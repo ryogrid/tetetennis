@@ -1,0 +1,122 @@
+// Stroke model: shot type table, contact quality, error model.
+// Where character stats meet physics.
+import { STATS_MAP, RPM_TO_RADS, COURT } from '../physics/constants.js';
+import { solveShot } from '../physics/shotSolver.js';
+
+export const SHOT_TYPES = {
+  flat:    { speedMul: 1.00, thetaMin: 1,  thetaMax: 14 },
+  topspin: { speedMul: 0.82, thetaMin: 4,  thetaMax: 26 },
+  slice:   { speedMul: 0.68, thetaMin: 1,  thetaMax: 18 },
+  lob:     { speedMul: 1.00, thetaMin: 28, thetaMax: 55 },
+};
+
+let _spare = null;
+export function gauss() {
+  if (_spare !== null) { const v = _spare; _spare = null; return v; }
+  let u = 0, v = 0;
+  while (u === 0) u = Math.random();
+  while (v === 0) v = Math.random();
+  const m = Math.sqrt(-2 * Math.log(u));
+  _spare = m * Math.sin(2 * Math.PI * v);
+  return Math.max(-2.5, Math.min(2.5, m * Math.cos(2 * Math.PI * v)));
+}
+
+function clamp(v, a, b) { return Math.max(a, Math.min(b, v)); }
+
+// Contact quality q in [0,1] from player/ball geometry at the contact instant.
+// Returns {q, whiff, d, stretched}.
+export function contactQuality({ playerPos, ballPos, ballVel, stats }) {
+  const d = Math.hypot(ballPos.x - playerPos.x, ballPos.z - playerPos.z);
+  const h = ballPos.y;
+  const reach = STATS_MAP.reach(stats.REA);
+  if (d > reach || h > 2.3) return { q: 0, whiff: true, d, stretched: true };
+
+  const qDist = clamp(1 - Math.max(0, d - 0.45) / (reach - 0.45), 0, 1);
+  const qHeight = 1 - clamp((Math.abs(h - 1.0) - 0.55) / 0.9, 0, 0.55);
+  const vIn = Math.hypot(ballVel.x, ballVel.y, ballVel.z);
+  const qSpeed = clamp(1 - (vIn - 18) / 55, 0.65, 1);
+  const qJam = d < 0.18 ? 0.55 : 1;
+  const q = qDist * qHeight * qSpeed * qJam;
+  return { q, whiff: false, d, stretched: qDist < 0.35 };
+}
+
+// Compute a stroke. side: 'P' hits toward -z, 'C' toward +z.
+// aim: {x: -1..1, depth: -1..1} (depth +1 deep, -1 short).
+// Returns {vel, spin, q, mishit, type} or null on whiff.
+export function computeStroke({ playerPos, ballPos, ballVel, stats, shotType, aim, side }) {
+  const cq = contactQuality({ playerPos, ballPos, ballVel, stats });
+  if (cq.whiff) return null;
+  const { q, stretched } = cq;
+
+  let type = shotType;
+  if (stretched && type !== 'slice') type = 'lob'; // forced defensive ball
+
+  const zSign = side === 'P' ? -1 : 1;
+  const def = SHOT_TYPES[type];
+
+  // --- nominal target ---
+  const baseZ = type === 'slice' ? 9.5 : type === 'lob' ? 9.0 : 10.3;
+  const target = {
+    x: clamp(aim.x, -1, 1) * 2.8,
+    z: zSign * clamp(baseZ + clamp(aim.depth, -1, 1) * 2.4, 4.5, 11.2),
+  };
+
+  // --- speed & spin from stats and quality ---
+  const flatSpeed = STATS_MAP.maxFlatSpeed(stats.POW) * (0.62 + 0.38 * q);
+  let speed, spinRpm;
+  if (type === 'flat') {
+    speed = flatSpeed;
+    spinRpm = 300 + 400 * q;
+  } else if (type === 'topspin') {
+    speed = flatSpeed * def.speedMul;
+    spinRpm = STATS_MAP.topspinRpm(stats.SPN) * (0.5 + 0.5 * q);
+  } else if (type === 'slice') {
+    speed = flatSpeed * def.speedMul;
+    spinRpm = -STATS_MAP.sliceRpm(stats.SLC) * (0.5 + 0.5 * q);
+  } else { // lob
+    speed = 15 + 4 * stats.POW / 100;
+    spinRpm = 500;
+  }
+
+  // --- error model ---
+  const errMul = STATS_MAP.errMulBase(stats.CTL) * (1 + 2.2 * (1 - q));
+  target.x += gauss() * 0.30 * errMul;
+  target.z += zSign * gauss() * 0.55 * errMul;
+  // keep the target on the opponent half so the solver geometry stays sane
+  target.z = zSign * clamp(Math.abs(target.z), 2.0, COURT.halfLen + 2.5);
+  spinRpm *= 1 + gauss() * 0.06 * errMul;
+  speed *= 1 + gauss() * 0.03 * errMul;
+
+  let mishit = false;
+  let yawErr = 0;
+  if (q < 0.3 && Math.random() < 0.35) {
+    mishit = true;
+    yawErr = (Math.random() - 0.5) * 0.5;
+    speed *= 0.55;
+    spinRpm *= 0.3;
+  }
+
+  // slice drifts: a touch of vertical-axis spin (sign by court side of contact)
+  const ySpin = type === 'slice'
+    ? Math.abs(spinRpm) * 0.27 * RPM_TO_RADS * (ballPos.x >= playerPos.x ? 1 : -1)
+    : 0;
+
+  const solved = solveShot({
+    from: { x: ballPos.x, y: Math.max(ballPos.y, 0.15), z: ballPos.z },
+    target,
+    speed,
+    spinRadS: spinRpm * RPM_TO_RADS,
+    ySpinRadS: ySpin,
+    thetaMinDeg: def.thetaMin,
+    thetaMaxDeg: def.thetaMax,
+  });
+
+  if (yawErr !== 0) {
+    const c = Math.cos(yawErr), s = Math.sin(yawErr);
+    const vx = solved.vel.x * c - solved.vel.z * s;
+    const vz = solved.vel.x * s + solved.vel.z * c;
+    solved.vel.x = vx; solved.vel.z = vz;
+  }
+
+  return { vel: solved.vel, spin: solved.spin, q, mishit, type };
+}
