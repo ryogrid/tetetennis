@@ -33,3 +33,19 @@ Implemented per plan with these notable deviations/findings:
 
 Verification status: vitest 8/8 pass, physics checks all pass, rally checks
 all pass, e2e smoke passes with zero page errors, `vite build` clean.
+
+## Touch controls (2nd task)
+
+- [x] input.js: setVirtualKey + pointerdown counts as first input (audio)
+- [x] ui.js: touch overlay (8-way slideable D-pad left, FLAT/TOP/SLICE arc +
+      SERVE right, toggle + quit top-right), localStorage persistence,
+      default ON for coarse pointers, menu tap delegation
+- [x] game.js: menu confirm logic extracted, shared by keyboard and tap
+- [x] index.html: viewport/touch hardening (no zoom, no callout)
+- [x] README.md: touch controls section
+- [x] Verify: scripts/touch-check.mjs (12 checks, mobile emulation) +
+      keyboard e2e regression + vitest + build all pass
+
+Lesson applied: synthetic pointer events lack active pointers, so
+setPointerCapture must be try/catch-wrapped (also more robust on quirky
+browsers).

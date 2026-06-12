@@ -2,10 +2,14 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
   <title>tetetetennis</title>
   <style>
-    html, body { margin: 0; padding: 0; height: 100%; overflow: hidden; background: #0d0d14; }
+    html, body {
+      margin: 0; padding: 0; height: 100%; overflow: hidden; background: #0d0d14;
+      touch-action: manipulation; overscroll-behavior: none;
+      -webkit-user-select: none; user-select: none; -webkit-touch-callout: none;
+    }
     #app { position: fixed; inset: 0; }
     #app canvas { display: block; }
     #hud { position: fixed; inset: 0; pointer-events: none; font-family: 'Segoe UI', Arial, sans-serif; color: #fff; }

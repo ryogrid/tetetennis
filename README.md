@@ -13,6 +13,8 @@ npm run dev      # open the printed URL
 
 ## How to play
 
+### Keyboard
+
 | Action | Keys |
 |---|---|
 | Move | WASD / Arrow keys |
@@ -22,6 +24,21 @@ npm run dev      # open the printed URL
 | Serve | Space to toss, then Z/X/C near the top of the toss (Z flat / X kick / C slice) |
 | Aim | hold a direction while swinging (left/right = sides, up = deep, down = short) |
 | Menus | Arrows + Enter, Esc = back / quit match |
+
+### Touch / on-screen controls
+
+The game is playable on phones and tablets (hold the device in landscape
+with both hands):
+
+- Menus: tap a card to select it, tap it again to confirm.
+- On the court, an on-screen pad appears:
+  - **Left thumb** — D-pad (bottom-left): move; slide your thumb to change
+    direction (8-way). Hold a direction while swinging to aim.
+  - **Right thumb** — shot buttons (bottom-right): **FLAT** / **TOP** /
+    **SLICE**, plus **SERVE** for the toss (then hit a shot button near the
+    top of the toss).
+  - **Top-right**: `⌨` / `🎮` toggles the on-screen controls on/off (the
+    choice is remembered), `✕` quits to the menu.
 
 - Shot quality depends on your position: hit the ball in the sweet spot
   (close, waist height) for clean power; stretching or getting jammed

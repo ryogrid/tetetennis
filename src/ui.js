@@ -6,8 +6,9 @@ const css = `
 .screen {
   position: absolute; inset: 0; display: flex; flex-direction: column;
   align-items: center; justify-content: center; gap: 24px;
-  background: rgba(8, 8, 16, 0.88); pointer-events: none;
+  background: rgba(8, 8, 16, 0.88); pointer-events: auto;
 }
+.card { cursor: pointer; }
 .title { font-size: 44px; font-weight: 800; letter-spacing: 4px; color: #e8f24b; }
 .subtitle { font-size: 18px; color: #aaa; letter-spacing: 2px; }
 .cards { display: flex; gap: 16px; }
@@ -54,12 +55,54 @@ const css = `
   position: absolute; bottom: 14px; right: 14px; font-size: 12px; color: #888;
   background: rgba(10,10,18,.7); padding: 8px 12px; border-radius: 6px; text-align: right;
 }
+#touchui { position: absolute; inset: 0; pointer-events: none; display: none; }
+#dpad {
+  position: absolute; left: 16px; bottom: 16px; width: 176px; height: 176px;
+  border-radius: 50%; background: rgba(18,18,28,.35);
+  border: 1px solid rgba(255,255,255,.18);
+  pointer-events: auto; touch-action: none;
+}
+#dpad span {
+  position: absolute; font-size: 26px; color: rgba(255,255,255,.55);
+  transform: translate(-50%,-50%);
+}
+#dpad span.lit { color: #e8f24b; }
+#dpad .du { left: 50%; top: 17%; }
+#dpad .dd { left: 50%; top: 83%; }
+#dpad .dl { left: 17%; top: 50%; }
+#dpad .dr { left: 83%; top: 50%; }
+.tbtn {
+  position: absolute; pointer-events: auto; touch-action: none;
+  width: 74px; height: 74px; border-radius: 50%;
+  background: rgba(18,18,28,.55); border: 2px solid rgba(255,255,255,.3);
+  color: #eee; font-weight: 700; font-size: 13px; letter-spacing: 1px;
+  display: flex; align-items: center; justify-content: center;
+}
+.tbtn.pressed, .tbtn.flash { background: #e8f24b; color: #111; border-color: #e8f24b; }
+#tb-flat  { right: 140px; bottom: 16px; }
+#tb-top   { right: 104px; bottom: 96px; }
+#tb-slice { right: 24px;  bottom: 148px; }
+#tb-serve {
+  right: 34px; bottom: 30px; width: 62px; height: 62px; font-size: 11px;
+  background: rgba(44,64,30,.6);
+}
+#tc-bar { position: absolute; top: 12px; right: 12px; display: none; gap: 8px; }
+#tc-bar button {
+  pointer-events: auto; width: 44px; height: 38px; border-radius: 8px;
+  background: rgba(18,18,28,.6); color: #ccc;
+  border: 1px solid rgba(255,255,255,.25); font-size: 17px;
+}
 `;
 
 let els = {};
 let bannerTimer = null;
 let toastTimer = null;
 const flashTimers = {};
+let menuTapHandler = null;
+let hudShown = false;
+let touchVisible = false;
+
+export function setMenuTapHandler(fn) { menuTapHandler = fn; }
 
 function div(id, parent, cls) {
   const d = document.createElement('div');
@@ -76,12 +119,13 @@ function statBars(stats) {
   ).join('');
 }
 
-export function initUI() {
+export function initUI({ onVirtualKey } = {}) {
   const style = document.createElement('style');
   style.textContent = css;
   document.head.appendChild(style);
   const hud = document.getElementById('hud');
   hud.innerHTML = '';
+  hud.addEventListener('contextmenu', (e) => e.preventDefault());
   els.menu = div('menu', hud, 'screen');
   els.scoreboard = div('scoreboard', hud);
   els.banner = div('banner', hud);
@@ -93,46 +137,176 @@ export function initUI() {
   els.controls.innerHTML =
     'Move: WASD / Arrows<br>Shots: Z flat &middot; X topspin &middot; C slice<br>' +
     'Serve: Space toss, then Z/X/C<br>Aim: hold a direction while swinging';
+
+  // menu tap support (tap a card to select it, tap again to confirm)
+  els.menu.addEventListener('pointerdown', (e) => {
+    if (!menuTapHandler) return;
+    const card = e.target.closest('[data-idx]');
+    if (card) menuTapHandler(parseInt(card.dataset.idx, 10));
+    else if (els.menu.dataset.screen === 'results') menuTapHandler('confirm');
+  });
+
+  buildTouchControls(hud, onVirtualKey || (() => {}));
   hideHUD();
+}
+
+// ---------- on-screen controls (two-handed phone grip) ----------
+
+function buildTouchControls(hud, onKey) {
+  els.touchui = div('touchui', hud);
+
+  // D-pad, bottom-left (left thumb): 8-way, position based, slideable
+  const dpad = div('dpad', els.touchui);
+  dpad.innerHTML =
+    '<span class="du">&#9650;</span><span class="dd">&#9660;</span>' +
+    '<span class="dl">&#9664;</span><span class="dr">&#9654;</span>';
+  const arrows = {
+    ArrowUp: dpad.querySelector('.du'),
+    ArrowDown: dpad.querySelector('.dd'),
+    ArrowLeft: dpad.querySelector('.dl'),
+    ArrowRight: dpad.querySelector('.dr'),
+  };
+  const DIRS = Object.keys(arrows);
+  let dpadPointer = null;
+  const held = new Set();
+  function applyDirs(want) {
+    for (const k of DIRS) {
+      const w = want.has(k);
+      if (w && !held.has(k)) { held.add(k); onKey(k, true); arrows[k].classList.add('lit'); }
+      if (!w && held.has(k)) { held.delete(k); onKey(k, false); arrows[k].classList.remove('lit'); }
+    }
+  }
+  function dirsFromEvent(e) {
+    const r = dpad.getBoundingClientRect();
+    const dx = e.clientX - (r.left + r.width / 2);
+    const dy = e.clientY - (r.top + r.height / 2);
+    const d = Math.hypot(dx, dy);
+    const want = new Set();
+    if (d > r.width * 0.12) {
+      const nx = dx / d, ny = dy / d;
+      if (nx < -0.42) want.add('ArrowLeft');
+      if (nx > 0.42) want.add('ArrowRight');
+      if (ny < -0.42) want.add('ArrowUp');
+      if (ny > 0.42) want.add('ArrowDown');
+    }
+    return want;
+  }
+  dpad.addEventListener('pointerdown', (e) => {
+    if (dpadPointer !== null) return;
+    dpadPointer = e.pointerId;
+    try { dpad.setPointerCapture(e.pointerId); } catch { /* synthetic event */ }
+    applyDirs(dirsFromEvent(e));
+    e.preventDefault();
+  });
+  dpad.addEventListener('pointermove', (e) => {
+    if (e.pointerId === dpadPointer) applyDirs(dirsFromEvent(e));
+  });
+  const dpadRelease = (e) => {
+    if (e.pointerId !== dpadPointer) return;
+    dpadPointer = null;
+    applyDirs(new Set());
+  };
+  dpad.addEventListener('pointerup', dpadRelease);
+  dpad.addEventListener('pointercancel', dpadRelease);
+
+  // shot + serve buttons, bottom-right (right thumb), arced for reach
+  const BUTTONS = [
+    ['tb-flat', 'FLAT', 'KeyZ'],
+    ['tb-top', 'TOP', 'KeyX'],
+    ['tb-slice', 'SLICE', 'KeyC'],
+    ['tb-serve', 'SERVE', 'Space'],
+  ];
+  for (const [id, label, code] of BUTTONS) {
+    const b = div(id, els.touchui, 'tbtn');
+    b.textContent = label;
+    b.addEventListener('pointerdown', (e) => {
+      try { b.setPointerCapture(e.pointerId); } catch { /* synthetic event */ }
+      b.classList.add('pressed');
+      onKey(code, true);
+      e.preventDefault();
+    });
+    const up = () => { b.classList.remove('pressed'); onKey(code, false); };
+    b.addEventListener('pointerup', up);
+    b.addEventListener('pointercancel', up);
+  }
+
+  // toggle + quit, top-right
+  els.tcBar = div('tc-bar', hud);
+  const toggle = document.createElement('button');
+  toggle.id = 'tc-toggle';
+  const quit = document.createElement('button');
+  quit.id = 'tc-quit';
+  quit.innerHTML = '&#10005;';
+  els.tcBar.append(toggle, quit);
+  els.tcToggle = toggle;
+
+  const stored = localStorage.getItem('touchControls');
+  touchVisible = stored !== null
+    ? stored === 'on'
+    : window.matchMedia('(pointer: coarse)').matches;
+
+  toggle.addEventListener('pointerdown', (e) => {
+    e.preventDefault();
+    touchVisible = !touchVisible;
+    localStorage.setItem('touchControls', touchVisible ? 'on' : 'off');
+    applyTouchVisibility();
+  });
+  quit.addEventListener('pointerdown', (e) => {
+    e.preventDefault();
+    onKey('Escape', true);
+    onKey('Escape', false);
+  });
+}
+
+function applyTouchVisibility() {
+  els.touchui.style.display = hudShown && touchVisible ? 'block' : 'none';
+  els.tcBar.style.display = hudShown ? 'flex' : 'none';
+  // keyboard-oriented HUD boxes collide with the touch buttons; swap them
+  els.shotbar.style.display = hudShown && !touchVisible ? 'flex' : 'none';
+  els.controls.style.display = hudShown && !touchVisible ? 'block' : 'none';
+  if (els.tcToggle) els.tcToggle.innerHTML = touchVisible ? '&#9000;' : '&#127918;';
 }
 
 export function showCharSelect(title, chars, idx, subtitle) {
   els.menu.style.display = 'flex';
+  els.menu.dataset.screen = 'select';
   els.menu.innerHTML =
     `<div class="title">${title}</div>` +
     (subtitle ? `<div class="subtitle">${subtitle}</div>` : '') +
     `<div class="cards">` +
     chars.map((c, i) =>
-      `<div class="card${i === idx ? ' sel' : ''}" id="card${i}">
+      `<div class="card${i === idx ? ' sel' : ''}" id="card${i}" data-idx="${i}">
         <h3 style="color:#${c.color.toString(16).padStart(6, '0')}">${c.name}</h3>
         <div class="arch">${c.archetype}</div>
         <div class="desc">${c.desc}</div>
         ${statBars(c.stats)}
       </div>`).join('') +
-    `</div><div class="hint">&larr; &rarr; select &middot; Enter confirm</div>`;
+    `</div><div class="hint">&larr; &rarr; select &middot; Enter confirm &middot; or tap (tap again to confirm)</div>`;
 }
 
 export function showSurfaceSelect(idx) {
   const surfaces = ['clay', 'grass', 'hard'];
   els.menu.style.display = 'flex';
+  els.menu.dataset.screen = 'select';
   els.menu.innerHTML =
     `<div class="title">SELECT SURFACE</div><div class="cards">` +
     surfaces.map((s, i) => {
       const t = SURFACE_THEMES[s];
-      return `<div class="card${i === idx ? ' sel' : ''}">
+      return `<div class="card${i === idx ? ' sel' : ''}" data-idx="${i}">
         <div class="swatch" style="background:#${t.court.toString(16).padStart(6, '0')}"></div>
         <div class="swatch-label">${t.label}</div>
       </div>`;
     }).join('') +
-    `</div><div class="hint">&larr; &rarr; select &middot; Enter confirm &middot; Esc back</div>`;
+    `</div><div class="hint">&larr; &rarr; select &middot; Enter confirm &middot; Esc back &middot; or tap (tap again to confirm)</div>`;
 }
 
 export function showResults(winnerName, loserName, games, playerWon) {
   els.menu.style.display = 'flex';
+  els.menu.dataset.screen = 'results';
   els.menu.innerHTML =
     `<div class="title">${playerWon ? 'YOU WIN!' : 'YOU LOSE'}</div>` +
     `<div class="subtitle">${winnerName} d. ${loserName} &nbsp; ${games}</div>` +
-    `<div class="hint">Enter: back to menu</div>`;
+    `<div class="hint">Enter or tap: back to menu</div>`;
 }
 
 export function hideMenu() {
@@ -140,17 +314,17 @@ export function hideMenu() {
 }
 
 export function showHUD() {
+  hudShown = true;
   els.scoreboard.style.display = 'block';
-  els.shotbar.style.display = 'flex';
-  els.controls.style.display = 'block';
+  applyTouchVisibility();
 }
 
 export function hideHUD() {
+  hudShown = false;
   els.scoreboard.style.display = 'none';
-  els.shotbar.style.display = 'none';
-  els.controls.style.display = 'none';
   els.banner.style.opacity = 0;
   els.toast.style.opacity = 0;
+  applyTouchVisibility();
 }
 
 export function updateScore(s, pName, cName, serveNumber) {
@@ -184,12 +358,16 @@ export function toast(text, ms = 1600) {
   toastTimer = setTimeout(() => { els.toast.style.opacity = 0; }, ms);
 }
 
+const TOUCH_FLASH_IDS = { flat: 'tb-flat', topspin: 'tb-top', slice: 'tb-slice' };
 export function flashShot(type) {
-  const el = document.getElementById('sb-' + type);
-  if (!el) return;
-  el.classList.add('flash');
-  if (flashTimers[type]) clearTimeout(flashTimers[type]);
-  flashTimers[type] = setTimeout(() => el.classList.remove('flash'), 350);
+  const ids = ['sb-' + type, TOUCH_FLASH_IDS[type]];
+  for (const id of ids) {
+    const el = id && document.getElementById(id);
+    if (!el) continue;
+    el.classList.add('flash');
+    if (flashTimers[id]) clearTimeout(flashTimers[id]);
+    flashTimers[id] = setTimeout(() => el.classList.remove('flash'), 350);
+  }
 }
 
 export function serveSpeedToast(kmh) {

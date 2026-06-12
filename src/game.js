@@ -37,8 +37,59 @@ export function createGame(scene, cameraRig, input) {
     events: [],
   };
 
-  ui.initUI();
+  ui.initUI({ onVirtualKey: (code, isDown) => input.setVirtualKey(code, isDown) });
   ui.showCharSelect('SELECT YOUR PLAYER', CHARACTERS, g.menuIdx);
+
+  // ---------- menu navigation (shared by keyboard and tap) ----------
+
+  function showCharMenu() {
+    ui.showCharSelect('SELECT YOUR PLAYER', CHARACTERS, g.menuIdx);
+  }
+  function showOppMenu() {
+    ui.showCharSelect('SELECT OPPONENT', CHARACTERS, g.menuIdx, `You: ${g.sel.player.name}`);
+  }
+  function confirmChar() {
+    audio.sfxConfirm();
+    g.sel.player = CHARACTERS[g.menuIdx];
+    g.state = 'menu_opp';
+    g.menuIdx = 0;
+    showOppMenu();
+  }
+  function confirmOpp() {
+    audio.sfxConfirm();
+    g.sel.opp = CHARACTERS[g.menuIdx];
+    g.state = 'menu_surface';
+    g.menuIdx = 2; // default hard
+    ui.showSurfaceSelect(g.menuIdx);
+  }
+  function confirmSurface() {
+    audio.sfxConfirm();
+    g.sel.surfaceId = SURFACE_IDS[g.menuIdx];
+    startMatch();
+  }
+  function backToCharMenu() {
+    g.state = 'menu_char';
+    g.menuIdx = 0;
+    showCharMenu();
+  }
+
+  ui.setMenuTapHandler((idx) => {
+    if (g.state === 'results') { backToCharMenu(); return; }
+    if (g.state !== 'menu_char' && g.state !== 'menu_opp' && g.state !== 'menu_surface') return;
+    const count = g.state === 'menu_surface' ? 3 : CHARACTERS.length;
+    if (typeof idx !== 'number' || idx < 0 || idx >= count) return;
+    if (idx === g.menuIdx) {
+      if (g.state === 'menu_char') confirmChar();
+      else if (g.state === 'menu_opp') confirmOpp();
+      else confirmSurface();
+    } else {
+      g.menuIdx = idx;
+      audio.sfxMenu();
+      if (g.state === 'menu_char') showCharMenu();
+      else if (g.state === 'menu_opp') showOppMenu();
+      else ui.showSurfaceSelect(g.menuIdx);
+    }
+  });
 
   // ---------- helpers ----------
 
@@ -289,35 +340,19 @@ export function createGame(scene, cameraRig, input) {
 
   g.handleInput = function () {
     if (g.state === 'menu_char') {
-      if (handleMenuNav(CHARACTERS.length)) {
-        ui.showCharSelect('SELECT YOUR PLAYER', CHARACTERS, g.menuIdx);
-      }
-      if (confirmPressed()) {
-        audio.sfxConfirm();
-        g.sel.player = CHARACTERS[g.menuIdx];
-        g.state = 'menu_opp';
-        g.menuIdx = 0;
-        ui.showCharSelect('SELECT OPPONENT', CHARACTERS, g.menuIdx, `You: ${g.sel.player.name}`);
-      }
+      if (handleMenuNav(CHARACTERS.length)) showCharMenu();
+      if (confirmPressed()) confirmChar();
       return;
     }
     if (g.state === 'menu_opp') {
-      if (handleMenuNav(CHARACTERS.length)) {
-        ui.showCharSelect('SELECT OPPONENT', CHARACTERS, g.menuIdx, `You: ${g.sel.player.name}`);
-      }
+      if (handleMenuNav(CHARACTERS.length)) showOppMenu();
       if (input.wasPressed('Escape')) {
         g.state = 'menu_char';
         g.menuIdx = CHARACTERS.indexOf(g.sel.player);
-        ui.showCharSelect('SELECT YOUR PLAYER', CHARACTERS, g.menuIdx);
+        showCharMenu();
         return;
       }
-      if (confirmPressed()) {
-        audio.sfxConfirm();
-        g.sel.opp = CHARACTERS[g.menuIdx];
-        g.state = 'menu_surface';
-        g.menuIdx = 2; // default hard
-        ui.showSurfaceSelect(g.menuIdx);
-      }
+      if (confirmPressed()) confirmOpp();
       return;
     }
     if (g.state === 'menu_surface') {
@@ -325,31 +360,21 @@ export function createGame(scene, cameraRig, input) {
       if (input.wasPressed('Escape')) {
         g.state = 'menu_opp';
         g.menuIdx = CHARACTERS.indexOf(g.sel.opp);
-        ui.showCharSelect('SELECT OPPONENT', CHARACTERS, g.menuIdx, `You: ${g.sel.player.name}`);
+        showOppMenu();
         return;
       }
-      if (confirmPressed()) {
-        audio.sfxConfirm();
-        g.sel.surfaceId = SURFACE_IDS[g.menuIdx];
-        startMatch();
-      }
+      if (confirmPressed()) confirmSurface();
       return;
     }
     if (g.state === 'results') {
-      if (confirmPressed()) {
-        g.state = 'menu_char';
-        g.menuIdx = 0;
-        ui.showCharSelect('SELECT YOUR PLAYER', CHARACTERS, g.menuIdx);
-      }
+      if (confirmPressed()) backToCharMenu();
       return;
     }
 
     // ---- in match ----
     if (input.wasPressed('Escape')) {
       teardownMatch();
-      g.state = 'menu_char';
-      g.menuIdx = 0;
-      ui.showCharSelect('SELECT YOUR PLAYER', CHARACTERS, g.menuIdx);
+      backToCharMenu();
       return;
     }
 

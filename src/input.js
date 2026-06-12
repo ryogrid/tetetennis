@@ -10,9 +10,16 @@ export function createInput(onFirstInput) {
 
   function norm(code) { return ALIASES[code] || code; }
 
+  function firstInput() {
+    if (!first) { first = true; if (onFirstInput) onFirstInput(); }
+  }
+
+  // any touch/click counts as first interaction (resumes audio context)
+  window.addEventListener('pointerdown', firstInput);
+
   window.addEventListener('keydown', (e) => {
     if (e.repeat) return;
-    if (!first) { first = true; if (onFirstInput) onFirstInput(); }
+    firstInput();
     const code = norm(e.code);
     down.add(code);
     pressed.add(code);
@@ -28,6 +35,16 @@ export function createInput(onFirstInput) {
   return {
     isDown: (code) => down.has(code),
     wasPressed: (code) => pressed.has(code),
+    // on-screen buttons synthesize the same key codes as the keyboard
+    setVirtualKey(code, isDown) {
+      firstInput();
+      if (isDown) {
+        if (!down.has(code)) pressed.add(code);
+        down.add(code);
+      } else {
+        down.delete(code);
+      }
+    },
     // movement vector from WASD + arrows, in court coords for the human
     // (+x right on screen, -z toward the net)
     moveVec() {
