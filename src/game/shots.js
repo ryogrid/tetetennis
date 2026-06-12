@@ -1,15 +1,17 @@
 // Stroke model: shot type table, contact quality, error model.
 // Where character stats meet physics.
-import { STATS_MAP, RPM_TO_RADS, COURT, IDEAL_CONTACT_H, IDEAL_CONTACT_R } from '../physics/constants.js';
+import { STATS_MAP, RPM_TO_RADS, COURT, IDEAL_CONTACT_H, IDEAL_CONTACT_R, PACE } from '../physics/constants.js';
 import { solveShot } from '../physics/shotSolver.js';
 
 // Three distinct physical regimes: flat = fast low liner, topspin = slower
 // but heavily arced (high clearance, dips, kicks off the bounce), slice =
 // clearly slow floater that stays low and checks.
+// Theta bands are sized so the PACE-slowed speeds can still reach the type
+// depths without the solver re-inflating v0 (which would undo the pace).
 export const SHOT_TYPES = {
-  flat:    { speedMul: 1.00, thetaMin: 0,  thetaMax: 10 },
+  flat:    { speedMul: 1.00, thetaMin: 0,  thetaMax: 13 },
   topspin: { speedMul: 0.85, thetaMin: 10, thetaMax: 32 },
-  slice:   { speedMul: 0.68, thetaMin: 1,  thetaMax: 10 },
+  slice:   { speedMul: 0.76, thetaMin: 1,  thetaMax: 13 },
   lob:     { speedMul: 1.00, thetaMin: 28, thetaMax: 55 },
 };
 
@@ -91,7 +93,7 @@ export function computeStroke({ playerPos, ballPos, ballVel, stats, shotType, ai
     speed = flatSpeed * def.speedMul;
     spinRpm = -STATS_MAP.sliceRpm(stats.SLC) * (0.5 + 0.5 * q);
   } else { // lob
-    speed = 15 + 4 * stats.POW / 100;
+    speed = (15 + 4 * stats.POW / 100) * PACE;
     spinRpm = 500;
   }
 

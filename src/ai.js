@@ -13,21 +13,23 @@ const STYLE_BIAS = {
 };
 
 // Difficulty scales only the brain (and a touch of foot speed) — never the
-// character's stats/identity.
+// character's stats/identity. Reaction times (and easy's foot speed) are
+// tuned against the PACE-slowed ball: slower balls hand the CPU free time,
+// so the weaker settings must hesitate longer to stay beatable.
 export const DIFFICULTIES = [
   {
     id: 'easy', name: 'Easy', desc: 'Slow reads, late reactions, soft serves.',
-    posErr: 2.0, jitter: 2.0, react: 0.38, speedMul: 0.82,
+    posErr: 2.0, jitter: 2.0, react: 0.55, speedMul: 0.70,
     serveQ: -0.10, choiceNoise: 0.45,
   },
   {
     id: 'normal', name: 'Normal', desc: 'A solid club player. Fair fight.',
-    posErr: 1.0, jitter: 1.0, react: 0.16, speedMul: 1.0,
+    posErr: 1.0, jitter: 1.0, react: 0.22, speedMul: 1.0,
     serveQ: 0.0, choiceNoise: 0.25,
   },
   {
     id: 'hard', name: 'Hard', desc: 'Sharp anticipation, big serves, few gifts.',
-    posErr: 0.35, jitter: 0.5, react: 0.05, speedMul: 1.10,
+    posErr: 0.35, jitter: 0.5, react: 0.06, speedMul: 1.10,
     serveQ: 0.08, choiceNoise: 0.12,
   },
 ];

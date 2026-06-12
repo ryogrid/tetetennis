@@ -264,3 +264,42 @@ Make the app an installable, offline-capable Progressive Web App.
   touch still report zero page errors with the SW registration added.
 - CI needs no change: icons are committed and `public/` is copied by the
   build; the PWA ships in the existing deploy artifact.
+
+## Global pace reduction (10th task)
+
+Plan: /home/ryo/.claude/plans/3d-1-mighty-ember.md
+
+- [x] constants.js: PACE = 0.8 applied to maxFlatSpeed + serveFlatSpeed
+- [x] shots.js: flat/slice thetaMax 13, slice speedMul 0.76, lob x PACE
+      (so the solver doesn't re-inflate the slowed speeds)
+- [x] physics-check: no-reinflation assertions + re-measure all
+      speed-dependent numbers
+- [x] ai.js: difficulty retune against the slower ball (unplanned, see below)
+- [x] Verify: physcheck, vitest, rally, ai-check, e2e, touch, fpv, build
+- [x] README figures + review notes
+
+### Review
+
+- Pace landed as planned: flat stroke 33.4 -> 26.7 m/s (flight 0.83 ->
+  1.06 s), topspin 28.4 -> 22.7 (0.96 -> 1.25 s), slice -> 20.3 (1.12 ->
+  1.27 s; ~20 m/s is the physical floor to carry 20+ m), flat serve
+  effective 48.4 -> 44 (158 km/h). A new physics-check block pins that the
+  solver does NOT re-inflate the paced speeds (the bracket fallback had
+  silently undone 0.8x for flat and slice until the theta bands were
+  widened to 13 deg).
+- Slower flight + unchanged spin shifted two physical regimes, and the
+  checks were reframed to match: (1) flat drives now land near the GRIP
+  threshold where friction loss saturates, so clay ~= hard for flat pace —
+  the mu ordering is asserted on the slice (still sliding: -7.4/-5.0/-3.2);
+  (2) a max-rpm topspin OVERSPINS at contact and kicks forward (+0.2 m/s)
+  — asserted as intended behavior. Type speed contrast asserted on 3D
+  arrival speed (horizontal-only compressed: topspin trades horizontal for
+  vertical in its steeper dive).
+- **Unplanned but necessary**: the slower ball handed the CPU free time —
+  easy's pressing contact jumped 28% -> 93%, erasing the difficulty gap.
+  DIFFICULTIES retuned against the new pace (react 0.55/0.22/0.06,
+  easy speedMul 0.82 -> 0.70): easy now 90% mixed / 43% pressing, normal
+  and hard 95-100% — ordering and the >10 pt pressing gap restored.
+  Player movement itself untouched, per the request.
+- All suites green: physcheck, vitest 8/8, rally, ai-check, e2e, touch,
+  fpv, build. README pace note + re-measured figures.

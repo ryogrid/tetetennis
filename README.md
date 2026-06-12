@@ -77,11 +77,14 @@ with both hands):
 
 - **Flat** — fastest ball on a low line; shallow, skidding bounce.
 - **Topspin** — slower off the racket but arcs high over the net and dips
-  sharply (Magnus effect: the same launch without spin would fly ~7 m
+  sharply (Magnus effect: the same launch without spin would fly ~5 m
   deeper), then kicks up off the bounce.
 - **Slice** — clearly slower floater whose backspin carries it on a
-  straighter, stretched line (~5 m deeper than the same launch without
+  straighter, stretched line (~4 m deeper than the same launch without
   spin); it stays low and robs the bounce of pace, especially on grass.
+
+Ball pace is globally scaled (`PACE` in `src/physics/constants.js`, 0.8) so
+rallies leave time to position — player movement is unaffected.
 
 Serves: **flat** is the cannonball; **kick** clears the net high and dives
 into the box (the safe second serve); **slice** curves visibly toward the
@@ -98,10 +101,10 @@ Bounces are physical: vertical restitution plus a Coulomb friction impulse.
 The restitution is anchored to the ITF ball test (a 2.54 m drop on hard
 court rebounds ~1.35-1.47 m) and — because a tennis ball is not rigid —
 falls with impact speed, so hard-hit balls rebound proportionally lower.
-The ball always loses horizontal speed at the bounce, and the loss is driven
-by each surface's friction coefficient (clay μ=0.80 slows a flat drive by
-~7.6 m/s, hard μ=0.56 by ~5.4, grass μ=0.38 by ~3.5) — verified by
-`npm run physcheck`.
+Flat and slice balls lose horizontal speed at the bounce, with the loss
+driven by each surface's friction coefficient (clay μ=0.80 robs a slice of
+~7.4 m/s, hard μ=0.56 of ~5.0, grass μ=0.38 of ~3.2); a heavily overspun
+topspin ball can even kick forward — verified by `npm run physcheck`.
 
 ## Characters
 

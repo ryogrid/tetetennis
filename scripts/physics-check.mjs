@@ -76,6 +76,7 @@ function fireAndBounce(surface, { speed, spinRpm, thetaMin, thetaMax, targetZ })
     bounce, apex, flightApex, rise, sag,
     descentDeg: bounce ? Math.atan2(Math.abs(preVy), preSpeedH) * 180 / Math.PI : 0,
     preSpeedH: bounce ? bounce.preSpeedH : 0,
+    preSpeed3D: bounce ? Math.hypot(bounce.preSpeedH, preVy) : 0,
     postSpeedH: bounce ? bounce.postSpeedH : 0,
     retention: bounce ? bounce.postSpeedH / bounce.preSpeedH : 0,
   };
@@ -173,21 +174,24 @@ console.log('--- surface behavior ---');
 console.log('--- shot-type contrast (POW/SPN/SLC ~72 player, hard court) ---');
 {
   // mirror SHOT_TYPES + STATS_MAP regimes for a typical character at q=1
+  // (33.4 m/s raw POW band x PACE 0.8 = 26.7)
   const flat = fireAndBounce(SURFACES.hard,
-    { speed: 33.4, spinRpm: 500, thetaMin: 0, thetaMax: 10, targetZ: -10.6 });
+    { speed: 26.7, spinRpm: 500, thetaMin: 0, thetaMax: 13, targetZ: -10.6 });
   const top = fireAndBounce(SURFACES.hard,
-    { speed: 33.4 * 0.85, spinRpm: 4070, thetaMin: 10, thetaMax: 32, targetZ: -9.8 });
+    { speed: 26.7 * 0.85, spinRpm: 4070, thetaMin: 10, thetaMax: 32, targetZ: -9.8 });
   const sli = fireAndBounce(SURFACES.hard,
-    { speed: 33.4 * 0.68, spinRpm: -2800, thetaMin: 1, thetaMax: 10, targetZ: -9.0 });
+    { speed: 26.7 * 0.76, spinRpm: -2800, thetaMin: 1, thetaMax: 13, targetZ: -9.0 });
   for (const [n, s] of [['flat', flat], ['topspin', top], ['slice', sli]]) {
     console.log(`  ${n.padEnd(7)}: arc=${s.flightApex.toFixed(2)}m  preSpeed=${s.preSpeedH.toFixed(1)}  postApex=${s.apex.toFixed(2)}  postSpeed=${s.postSpeedH.toFixed(1)}  descent=${s.descentDeg.toFixed(1)}deg  rise=${s.rise.toFixed(2)}  sag=${s.sag.toFixed(2)}`);
   }
   check('flat arrives much faster than topspin (>10%)',
     flat.preSpeedH > top.preSpeedH * 1.10,
     `${flat.preSpeedH.toFixed(1)} vs ${top.preSpeedH.toFixed(1)}`);
-  check('topspin arrives much faster than slice (>15%)',
-    top.preSpeedH > sli.preSpeedH * 1.15,
-    `${top.preSpeedH.toFixed(1)} vs ${sli.preSpeedH.toFixed(1)}`);
+  // horizontal arrival compresses at the slowed pace (topspin's steep dive
+  // trades horizontal for vertical speed), so compare full 3D arrival speed
+  check('topspin arrives faster than slice (3D, >6%)',
+    top.preSpeed3D > sli.preSpeed3D * 1.06,
+    `${top.preSpeed3D.toFixed(1)} vs ${sli.preSpeed3D.toFixed(1)}`);
   check('topspin arcs visibly higher than flat (>0.5m)',
     top.flightApex > flat.flightApex + 0.5,
     `${top.flightApex.toFixed(2)} vs ${flat.flightApex.toFixed(2)}`);
@@ -229,8 +233,8 @@ console.log('--- Magnus effect on the trajectory (same launch, spin vs no spin) 
     const landing = predictLanding(ball, SURFACES.hard);
     return landing ? landing.pos.z : null;
   }
-  const topCfg = { speed: 33.4 * 0.85, spinRpm: 4070, thetaMin: 10, thetaMax: 32, targetZ: -9.8 };
-  const sliCfg = { speed: 33.4 * 0.68, spinRpm: -2800, thetaMin: 1, thetaMax: 10, targetZ: -9.0 };
+  const topCfg = { speed: 26.7 * 0.85, spinRpm: 4070, thetaMin: 10, thetaMax: 32, targetZ: -9.8 };
+  const sliCfg = { speed: 26.7 * 0.76, spinRpm: -2800, thetaMin: 1, thetaMax: 13, targetZ: -9.0 };
   const topDip = landWith(topCfg, true) - landWith(topCfg, false);   // < 0: nospin flies deeper
   const sliCarry = landWith(sliCfg, true) - landWith(sliCfg, false); // > 0: nospin falls shorter
   console.log(`  topspin pulls the ball ${(-topDip).toFixed(1)} m shorter; backspin carries it ${sliCarry.toFixed(1)} m deeper`);
@@ -244,43 +248,54 @@ console.log('--- bounce decelerates horizontally (Coulomb friction, all surfaces
 {
   // representative in-game shots; max-spin variants included
   const SHOTS = {
-    flat:    { speed: 33.4, spinRpm: 700, thetaMin: 0, thetaMax: 10, targetZ: -10.6 },
-    topspin: { speed: 28.4, spinRpm: 4800, thetaMin: 10, thetaMax: 32, targetZ: -9.8 },
-    slice:   { speed: 22.7, spinRpm: -3300, thetaMin: 1, thetaMax: 10, targetZ: -9.0 },
+    flat:    { speed: 26.7, spinRpm: 700, thetaMin: 0, thetaMax: 13, targetZ: -10.6 },
+    topspin: { speed: 22.7, spinRpm: 4800, thetaMin: 10, thetaMax: 32, targetZ: -9.8 },
+    slice:   { speed: 20.3, spinRpm: -3300, thetaMin: 1, thetaMax: 13, targetZ: -9.0 },
   };
   let allSlow = true;
+  let topKick = Infinity;
   const loss = {};
   for (const [sid, surface] of Object.entries(SURFACES)) {
     for (const [name, shot] of Object.entries(SHOTS)) {
       const r = fireAndBounce(surface, shot);
       const detail = `${sid}/${name}: ${r.preSpeedH.toFixed(1)} -> ${r.postSpeedH.toFixed(1)} m/s`;
       console.log(`  ${detail}`);
-      if (!(r.postSpeedH < r.preSpeedH)) allSlow = false;
-      if (name === 'flat') loss[sid] = r.preSpeedH - r.postSpeedH;
+      // max-rpm topspin legitimately OVERSPINS at the slowed pace (contact
+      // point moves backward faster than the ball flies) and shoots forward
+      if (name === 'topspin') topKick = Math.min(topKick, r.postSpeedH - r.preSpeedH);
+      else if (!(r.postSpeedH < r.preSpeedH)) allSlow = false;
+      // the slice keeps a large slip (backspin), so it stays in the SLIDE
+      // regime where the loss is mu-proportional on every surface
+      if (name === 'slice') loss[sid] = r.preSpeedH - r.postSpeedH;
     }
   }
-  check('horizontal speed drops at the bounce for every shot x surface', allSlow);
-  check('friction ordering of the speed LOSS: clay > hard > grass',
+  check('flat and slice lose horizontal speed at the bounce everywhere', allSlow);
+  check('overspun topspin keeps/extends its pace through the bounce',
+    topKick > -1.0, `min change ${topKick.toFixed(1)} m/s`);
+  check('friction ordering of the slice speed LOSS: clay > hard > grass',
     loss.clay > loss.hard && loss.hard > loss.grass,
     `clay -${loss.clay.toFixed(1)}  hard -${loss.hard.toFixed(1)}  grass -${loss.grass.toFixed(1)} m/s`);
 }
 
-console.log('--- surface pace (flat drive ~28 m/s) ---');
+console.log('--- surface pace (flat drive ~22.4 m/s) ---');
 {
-  const flat = { speed: 28, spinRpm: 500, thetaMin: 1, thetaMax: 14, targetZ: -10.0 };
+  const flat = { speed: 22.4, spinRpm: 500, thetaMin: 1, thetaMax: 14, targetZ: -10.0 };
   const hard = fireAndBounce(SURFACES.hard, flat);
   const clay = fireAndBounce(SURFACES.clay, flat);
   const grass = fireAndBounce(SURFACES.grass, flat);
   console.log(`  flat hard : apex=${hard.apex.toFixed(2)} retention=${hard.retention.toFixed(2)}`);
   console.log(`  flat clay : apex=${clay.apex.toFixed(2)} retention=${clay.retention.toFixed(2)}`);
   console.log(`  flat grass: apex=${grass.apex.toFixed(2)} retention=${grass.retention.toFixed(2)}`);
-  check('pace order: grass > hard > clay',
-    grass.retention > hard.retention && hard.retention > clay.retention,
+  // at the slowed pace a flat drive lands near the grip threshold, where the
+  // friction loss saturates — clay and hard may converge (grass still slides)
+  check('pace order: grass > hard >= clay',
+    grass.retention > hard.retention + 0.05 &&
+    hard.retention >= clay.retention - 0.005,
     `g=${grass.retention.toFixed(2)} h=${hard.retention.toFixed(2)} c=${clay.retention.toFixed(2)}`);
   check('bounce height order: clay > hard > grass',
     clay.apex > hard.apex && hard.apex > grass.apex,
     `c=${clay.apex.toFixed(2)} h=${hard.apex.toFixed(2)} g=${grass.apex.toFixed(2)}`);
-  check('grass keeps most of the pace (retention > 0.75)', grass.retention > 0.75,
+  check('grass keeps most of the pace (retention > 0.72)', grass.retention > 0.72,
     grass.retention.toFixed(2));
   check('clay takes pace off (retention < 0.70)', clay.retention < 0.70,
     clay.retention.toFixed(2));
@@ -350,7 +365,7 @@ console.log('--- serve plausibility ---');
   const solved = solveShot({
     from: { x: 0.35, y: 2.95, z: 11.9 },
     target: { x: -0.45, z: -5.85 },
-    speed: 55, spinRadS: 400 * RPM_TO_RADS,
+    speed: 44, spinRadS: 400 * RPM_TO_RADS,
     thetaMinDeg: -6, thetaMaxDeg: 4,
   });
   const ball = makeBall();
@@ -359,8 +374,30 @@ console.log('--- serve plausibility ---');
   const landing = predictLanding(ball, SURFACES.hard);
   const inBox = landing && Math.abs(landing.pos.x) < COURT.halfWidth &&
     landing.pos.z < 0 && landing.pos.z > -COURT.serviceLine - 0.05;
-  check('flat serve at 198 km/h lands in the service box', !!inBox,
+  check('flat serve at 158 km/h lands in the service box', !!inBox,
     landing ? `x=${landing.pos.x.toFixed(2)} z=${landing.pos.z.toFixed(2)}` : 'no landing');
+}
+
+console.log('--- pace: slowed base speeds are NOT re-inflated by the solver ---');
+{
+  // If a theta band cannot reach its type depth, solveShot brackets v0 back
+  // up (x1.12 per try) and silently undoes the PACE reduction — pin it.
+  const shots = [
+    ['flat stroke', { from: { x: 0, y: 1.0, z: 11.5 }, target: { x: 0, z: -10.6 },
+      speed: 26.7, spinRadS: 500 * RPM_TO_RADS, thetaMinDeg: 0, thetaMaxDeg: 13 }],
+    ['topspin stroke', { from: { x: 0, y: 1.0, z: 11.5 }, target: { x: 0, z: -9.8 },
+      speed: 26.7 * 0.85, spinRadS: 4070 * RPM_TO_RADS, thetaMinDeg: 10, thetaMaxDeg: 32 }],
+    ['slice stroke', { from: { x: 0, y: 1.0, z: 11.5 }, target: { x: 0, z: -9.0 },
+      speed: 26.7 * 0.76, spinRadS: -2800 * RPM_TO_RADS, thetaMinDeg: 1, thetaMaxDeg: 13 }],
+    ['flat serve', { from: { x: 0.35, y: 2.95, z: 11.9 }, target: { x: -0.45, z: -5.85 },
+      speed: 44, spinRadS: 400 * RPM_TO_RADS, thetaMinDeg: -6, thetaMaxDeg: 4 }],
+  ];
+  for (const [name, args] of shots) {
+    const s = solveShot(args);
+    check(`${name}: solver keeps the paced speed (no re-inflation)`,
+      s.speed <= args.speed * 1.001,
+      `in=${args.speed.toFixed(1)} out=${s.speed.toFixed(1)}`);
+  }
 }
 
 console.log('--- serve-type shapes (kick dips, slice curves) ---');
@@ -378,7 +415,7 @@ console.log('--- serve-type shapes (kick dips, slice curves) ---');
     const wTotal = Math.abs(spinRpm) * RPM_TO_RADS;
     const solved = solveShot({
       from, target,
-      speed: 55 * def.speedMul,
+      speed: 44 * def.speedMul, // ~55 raw SRV band x PACE 0.8
       spinRadS: spinRpm * RPM_TO_RADS * (1 - ySpinFrac),
       ySpinRadS: wTotal * ySpinFrac * ySpinSign,
       thetaMinDeg: def.thetaMin, thetaMaxDeg: def.thetaMax,
