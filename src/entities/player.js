@@ -314,7 +314,13 @@ export function createPlayer({ side, character, scene, speedMul = 1 }) {
     cyl.position.y = hMax / 2;
     root.add(cyl);
 
-    p._reachZone = { circle, cyl };
+    p._reachZone = { circle, cyl, circMat, cylMat };
+
+    // Change the reach zone colour on the fly (blue = idle, pink = ball in range)
+    p.setReachZoneColor = (hex) => {
+      circMat.color.setHex(hex);
+      cylMat.color.setHex(hex);
+    };
   }
 
   return p;

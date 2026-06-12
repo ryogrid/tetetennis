@@ -634,6 +634,14 @@ export function createGame(scene, cameraRig, input) {
     if (g.ball) g.ball.updateVisual(dt);
     if (g.human && g.ball) {
       cameraRig.update(dt, cameraMode(), g.human, g.ball.state);
+      // Reach zone colour: pink when the incoming ball is within striking range
+      if (g.human.setReachZoneColor) {
+        const b = g.ball.state;
+        const inReach = b.active &&
+          Math.hypot(b.pos.x - g.human.pos.x, b.pos.z - g.human.pos.z) <= g.human.reach &&
+          b.pos.y <= 1.15 + g.human.reach;
+        g.human.setReachZoneColor(inReach ? 0xff50a0 : 0x3988ff);
+      }
     }
     // toss gauge: the FPV camera doesn't look up, so show toss height here
     if (g.state === 'match' && g.pointState === 'serving' && server() === 'P' &&
