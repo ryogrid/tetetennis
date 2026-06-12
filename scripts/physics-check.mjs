@@ -330,7 +330,7 @@ console.log('--- contact quality sensitivity (stroke) ---');
     return { speed: speedSum / n, depth: depthSum / n, q: qSum / n, n };
   }
   const clean = meanStroke(0.5);     // inside the ideal arm+racket band
-  const stretched = meanStroke(1.15); // well past the band, toward max reach
+  const stretched = meanStroke(1.60); // well past the band, toward max reach (scaled for 1.5x reach)
   console.log(`  clean    : q=${clean.q.toFixed(2)} speed=${clean.speed.toFixed(1)} depth=${clean.depth.toFixed(1)}`);
   console.log(`  stretched: q=${stretched.q.toFixed(2)} speed=${stretched.speed.toFixed(1)} depth=${stretched.depth.toFixed(1)}`);
   check('stretched contact is >10% slower', stretched.speed < clean.speed * 0.9,
