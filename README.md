@@ -11,6 +11,17 @@ npm install
 npm run dev      # open the printed URL
 ```
 
+## Install (PWA)
+
+The game is an installable Progressive Web App: open the deployed site and
+use your browser's **Install** / **Add to Home Screen** action to run it
+full-screen, landscape, with its own icon. After the first online visit a
+service worker caches the app, so it **plays fully offline** (all graphics
+are procedural and the audio is synthesized, so there are no extra downloads).
+
+The app icons are drawn, not stored as art — regenerate them with
+`npm run icons` (writes the PNGs and manifest icons into `public/`).
+
 ## How to play
 
 ### Keyboard
@@ -114,7 +125,13 @@ node scripts/rally-check.mjs   # serve/stroke in-rate sanity
 node scripts/ai-check.mjs      # CPU return rates per difficulty
 npm run dev -- --port 5199 & node scripts/e2e-check.mjs  # browser smoke test (playwright)
 node scripts/fpv-check.mjs    # first-person camera / gauge / markers (needs the dev server)
+npm run icons        # regenerate the PWA icons into public/
 npm run build        # production build
+
+# PWA check: manifest, service worker, and a fully-offline reload, against
+# the production build served at the GitHub Pages base path
+npm run build -- --base=/tetetennis/
+npx vite preview --base=/tetetennis/ --port 4180 & node scripts/pwa-check.mjs
 ```
 
 All sound effects are synthesized at runtime with the Web Audio API — no

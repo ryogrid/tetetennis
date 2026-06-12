@@ -6,6 +6,9 @@ import { createCameraRig } from './camera.js';
 import { createInput } from './input.js';
 import { createGame } from './game.js';
 import { initAudio } from './audio.js';
+import { registerPWA } from './pwa.js';
+
+registerPWA();
 
 const app = document.getElementById('app');
 const renderer = new THREE.WebGLRenderer({ antialias: true });

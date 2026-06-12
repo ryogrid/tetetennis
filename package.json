@@ -8,7 +8,8 @@
     "build": "vite build",
     "preview": "vite preview",
     "test": "vitest run",
-    "physcheck": "node scripts/physics-check.mjs"
+    "physcheck": "node scripts/physics-check.mjs",
+    "icons": "node scripts/gen-icons.mjs"
   },
   "dependencies": {
     "three": "^0.165.0"

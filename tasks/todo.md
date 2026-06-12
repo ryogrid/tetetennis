@@ -222,3 +222,45 @@ Plan: /home/ryo/.claude/plans/3d-1-mighty-ember.md
   touch, build. AI contact rates unchanged on normal/hard (99/100 mixed);
   easy dropped to 84% mixed / 28% pressing (lateral stand offset costs the
   slowest setting most) — accepted, easy should be beatable.
+
+## PWA (9th task)
+
+Make the app an installable, offline-capable Progressive Web App.
+
+- [x] public/manifest.webmanifest: name/short_name, fullscreen + landscape,
+      theme/background #0d0d14, relative start_url/scope "." (base-agnostic),
+      192/512 + maskable-512 icons
+- [x] public/sw.js: zero-dependency runtime caching — network-first for
+      navigations (app shell), cache-first for hashed assets/icons; versioned
+      cache cleaned on activate; skipWaiting + clients.claim
+- [x] scripts/gen-icons.mjs (npm run icons): draws the tennis-ball mark on a
+      canvas and writes the PNGs — keeps the repo asset-free in spirit
+- [x] src/pwa.js: registers the SW at `${BASE_URL}sw.js` (works at "/" and
+      "/tetetennis/"); PROD-gated so it never interferes with dev HMR
+- [x] index.html: manifest link, theme-color, apple-touch-icon + iOS
+      standalone metas, viewport-fit=cover (all relative hrefs)
+- [x] scripts/pwa-check.mjs: manifest/SW/offline-reload smoke against the
+      production build at the GitHub Pages base path
+- [x] README: Install (PWA) section + dev commands
+
+### Review
+
+- **Approach**: hand-rolled (no vite-plugin-pwa) to match the project's
+  zero-runtime-dep, asset-free style and avoid churning the lockfile that
+  CI's `npm ci` depends on. Workbox would have pulled ~dozens of transitive
+  deps for what a 40-line runtime-caching worker does here.
+- **Base path was the crux**: the site deploys under `/tetetennis/` (base
+  injected at build time). Solved with manifest-relative URLs (`start_url`,
+  `scope`, icon `src` all `"."`/relative) and `import.meta.env.BASE_URL`
+  for SW registration, so the identical code works at the dev root and the
+  Pages subpath. Verified both builds.
+- **Hashed assets**: runtime caching (not a precache manifest) means new
+  deploys' content-hashed filenames are fetched fresh and cached on the
+  next online visit — no stale-asset trap, no build-time manifest to keep
+  in sync.
+- pwa-check (10 assertions) confirms manifest parses + resolves under the
+  base, all icons 200, the SW reaches "activated" with the base scope, and
+  a **fully-offline reload still renders the game** (app + canvas). e2e and
+  touch still report zero page errors with the SW registration added.
+- CI needs no change: icons are committed and `public/` is copied by the
+  build; the PWA ships in the existing deploy artifact.
