@@ -71,20 +71,24 @@ with both hands):
   **waist height, an arm-plus-racket length to your side** (forehand or
   backhand). Stretching for it or getting jammed against the body produces
   weak, short, error-prone balls.
+- A **blue circle** on the court shows your horizontal reach area. It turns
+  **pink** and a subtle rising tone plays when the incoming ball enters your
+  striking range — a quick cue that it's time to swing.
 - Serve power/accuracy depends on hitting near the top of the toss.
 
 ## Shot types
 
 - **Flat** — fastest ball on a low line; shallow, skidding bounce.
 - **Topspin** — slower off the racket but arcs high over the net and dips
-  sharply (Magnus effect: the same launch without spin would fly ~5 m
+  sharply (Magnus effect: the same launch without spin would fly ~2.8 m
   deeper), then kicks up off the bounce.
 - **Slice** — clearly slower floater whose backspin carries it on a
-  straighter, stretched line (~4 m deeper than the same launch without
+  straighter, stretched line (~3.1 m deeper than the same launch without
   spin); it stays low and robs the bounce of pace, especially on grass.
 
-Ball pace is globally scaled (`PACE` in `src/physics/constants.js`, 0.8) so
-rallies leave time to position — player movement is unaffected.
+Ball pace is globally scaled (`PACE` in `src/physics/constants.js`, 0.64) to
+80 % of the original speed — rallies leave plenty of time to position.
+Player movement speed is boosted 1.5× so you can still cover the court.
 
 Serves: **flat** is the cannonball; **kick** clears the net high and dives
 into the box (the safe second serve); **slice** curves visibly toward the
@@ -103,7 +107,7 @@ court rebounds ~1.35-1.47 m) and — because a tennis ball is not rigid —
 falls with impact speed, so hard-hit balls rebound proportionally lower.
 Flat and slice balls lose horizontal speed at the bounce, with the loss
 driven by each surface's friction coefficient (clay μ=0.80 robs a slice of
-~7.4 m/s, hard μ=0.56 of ~5.0, grass μ=0.38 of ~3.2); a heavily overspun
+~7.3 m/s, hard μ=0.56 of ~5.0, grass μ=0.38 of ~3.2); a heavily overspun
 topspin ball can even kick forward — verified by `npm run physcheck`.
 
 ## Characters
