@@ -152,3 +152,16 @@ slide dv_h = mu*Jn, grip dv_h = (2/5)*slip). Work done:
       (flat drive: -7.6 / -5.5 / -3.5 m/s)
 - [x] bounce.js doc comment + README physics note (no behavior change)
 - [x] All suites re-run green; build clean
+
+## Trajectory trail (7th task)
+
+- [x] physics/ball.js: predictTrajectory (sampled path + bounceT)
+- [x] entities/ball.js: InstancedMesh dot trail (yellow pre-bounce /
+      cyan post-bounce, capacity 64), exposed as trailMarker
+- [x] game.js: shown per ballStamp with the sweet-spot lifecycle, window
+      bounceT-0.45s -> 2nd bounce, human side only
+- [x] Checks: physics-check sampling sanity, fpv-check trail assertion +
+      24-fpv-trail.png (34 dots, reads well in FPV), all suites green
+- [x] touch-check D-pad hold 400->700 ms (flaky once: accel ramp made the
+      0.2 m threshold marginal)
+- [x] README "Reading the screen" updated

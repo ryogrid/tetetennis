@@ -173,6 +173,40 @@ export function sampleHitPoints(ball, surface, sideZSign, maxT = 6, every = 0.06
   return out;
 }
 
+// Sampled predicted path for display: points every `every` seconds with
+// their bounce phase. Returns {points: [{x,y,z,t,afterBounce}], bounceT}
+// where bounceT is the time of the next bounce on `sideZSign`'s side (null
+// if none within maxT). Stops at the second bounce there. With
+// alreadyBounced, every point is afterBounce and bounceT = 0.
+export function predictTrajectory(ball, surface, sideZSign, maxT = 4,
+                                  every = 0.04, alreadyBounced = false) {
+  const sim = copyBall(ball);
+  const ev = [];
+  const points = [];
+  let bounces = alreadyBounced ? 1 : 0;
+  let bounceT = alreadyBounced ? 0 : null;
+  let nextSample = 0;
+  for (let t = 0; t < maxT; t += PREDICT_DT) {
+    ev.length = 0;
+    stepBall(sim, PREDICT_DT, surface, ev);
+    for (const e of ev) {
+      if (e.type === 'bounce' && Math.sign(e.pos.z) === sideZSign) {
+        bounces++;
+        if (bounceT === null) bounceT = t;
+      }
+    }
+    if (bounces >= 2) break;
+    if (t >= nextSample) {
+      points.push({
+        x: sim.pos.x, y: sim.pos.y, z: sim.pos.z, t,
+        afterBounce: bounces >= 1,
+      });
+      nextSample = t + every;
+    }
+  }
+  return { points, bounceT };
+}
+
 // Where/when the ball crosses the plane z = zPlane (before any 2nd bounce).
 export function predictAtZ(ball, surface, zPlane, maxT = 5) {
   const sim = copyBall(ball);

@@ -77,10 +77,13 @@ check('toss gauge hidden after the hit', afterHit.gauge === 'none', afterHit.gau
 let sawSweet = false;
 let sweetPos = null;
 let sawMoveHint = false;
+let trailCount = 0;
 for (let t = 0; t < 40 && !sawSweet; t++) {
   const s = await page.evaluate(() => ({
     vis: window.__game.ball.sweetMarker.visible,
     pos: { x: window.__game.ball.sweetMarker.position.x, z: window.__game.ball.sweetMarker.position.z },
+    trailVis: window.__game.ball.trailMarker.visible,
+    trailCount: window.__game.ball.trailMarker.count,
     hint: getComputedStyle(document.getElementById('movehint')).display,
     lastHitBy: window.__game.rally ? window.__game.rally.lastHitBy : null,
     ps: window.__game.pointState,
@@ -89,7 +92,8 @@ for (let t = 0; t < 40 && !sawSweet; t++) {
     sawSweet = true;
     sweetPos = s.pos;
     sawMoveHint = s.hint === 'block';
-    await page.screenshot({ path: 'scripts/shots/23-fpv-sweetspot.png' });
+    if (s.trailVis) trailCount = s.trailCount;
+    await page.screenshot({ path: 'scripts/shots/24-fpv-trail.png' });
   }
   if (s.ps === 'pre_serve') {
     // next point started without a CPU return; serve again
@@ -105,6 +109,8 @@ if (sweetPos) {
   check('sweet-spot marker is on the human side', sweetPos.z > 0,
     `z=${sweetPos.z.toFixed(1)}`);
   check('move hint shown with the marker', sawMoveHint);
+  check('trajectory trail shown with the marker (>5 dots)', trailCount > 5,
+    `${trailCount} dots`);
 }
 await page.screenshot({ path: 'scripts/shots/22-fpv-rally.png' });
 

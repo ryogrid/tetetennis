@@ -3,7 +3,7 @@
 import { CHARACTERS } from './characters.js';
 import { createMatch, addPoint, scoreStrings, pointNumberInGame } from './match.js';
 import { SURFACES, COURT, LINE_GRACE, STATS_MAP, G } from './physics/constants.js';
-import { stepBall, predictLanding, predictHitPoint } from './physics/ball.js';
+import { stepBall, predictLanding, predictHitPoint, predictTrajectory } from './physics/ball.js';
 import { computeStroke } from './game/shots.js';
 import { computeServe, serveStanceX, isServeBoxIn, serveBox } from './game/serve.js';
 import { createPlayer, SWING_CONTACT_T } from './entities/player.js';
@@ -122,7 +122,19 @@ export function createGame(scene, cameraRig, input) {
   function hideSweet() {
     g.sweetPos = null;
     g.ball.hideSweetSpot();
+    g.ball.hideTrail();
     ui.hideMoveHint();
+  }
+
+  // trajectory trail: from a little before the bounce through the
+  // post-bounce arc, on the human's side only
+  function showTrajectoryTrail() {
+    const alreadyBounced = g.rally.bounces > 0;
+    const { points, bounceT } = predictTrajectory(
+      g.ball.state, g.surface, 1, 4, 0.04, alreadyBounced);
+    if (bounceT === null) { g.ball.hideTrail(); return; }
+    const from = alreadyBounced ? 0 : bounceT - 0.45;
+    g.ball.showTrail(points.filter((p) => p.t >= from && p.z > 0.3));
   }
 
   function startMatch() {
@@ -562,6 +574,7 @@ export function createGame(scene, cameraRig, input) {
           const hp = predictHitPoint(b, g.surface, 1);
           if (hp) showSweet(hp.pos);
           else hideSweet();
+          showTrajectoryTrail();
         }
       }
       return;

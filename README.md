@@ -44,6 +44,9 @@ with both hands):
 
 - The camera is your player's eyes; your own body is not drawn.
 - **Yellow ring** — where the incoming ball will land.
+- **Trajectory dots** — the incoming ball's predicted path from just before
+  the bounce: yellow dots down to the bounce, cyan dots for the arc after
+  it, so you can read where the ball is going before it gets there.
 - **Cyan ring + arrow** — where to stand for a clean contact: the ring marks
   the spot on the court, the on-screen arrow points the way (it turns into a
   green ◎ when you are on the spot).

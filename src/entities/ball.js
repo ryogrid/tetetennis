@@ -31,6 +31,25 @@ export function createBallEntity(scene) {
   ring.visible = false;
   scene.add(ring);
 
+  // predicted-path trail: dots from just before the bounce through the
+  // post-bounce arc (yellow = incoming, cyan = after the bounce)
+  const TRAIL_CAP = 64;
+  const trail = new THREE.InstancedMesh(
+    new THREE.SphereGeometry(0.035, 8, 6),
+    new THREE.MeshBasicMaterial({ transparent: true, opacity: 0.8 }),
+    TRAIL_CAP,
+  );
+  trail.instanceColor = new THREE.InstancedBufferAttribute(
+    new Float32Array(TRAIL_CAP * 3), 3,
+  );
+  trail.count = 0;
+  trail.visible = false;
+  trail.frustumCulled = false;
+  scene.add(trail);
+  const _m = new THREE.Matrix4();
+  const _cPre = new THREE.Color(0xffe34d);
+  const _cPost = new THREE.Color(0x39d7ff);
+
   // "stand here" marker: where the player should be to make a clean contact
   const sweet = new THREE.Group();
   const sweetRing = new THREE.Mesh(
@@ -82,8 +101,28 @@ export function createBallEntity(scene) {
       sweet.position.z = pos.z;
     },
     hideSweetSpot() { sweet.visible = false; },
+    // points: [{x, y, z, afterBounce}]
+    showTrail(points) {
+      const n = Math.min(points.length, TRAIL_CAP);
+      for (let i = 0; i < n; i++) {
+        const p = points[i];
+        _m.makeScale(1, 1, 1);
+        _m.setPosition(p.x, Math.max(p.y, 0.04), p.z);
+        trail.setMatrixAt(i, _m);
+        trail.setColorAt(i, p.afterBounce ? _cPost : _cPre);
+      }
+      trail.count = n;
+      trail.instanceMatrix.needsUpdate = true;
+      trail.instanceColor.needsUpdate = true;
+      trail.visible = n > 0;
+    },
+    hideTrail() {
+      trail.visible = false;
+      trail.count = 0;
+    },
+    trailMarker: trail,
     dispose() {
-      scene.remove(mesh, blob, ring, sweet);
+      scene.remove(mesh, blob, ring, sweet, trail);
     },
   };
 }

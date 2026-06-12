@@ -92,7 +92,7 @@ await page.dispatchEvent('#dpad', 'pointerdown', {
   pointerId: 7, pointerType: 'touch', isPrimary: true,
   clientX: cx - dpadBox.width * 0.38, clientY: cy,
 });
-await page.waitForTimeout(400);
+await page.waitForTimeout(700); // movement now accelerates; allow the ramp
 await page.dispatchEvent('#dpad', 'pointerup', {
   pointerId: 7, pointerType: 'touch', isPrimary: true,
   clientX: cx - dpadBox.width * 0.38, clientY: cy,

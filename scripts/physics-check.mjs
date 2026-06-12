@@ -1,6 +1,6 @@
 // Headless physics sanity checks (no DOM/three): node scripts/physics-check.mjs
 import { SURFACES, RPM_TO_RADS, COURT } from '../src/physics/constants.js';
-import { makeBall, stepBall, predictLanding } from '../src/physics/ball.js';
+import { makeBall, stepBall, predictLanding, predictTrajectory } from '../src/physics/ball.js';
 import { solveShot } from '../src/physics/shotSolver.js';
 import { computeStroke } from '../src/game/shots.js';
 
@@ -220,6 +220,27 @@ console.log('--- contact quality sensitivity (stroke) ---');
     `${stretched.speed.toFixed(1)} vs ${clean.speed.toFixed(1)}`);
   check('stretched contact lands shorter', stretched.depth < clean.depth - 0.5,
     `${stretched.depth.toFixed(1)} vs ${clean.depth.toFixed(1)}`);
+}
+
+console.log('--- trajectory sampling (display trail) ---');
+{
+  const solved = solveShot({
+    from: { x: 0, y: 1.0, z: -11.5 }, target: { x: 0, z: 9.8 }, speed: 27,
+    spinRadS: 2800 * RPM_TO_RADS, thetaMinDeg: 10, thetaMaxDeg: 32,
+  });
+  const ball = makeBall();
+  ball.pos = { x: 0, y: 1.0, z: -11.5 };
+  ball.vel = solved.vel; ball.spin = solved.spin; ball.active = true;
+  const landing = predictLanding(ball, SURFACES.hard);
+  const { points, bounceT } = predictTrajectory(ball, SURFACES.hard, 1);
+  const ordered = points.every((p, i) => i === 0 || p.t > points[i - 1].t);
+  const pre = points.filter((p) => !p.afterBounce).length;
+  const post = points.filter((p) => p.afterBounce).length;
+  check('trajectory points are time-ordered with both phases',
+    ordered && pre > 5 && post > 5, `pre=${pre} post=${post}`);
+  check('trail bounce time matches predictLanding',
+    bounceT !== null && Math.abs(bounceT - landing.t) < 0.05,
+    `bounceT=${bounceT && bounceT.toFixed(2)} landing.t=${landing.t.toFixed(2)}`);
 }
 
 console.log('--- serve plausibility ---');
