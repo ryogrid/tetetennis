@@ -287,5 +287,29 @@ export function createPlayer({ side, character, scene, speedMul = 1 }) {
       scene.remove(root);
     },
   };
+
+  // Reach zone arcs — only for the human player, so they can see the
+  // maximum horizontal reach boundary on the left and right sides.
+  if (p.isHuman) {
+    const reach = p.reach;
+    const arcMat = new THREE.MeshBasicMaterial({
+      color: 0x50e678, transparent: true, opacity: 0.5, side: THREE.DoubleSide,
+    });
+    const mkArc = (start, len) =>
+      new THREE.RingGeometry(reach - 0.03, reach + 0.03, 48, 1, start, len);
+
+    const rightArc = new THREE.Mesh(mkArc(-Math.PI / 3, (2 * Math.PI) / 3), arcMat);
+    rightArc.rotation.x = -Math.PI / 2;
+    rightArc.position.y = 0.012;
+    root.add(rightArc);
+
+    const leftArc = new THREE.Mesh(mkArc((2 * Math.PI) / 3, (2 * Math.PI) / 3), arcMat);
+    leftArc.rotation.x = -Math.PI / 2;
+    leftArc.position.y = 0.012;
+    root.add(leftArc);
+
+    p._reachArcs = [rightArc, leftArc];
+  }
+
   return p;
 }
