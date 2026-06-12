@@ -67,8 +67,9 @@ export function solveShot({ from, target, speed, spinRadS = 0, ySpinRadS = 0,
     break;
   }
 
-  // Bisection (range is monotonic in theta within the bands used)
-  for (let i = 0; i < 14; i++) {
+  // Bisection (range is monotonic in theta within the bands used).
+  // 11 iterations: angle precision far below the shot error model's noise.
+  for (let i = 0; i < 11; i++) {
     theta = (lo + hi) / 2;
     const r = simulateRange2D(from.y, v0, theta, spinRadS);
     if (r < D) lo = theta; else hi = theta;

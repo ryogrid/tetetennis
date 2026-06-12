@@ -36,7 +36,7 @@ export function serveStanceX(servingSide, courtSide) {
 
 export const SERVE_TYPES = {
   flat:  { speedMul: 1.00, thetaMin: -6, thetaMax: 4 },
-  kick:  { speedMul: 0.70, thetaMin: 0,  thetaMax: 10 },
+  kick:  { speedMul: 0.66, thetaMin: 1,  thetaMax: 12 },
   slice: { speedMul: 0.84, thetaMin: -4, thetaMax: 6 },
 };
 

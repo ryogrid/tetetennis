@@ -63,6 +63,18 @@ check('player is rojo, opp is dash', state1.player === 'rojo' && state1.opp === 
 check('waiting for serve', state1.pointState === 'pre_serve', state1.pointState);
 await page.screenshot({ path: 'scripts/shots/02-preserve.png' });
 
+// --- movement physics: velocity builds up over ~0.5 s (not instant) ---
+await page.keyboard.down('ArrowLeft');
+await page.waitForTimeout(100);
+const vEarly = await page.evaluate(() => Math.abs(window.__game.human.vel.x));
+await page.waitForTimeout(500);
+const vLate = await page.evaluate(() => Math.abs(window.__game.human.vel.x));
+await page.keyboard.up('ArrowLeft');
+await page.waitForTimeout(400);
+check('movement accelerates over time (vLate > 1.5x vEarly)',
+  vEarly > 0.1 && vLate > vEarly * 1.5,
+  `v(0.1s)=${vEarly.toFixed(2)} v(0.6s)=${vLate.toFixed(2)}`);
+
 // Play several points: toss + hit, then mash a groundstroke key with movement
 // so the human sometimes returns. CPU plays for real.
 async function playPoint(i) {
@@ -118,6 +130,35 @@ console.log('  final:', JSON.stringify(finalSnap));
 check('points were scored across 6 serves', sawRally, JSON.stringify(finalSnap));
 check('no page errors during play', pageErrors.length === 0, pageErrors[0]);
 await page.screenshot({ path: 'scripts/shots/04-after-points.png' });
+
+// --- diagonal movement: up+left moves forward-left (free movement in rally) ---
+let diagOk = false, diagDetail = 'no rally window found';
+for (let t = 0; t < 60; t++) {
+  const s = await page.evaluate(() => ({
+    ps: window.__game.pointState, sv: window.__game.match.server,
+  }));
+  if (s.ps === 'rally') break;
+  if (s.ps === 'pre_serve' && s.sv === 'P') {
+    await page.keyboard.press('Space');
+    await page.waitForTimeout(500);
+    await page.keyboard.press('KeyZ');
+  }
+  await page.waitForTimeout(250);
+}
+{
+  const ps = await page.evaluate(() => window.__game.pointState);
+  if (ps === 'rally') {
+    await page.keyboard.down('ArrowUp');
+    await page.keyboard.down('ArrowLeft');
+    await page.waitForTimeout(400);
+    const v = await page.evaluate(() => ({ ...window.__game.human.vel }));
+    await page.keyboard.up('ArrowUp');
+    await page.keyboard.up('ArrowLeft');
+    diagDetail = `vx=${v.x.toFixed(2)} vz=${v.z.toFixed(2)}`;
+    diagOk = v.x < -0.5 && v.z < -0.5; // left AND toward the net
+  }
+}
+check('up+left moves diagonally forward-left', diagOk, diagDetail);
 
 // scoreboard sanity
 const sb = await page.textContent('#scoreboard');

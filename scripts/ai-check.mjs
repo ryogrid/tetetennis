@@ -81,11 +81,17 @@ function playBall(ai, character, surface, seed, mode) {
         cpu.pendingAim = aim;
       },
     });
-    // integrate movement (same model as player.update)
+    // integrate movement (keep in sync with player.update's accel/brake model)
     const slow = cpu.swing ? 0.45 : 1;
-    const k = Math.min(1, accel * DT / Math.max(maxSpeed, 0.01));
-    cpu.vel.x += (move.x * maxSpeed * slow - cpu.vel.x) * k;
-    cpu.vel.z += (move.z * maxSpeed * slow - cpu.vel.z) * k;
+    const dvx = move.x * maxSpeed * slow - cpu.vel.x;
+    const dvz = move.z * maxSpeed * slow - cpu.vel.z;
+    const dv = Math.hypot(dvx, dvz);
+    if (dv > 1e-6) {
+      const braking = cpu.vel.x * dvx + cpu.vel.z * dvz < 0;
+      const step = Math.min(dv, (braking ? accel * 1.8 : accel) * DT);
+      cpu.vel.x += dvx / dv * step;
+      cpu.vel.z += dvz / dv * step;
+    }
     cpu.pos.x += cpu.vel.x * DT;
     cpu.pos.z += cpu.vel.z * DT;
     cpu.pos.x = Math.max(PLAYER_BOUNDS.xMin, Math.min(PLAYER_BOUNDS.xMax, cpu.pos.x));

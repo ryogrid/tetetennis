@@ -154,14 +154,22 @@ export function createPlayer({ side, character, scene, speedMul = 1 }) {
       this.vel.x = 0; this.vel.z = 0;
     },
 
-    // fixed-step movement; move = {x, z} in [-1,1]
+    // fixed-step movement; move = {x, z} in [-1,1].
+    // Constant-force model: accelerate toward the desired velocity with a
+    // limited force; braking (reversing/stopping) is 1.8x stronger, like
+    // real footwork. Gives build-up, momentum and overshoot on reversals.
     update(dt, move) {
       const slow = this.swing ? 0.45 : 1;
       const tx = move.x * maxSpeed * slow;
       const tz = move.z * maxSpeed * slow;
-      const k = Math.min(1, accel * dt / Math.max(maxSpeed, 0.01));
-      this.vel.x += (tx - this.vel.x) * k;
-      this.vel.z += (tz - this.vel.z) * k;
+      const dvx = tx - this.vel.x, dvz = tz - this.vel.z;
+      const dv = Math.hypot(dvx, dvz);
+      if (dv > 1e-6) {
+        const braking = this.vel.x * dvx + this.vel.z * dvz < 0;
+        const step = Math.min(dv, (braking ? accel * 1.8 : accel) * dt);
+        this.vel.x += dvx / dv * step;
+        this.vel.z += dvz / dv * step;
+      }
       this.pos.x += this.vel.x * dt;
       this.pos.z += this.vel.z * dt;
 

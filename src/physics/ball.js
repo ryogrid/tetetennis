@@ -103,7 +103,9 @@ export function stepBall(ball, dt, surface, events) {
   return events;
 }
 
-const PREDICT_DT = 1 / 240;
+// Predictions don't need the full 240 Hz: 120 Hz halves their cost and is
+// still well within the error budget of aiming and AI reads.
+const PREDICT_DT = 1 / 120;
 
 // First ground contact of the ball's current trajectory (net included).
 export function predictLanding(ball, surface, maxT = 5) {

@@ -109,3 +109,34 @@ Plan: /home/ryo/.claude/plans/3d-1-mighty-ember.md
   lower choiceNoise picks riskier corner targets — intended personality, so
   the ordering assertion uses contact rate.
 - In-browser: CPU on hard returned 6/6 human serves (was: mostly aces).
+
+## Shot contrast + strafe camera + movement physics (5th task)
+
+Plan: /home/ryo/.claude/plans/3d-1-mighty-ember.md
+
+- [x] shots.js/constants.js: distinct flat/topspin/slice regimes
+      (speed, spin, theta band, depth) + physics-check contrast assertions
+- [x] ball.js PREDICT_DT 1/240→1/120, shotSolver bisection 14→11
+- [x] camera.js: eye-relative look targets (no yaw while strafing)
+- [x] player.js: constant-force accel/brake movement; runAccel retune
+- [x] ai.js: kinematic arrival estimate; ai-check movement mirror
+- [x] e2e-check: velocity ramp + diagonal movement assertions
+- [x] Verify all suites + build; README update
+
+### Review
+
+- Final type regimes (POW≈72, q=1, hard court): flat 21.2 m/s arrival /
+  1.55 m arc / 0.68 m bounce; topspin 17.7 / 2.21 / 1.16 (kick); slice
+  15.3 / low / 0.64 and only 10.8 m/s through the bounce. Slice needed two
+  iterations: speedMul 0.55 + theta≤18 made it a moonball that bounced as
+  high as topspin — flatter band (1–10°) + 0.62 speed + 9.0 m depth fixed it.
+- Strafe verified by camera-quaternion probe: yaw drift while moving 2 m
+  sideways is ~0.001 (pre-serve) / ~0.01 (rally, from the small ball-offset),
+  vs ~0.08 before. Look targets are all eye-relative now.
+- Movement: constant-force accel (9–15 m/s²) with 1.8x braking; e2e asserts
+  the ramp (1.4 → 7.3 m/s over 0.5 s) and diagonal up+left motion. The AI
+  arrival estimate switched to rest-to-distance kinematics so the CPU plans
+  around its own acceleration; ai-check mirrors the new integrator.
+- Easy difficulty under corner pressure dropped to ~30% returns (slower
+  accel hurts the weakest setting most) — accepted: pressing corners SHOULD
+  beat easy; its mixed-ball rate stays 87%.

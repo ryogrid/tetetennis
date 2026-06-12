@@ -58,11 +58,11 @@ export const RPM_TO_RADS = Math.PI * 2 / 60;
 // Character stat (0-100) -> physics mappings
 export const STATS_MAP = {
   maxFlatSpeed:  (POW) => 26 + 10 * POW / 100,        // m/s
-  topspinRpm:    (SPN) => 1500 + 1800 * SPN / 100,
-  sliceRpm:      (SLC) => 1000 + 1400 * SLC / 100,
+  topspinRpm:    (SPN) => 1800 + 2400 * SPN / 100,
+  sliceRpm:      (SLC) => 1200 + 1600 * SLC / 100,
   serveFlatSpeed:(SRV) => 40 + 16 * SRV / 100,        // m/s
   runSpeed:      (SPD) => 5.2 + 2.6 * SPD / 100,      // m/s
-  runAccel:      (SPD) => 18 + 14 * SPD / 100,        // m/s^2
+  runAccel:      (SPD) => 9 + 6 * SPD / 100,          // m/s^2 (brake is 1.8x)
   errMulBase:    (CTL) => 1.6 - 1.2 * CTL / 100,
   reach:         (REA) => 1.25 + 0.25 * REA / 100,    // m
   serveContactH: (REA) => 2.55 + 0.55 * REA / 100,    // m

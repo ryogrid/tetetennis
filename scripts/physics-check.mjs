@@ -31,8 +31,12 @@ function fireAndBounce(surface, { speed, spinRpm, thetaMin, thetaMax, targetZ })
   let bounce = null;
   let preSpeedH = 0;
   let apex = 0;
+  let flightApex = 0;
   for (let t = 0; t < 4; t += dt) {
-    if (!bounce) preSpeedH = Math.hypot(ball.vel.x, ball.vel.z);
+    if (!bounce) {
+      preSpeedH = Math.hypot(ball.vel.x, ball.vel.z);
+      flightApex = Math.max(flightApex, ball.pos.y);
+    }
     ev.length = 0;
     stepBall(ball, dt, surface, ev);
     const b = ev.find((e) => e.type === 'bounce');
@@ -48,7 +52,12 @@ function fireAndBounce(surface, { speed, spinRpm, thetaMin, thetaMax, targetZ })
       if (ev.some((e) => e.type === 'bounce')) break; // second bounce
     }
   }
-  return { bounce, apex, retention: bounce ? bounce.postSpeedH / bounce.preSpeedH : 0 };
+  return {
+    bounce, apex, flightApex,
+    preSpeedH: bounce ? bounce.preSpeedH : 0,
+    postSpeedH: bounce ? bounce.postSpeedH : 0,
+    retention: bounce ? bounce.postSpeedH / bounce.preSpeedH : 0,
+  };
 }
 
 console.log('--- shot solver accuracy ---');
@@ -98,6 +107,35 @@ console.log('--- surface behavior ---');
   check('grass slice faster through court than hard slice',
     sliGrass.retention > sliHard.retention,
     `${sliGrass.retention.toFixed(2)} vs ${sliHard.retention.toFixed(2)}`);
+}
+
+console.log('--- shot-type contrast (POW/SPN/SLC ~72 player, hard court) ---');
+{
+  // mirror SHOT_TYPES + STATS_MAP regimes for a typical character at q=1
+  const flat = fireAndBounce(SURFACES.hard,
+    { speed: 33.4, spinRpm: 500, thetaMin: 0, thetaMax: 10, targetZ: -10.6 });
+  const top = fireAndBounce(SURFACES.hard,
+    { speed: 33.4 * 0.85, spinRpm: 3530, thetaMin: 10, thetaMax: 32, targetZ: -9.8 });
+  const sli = fireAndBounce(SURFACES.hard,
+    { speed: 33.4 * 0.62, spinRpm: -2350, thetaMin: 1, thetaMax: 10, targetZ: -9.0 });
+  for (const [n, s] of [['flat', flat], ['topspin', top], ['slice', sli]]) {
+    console.log(`  ${n.padEnd(7)}: arc=${s.flightApex.toFixed(2)}m  preSpeed=${s.preSpeedH.toFixed(1)}  postApex=${s.apex.toFixed(2)}  postSpeed=${s.postSpeedH.toFixed(1)}`);
+  }
+  check('flat arrives much faster than topspin (>10%)',
+    flat.preSpeedH > top.preSpeedH * 1.10,
+    `${flat.preSpeedH.toFixed(1)} vs ${top.preSpeedH.toFixed(1)}`);
+  check('topspin arrives much faster than slice (>15%)',
+    top.preSpeedH > sli.preSpeedH * 1.15,
+    `${top.preSpeedH.toFixed(1)} vs ${sli.preSpeedH.toFixed(1)}`);
+  check('topspin arcs visibly higher than flat (>0.5m)',
+    top.flightApex > flat.flightApex + 0.5,
+    `${top.flightApex.toFixed(2)} vs ${flat.flightApex.toFixed(2)}`);
+  check('topspin kicks much higher off the bounce than slice (>=1.5x)',
+    top.apex >= sli.apex * 1.5,
+    `${top.apex.toFixed(2)} vs ${sli.apex.toFixed(2)}`);
+  check('slice is slower through the bounce than topspin',
+    sli.postSpeedH < top.postSpeedH,
+    `${sli.postSpeedH.toFixed(1)} vs ${top.postSpeedH.toFixed(1)}`);
 }
 
 console.log('--- surface pace (flat drive ~28 m/s) ---');
@@ -191,6 +229,19 @@ console.log('--- solver performance ---');
   }
   const ms = performance.now() - t0;
   check('10,000 solves under 2000 ms', ms < 2000, `${ms.toFixed(0)} ms`);
+}
+{
+  const solved = solveShot({
+    from: { x: 0, y: 1.0, z: 11.5 }, target: { x: 0, z: -10 }, speed: 30,
+    spinRadS: 2500 * RPM_TO_RADS, thetaMinDeg: 10, thetaMaxDeg: 32,
+  });
+  const ball = makeBall();
+  ball.pos = { x: 0, y: 1.0, z: 11.5 };
+  ball.vel = solved.vel; ball.spin = solved.spin; ball.active = true;
+  const t0 = performance.now();
+  for (let i = 0; i < 1000; i++) predictLanding(ball, SURFACES.hard);
+  const ms = performance.now() - t0;
+  check('1,000 landing predictions under 800 ms', ms < 800, `${ms.toFixed(0)} ms`);
 }
 
 console.log(failures === 0 ? '\nAll physics checks passed.' : `\n${failures} CHECK(S) FAILED`);

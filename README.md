@@ -17,7 +17,7 @@ npm run dev      # open the printed URL
 
 | Action | Keys |
 |---|---|
-| Move | WASD / Arrow keys |
+| Move | WASD / Arrow keys — you strafe facing forward; diagonals combine (e.g. up+left); movement has real acceleration and braking |
 | Flat shot | Z (or J) |
 | Topspin shot | X (or K) |
 | Slice shot | C (or L) |
@@ -55,6 +55,14 @@ with both hands):
   (close, waist height) for clean power; stretching or getting jammed
   produces weak, short, error-prone balls.
 - Serve power/accuracy depends on hitting near the top of the toss.
+
+## Shot types
+
+- **Flat** — fastest ball on a low line; shallow, skidding bounce.
+- **Topspin** — slower off the racket but arcs high over the net, dips
+  sharply (Magnus effect) and kicks up off the bounce.
+- **Slice** — clearly slower floater with backspin: it stays low and robs
+  the bounce of pace, especially on grass.
 
 ## Surfaces
 

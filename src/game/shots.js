@@ -3,10 +3,13 @@
 import { STATS_MAP, RPM_TO_RADS, COURT } from '../physics/constants.js';
 import { solveShot } from '../physics/shotSolver.js';
 
+// Three distinct physical regimes: flat = fast low liner, topspin = slower
+// but heavily arced (high clearance, dips, kicks off the bounce), slice =
+// clearly slow floater that stays low and checks.
 export const SHOT_TYPES = {
-  flat:    { speedMul: 1.00, thetaMin: 1,  thetaMax: 14 },
-  topspin: { speedMul: 0.78, thetaMin: 4,  thetaMax: 26 },
-  slice:   { speedMul: 0.72, thetaMin: 1,  thetaMax: 18 },
+  flat:    { speedMul: 1.00, thetaMin: 0,  thetaMax: 10 },
+  topspin: { speedMul: 0.85, thetaMin: 10, thetaMax: 32 },
+  slice:   { speedMul: 0.62, thetaMin: 1,  thetaMax: 10 },
   lob:     { speedMul: 1.00, thetaMin: 28, thetaMax: 55 },
 };
 
@@ -55,7 +58,11 @@ export function computeStroke({ playerPos, ballPos, ballVel, stats, shotType, ai
   const def = SHOT_TYPES[type];
 
   // --- nominal target: poor contacts land shorter, not just wilder ---
-  const baseZ = (type === 'slice' ? 9.5 : type === 'lob' ? 9.0 : 10.3) - (1 - q) * 1.5;
+  // per-type depth consistent with the type's natural speed (the solver must
+  // not have to inflate a slow slice to reach a flat-drive depth)
+  const typeZ = type === 'flat' ? 10.6 : type === 'topspin' ? 9.8
+    : type === 'slice' ? 9.0 : 9.0;
+  const baseZ = typeZ - (1 - q) * 1.5;
   const target = {
     x: clamp(aim.x, -1, 1) * 2.8,
     z: zSign * clamp(baseZ + clamp(aim.depth, -1, 1) * 2.4, 4.5, 11.2),

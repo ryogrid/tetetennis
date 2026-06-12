@@ -21,18 +21,24 @@ export function createCameraRig(camera) {
       const eyeX = player.pos.x;
       const eyeZ = player.pos.z + EYE_BACK;
       desiredPos.set(eyeX, EYE_H, eyeZ);
+      // All look targets are EYE-RELATIVE: the player strafes facing forward,
+      // their own movement never rotates the view.
       if (mode === 'serve') {
-        // fixed forward gaze at the service box; the toss gauge handles timing
-        desiredLook.set(serveLookX * 0.5, 1.0, -COURT.serviceLine);
-      } else if (ball && ball.active) {
-        // track the ball, but never look behind the eyes or pitch too far
+        // forward gaze toward the service box; the toss gauge handles timing
         desiredLook.set(
-          THREE.MathUtils.clamp(ball.pos.x, eyeX - 6, eyeX + 6),
-          THREE.MathUtils.clamp(ball.pos.y, 0.3, 2.6),
-          Math.min(ball.pos.z, eyeZ - 3.0),
+          eyeX + (serveLookX - eyeX) * 0.2,
+          1.0,
+          -COURT.serviceLine,
+        );
+      } else if (ball && ball.active) {
+        // tiny ball-relative offset (<= ~6 deg) for awareness only
+        desiredLook.set(
+          eyeX + THREE.MathUtils.clamp((ball.pos.x - eyeX) * 0.25, -1.2, 1.2),
+          0.9,
+          eyeZ - 12,
         );
       } else {
-        desiredLook.set(0, 0.9, -COURT.halfLen * 0.5);
+        desiredLook.set(eyeX, 0.9, eyeZ - 12);
       }
       // position follows tightly (lag here feels swimmy); gaze is softer
       const kPos = 1 - Math.pow(0.000001, dt);

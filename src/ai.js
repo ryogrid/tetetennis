@@ -88,8 +88,9 @@ function chooseStroke(ai, ctx, predPos) {
   }
   candidates.sort((a, b) => b.u - a.u);
   const pick = candidates[0];
-  // convert target -> aim input understood by computeStroke
-  const baseZ = pick.type === 'slice' ? 9.5 : 10.3;
+  // convert target -> aim input understood by computeStroke (its per-type
+  // base depths)
+  const baseZ = pick.type === 'flat' ? 10.6 : pick.type === 'topspin' ? 9.8 : 9.2;
   return {
     type: pick.type,
     aim: {
@@ -126,15 +127,24 @@ export function chooseServe(ai, isSecond) {
 // Pick the contact point: the most comfortable one the CPU can actually reach
 // in time; if none is reachable, the least-bad one (keep chasing — never
 // stand and watch a playable ball).
+// Time to cover `dist` from rest with limited acceleration, then top speed.
+function travelTime(dist, vmax, accel) {
+  const dAcc = vmax * vmax / (2 * accel);
+  return dist <= dAcc
+    ? Math.sqrt(2 * dist / accel)
+    : dist / vmax + vmax / (2 * accel);
+}
+
 function pickIntercept(ai, ctx, opts) {
   if (!opts.length) return null;
-  const speed = STATS_MAP.runSpeed(ai.stats.SPD) * ai.diff.speedMul;
+  const vmax = STATS_MAP.runSpeed(ai.stats.SPD) * ai.diff.speedMul;
+  const accel = STATS_MAP.runAccel(ai.stats.SPD) * ai.diff.speedMul;
   const zReach = PLAYER_BOUNDS.zMax - 0.4;
   let best = null, bestU = -Infinity;
   let fallback = null, fallbackBad = Infinity;
   for (const p of opts) {
     const dist = Math.hypot(p.pos.x - ctx.cpu.pos.x, p.pos.z - ctx.cpu.pos.z);
-    const arrive = dist / speed + 0.12;
+    const arrive = travelTime(dist, vmax, accel) + 0.08;
     const spare = p.t - arrive;
     const inBounds = Math.abs(p.pos.z) <= zReach;
     if (spare >= 0.05 && inBounds) {
