@@ -138,6 +138,31 @@ console.log('--- shot-type contrast (POW/SPN/SLC ~72 player, hard court) ---');
     `${sli.postSpeedH.toFixed(1)} vs ${top.postSpeedH.toFixed(1)}`);
 }
 
+console.log('--- bounce decelerates horizontally (Coulomb friction, all surfaces) ---');
+{
+  // representative in-game shots; max-spin variants included
+  const SHOTS = {
+    flat:    { speed: 33.4, spinRpm: 700, thetaMin: 0, thetaMax: 10, targetZ: -10.6 },
+    topspin: { speed: 28.4, spinRpm: 4200, thetaMin: 10, thetaMax: 32, targetZ: -9.8 },
+    slice:   { speed: 20.7, spinRpm: -2800, thetaMin: 1, thetaMax: 10, targetZ: -9.0 },
+  };
+  let allSlow = true;
+  const loss = {};
+  for (const [sid, surface] of Object.entries(SURFACES)) {
+    for (const [name, shot] of Object.entries(SHOTS)) {
+      const r = fireAndBounce(surface, shot);
+      const detail = `${sid}/${name}: ${r.preSpeedH.toFixed(1)} -> ${r.postSpeedH.toFixed(1)} m/s`;
+      console.log(`  ${detail}`);
+      if (!(r.postSpeedH < r.preSpeedH)) allSlow = false;
+      if (name === 'flat') loss[sid] = r.preSpeedH - r.postSpeedH;
+    }
+  }
+  check('horizontal speed drops at the bounce for every shot x surface', allSlow);
+  check('friction ordering of the speed LOSS: clay > hard > grass',
+    loss.clay > loss.hard && loss.hard > loss.grass,
+    `clay -${loss.clay.toFixed(1)}  hard -${loss.hard.toFixed(1)}  grass -${loss.grass.toFixed(1)} m/s`);
+}
+
 console.log('--- surface pace (flat drive ~28 m/s) ---');
 {
   const flat = { speed: 28, spinRpm: 500, thetaMin: 1, thetaMax: 14, targetZ: -10.0 };

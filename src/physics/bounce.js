@@ -1,6 +1,15 @@
 // Ground bounce: vertical restitution + Coulomb friction impulse with a
 // grip/slide branch. Ball treated as hollow sphere, I = (2/3) m r^2, which
 // gives the "reach rolling" impulse factor alpha = 2/5.
+//
+// Horizontal deceleration at the bounce is surface-friction driven:
+// - SLIDE (friction too weak to stop the slip during impact):
+//     dv_h = mu * Jn,  Jn = (1+ey)*|vy_in|  -> loss proportional to mu,
+//   so clay (mu .80) takes far more pace off than grass (mu .38).
+// - GRIP (friction "bites" and the contact reaches rolling):
+//     dv_h = (2/5) * slip  -> mu no longer matters once it is sufficient,
+//   which is why heavy topspin loses similar pace on every surface while
+//   the bounce HEIGHT still differs via ey.
 import { BALL } from './constants.js';
 
 const ALPHA = 2 / 5;

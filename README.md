@@ -70,6 +70,12 @@ with both hands):
 - **Grass** — fast and low; slices skid, big serves dominate.
 - **Hard** — medium pace, true bounce.
 
+Bounces are physical: vertical restitution plus a Coulomb friction impulse.
+The ball always loses horizontal speed at the bounce, and the loss is driven
+by each surface's friction coefficient (clay μ=0.80 slows a flat drive by
+~7.6 m/s, hard μ=0.56 by ~5.5, grass μ=0.38 by ~3.5) — verified by
+`npm run physcheck`.
+
 ## Characters
 
 Boom (big server) · Rojo (spin grinder) · Dash (counterpuncher) ·

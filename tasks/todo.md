@@ -140,3 +140,15 @@ Plan: /home/ryo/.claude/plans/3d-1-mighty-ember.md
 - Easy difficulty under corner pressure dropped to ~30% returns (slower
   accel hurts the weakest setting most) — accepted: pressing corners SHOULD
   beat easy; its mixed-ball rate stays 87%.
+
+## Bounce deceleration verification (6th task)
+
+User asked to add mu-driven horizontal deceleration at the bounce if missing.
+**Already modeled** in src/physics/bounce.js (Coulomb friction impulse:
+slide dv_h = mu*Jn, grip dv_h = (2/5)*slip). Work done:
+
+- [x] physics-check: new block asserts horizontal speed drops for every
+      shot x surface (9 combos) and the loss orders clay > hard > grass
+      (flat drive: -7.6 / -5.5 / -3.5 m/s)
+- [x] bounce.js doc comment + README physics note (no behavior change)
+- [x] All suites re-run green; build clean
