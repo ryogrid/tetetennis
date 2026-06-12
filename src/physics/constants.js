@@ -83,6 +83,6 @@ export const STATS_MAP = {
   runSpeed:      (SPD) => 5.2 + 2.6 * SPD / 100,      // m/s
   runAccel:      (SPD) => 9 + 6 * SPD / 100,          // m/s^2 (brake is 1.8x)
   errMulBase:    (CTL) => 1.6 - 1.2 * CTL / 100,
-  reach:         (REA) => 1.25 + 0.25 * REA / 100,    // m
+  reach:         (REA) => (1.25 + 0.25 * REA / 100) * 1.5,    // m
   serveContactH: (REA) => 2.55 + 0.55 * REA / 100,    // m
 };
