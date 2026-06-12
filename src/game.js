@@ -151,7 +151,7 @@ export function createGame(scene, cameraRig, input) {
     scene.add(g.court);
     g.ball = createBallEntity(scene);
     g.human = createPlayer({ side: 'P', character: g.sel.player, scene });
-    g.human.root.visible = false; // first-person view: own rig stays hidden
+    g.human.root.visible = true; // third-person view: player visible from behind
     g.ai = createAI(g.sel.opp, g.sel.difficulty);
     g.cpu = createPlayer({
       side: 'C', character: g.sel.opp, scene, speedMul: g.ai.diff.speedMul,

@@ -6,6 +6,7 @@ import { COURT } from './physics/constants.js';
 
 const EYE_H = 1.62;
 const EYE_BACK = 0.15; // eyes slightly behind the body position
+const CAMERA_BACK = 2.5; // meters behind body — pull back enough to see the full player
 
 export function createCameraRig(camera) {
   const pos = new THREE.Vector3(0, EYE_H, 12.5);
@@ -19,7 +20,7 @@ export function createCameraRig(camera) {
     setServeLookX(x) { serveLookX = x; },
     update(dt, mode, player, ball) {
       const eyeX = player.pos.x;
-      const eyeZ = player.pos.z + EYE_BACK;
+      const eyeZ = player.pos.z + CAMERA_BACK;
       desiredPos.set(eyeX, EYE_H, eyeZ);
       // All look targets are EYE-RELATIVE: the player strafes facing forward,
       // their own movement never rotates the view.
@@ -28,7 +29,7 @@ export function createCameraRig(camera) {
         desiredLook.set(
           eyeX + (serveLookX - eyeX) * 0.2,
           1.0,
-          -COURT.serviceLine,
+          -COURT.serviceLine + (CAMERA_BACK - EYE_BACK),
         );
       } else if (ball && ball.active) {
         // tiny ball-relative offset (<= ~6 deg) for awareness only
