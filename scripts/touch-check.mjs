@@ -40,9 +40,20 @@ await page.waitForTimeout(150);
 st = await page.evaluate(() => window.__game.state);
 check('opponent confirmed by tap', st === 'menu_surface', st);
 await page.tap('[data-idx="2"]'); // hard already selected -> confirm
+await page.waitForTimeout(150);
+st = await page.evaluate(() => window.__game.state);
+check('difficulty select shown after surface tap', st === 'menu_difficulty', st);
+await page.tap('[data-idx="0"]'); // select easy
+await page.waitForTimeout(150);
+await page.tap('[data-idx="0"]'); // confirm easy
 await page.waitForTimeout(400);
-st = await page.evaluate(() => ({ state: window.__game.state, ps: window.__game.pointState }));
-check('match started by tap', st.state === 'match', JSON.stringify(st));
+st = await page.evaluate(() => ({
+  state: window.__game.state,
+  ps: window.__game.pointState,
+  diff: window.__game.sel.difficulty,
+}));
+check('match started by tap (easy picked)', st.state === 'match' && st.diff === 'easy',
+  JSON.stringify(st));
 
 // --- touch overlay should be on by default (coarse pointer) ---
 const overlayVisible = await page.evaluate(() =>

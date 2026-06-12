@@ -142,6 +142,35 @@ export function predictHitPoint(ball, surface, sideZSign, maxT = 6) {
   return null;
 }
 
+// Candidate contact points for an interceptor on `sideZSign`'s side: sampled
+// every `every` seconds between the first and second bounce there, inside the
+// hittable height window. Returns [{pos, t}], earliest first.
+// Pass alreadyBounced=true when the ball has had its first bounce on that
+// side (then sampling starts immediately and ends at the NEXT bounce).
+export function sampleHitPoints(ball, surface, sideZSign, maxT = 6, every = 0.06,
+                                alreadyBounced = false) {
+  const sim = copyBall(ball);
+  const ev = [];
+  const out = [];
+  let bounces = alreadyBounced ? 1 : 0;
+  let nextSample = 0;
+  for (let t = 0; t < maxT; t += PREDICT_DT) {
+    ev.length = 0;
+    stepBall(sim, PREDICT_DT, surface, ev);
+    for (const e of ev) {
+      if (e.type === 'bounce' && Math.sign(e.pos.z) === sideZSign) bounces++;
+    }
+    if (bounces >= 2) break; // double bounce: too late to play
+    if (bounces === 1 && t >= nextSample &&
+        Math.sign(sim.pos.z) === sideZSign &&
+        sim.pos.y >= 0.3 && sim.pos.y <= 1.9) {
+      out.push({ pos: { ...sim.pos }, t });
+      nextSample = t + every;
+    }
+  }
+  return out;
+}
+
 // Where/when the ball crosses the plane z = zPlane (before any 2nd bounce).
 export function predictAtZ(ball, surface, zPlane, maxT = 5) {
   const sim = copyBall(ball);

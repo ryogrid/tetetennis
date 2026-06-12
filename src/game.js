@@ -9,7 +9,7 @@ import { computeServe, serveStanceX, isServeBoxIn, serveBox } from './game/serve
 import { createPlayer, SWING_CONTACT_T } from './entities/player.js';
 import { createBallEntity } from './entities/ball.js';
 import { buildCourt } from './court.js';
-import { createAI, updateAI, chooseServe } from './ai.js';
+import { createAI, updateAI, chooseServe, DIFFICULTIES } from './ai.js';
 import * as ui from './ui.js';
 import * as audio from './audio.js';
 
@@ -21,7 +21,7 @@ export function createGame(scene, cameraRig, input) {
     scene, cameraRig, input,
     state: 'menu_char',
     menuIdx: 0,
-    sel: { player: null, opp: null, surfaceId: 'hard' },
+    sel: { player: null, opp: null, surfaceId: 'hard', difficulty: 'normal' },
 
     // match objects (created in startMatch)
     court: null, ball: null, human: null, cpu: null, ai: null,
@@ -67,6 +67,13 @@ export function createGame(scene, cameraRig, input) {
   function confirmSurface() {
     audio.sfxConfirm();
     g.sel.surfaceId = SURFACE_IDS[g.menuIdx];
+    g.state = 'menu_difficulty';
+    g.menuIdx = 1; // default normal
+    ui.showDifficultySelect(DIFFICULTIES, g.menuIdx);
+  }
+  function confirmDifficulty() {
+    audio.sfxConfirm();
+    g.sel.difficulty = DIFFICULTIES[g.menuIdx].id;
     startMatch();
   }
   function backToCharMenu() {
@@ -77,19 +84,23 @@ export function createGame(scene, cameraRig, input) {
 
   ui.setMenuTapHandler((idx) => {
     if (g.state === 'results') { backToCharMenu(); return; }
-    if (g.state !== 'menu_char' && g.state !== 'menu_opp' && g.state !== 'menu_surface') return;
-    const count = g.state === 'menu_surface' ? 3 : CHARACTERS.length;
+    if (g.state !== 'menu_char' && g.state !== 'menu_opp' &&
+        g.state !== 'menu_surface' && g.state !== 'menu_difficulty') return;
+    const count = (g.state === 'menu_surface' || g.state === 'menu_difficulty')
+      ? 3 : CHARACTERS.length;
     if (typeof idx !== 'number' || idx < 0 || idx >= count) return;
     if (idx === g.menuIdx) {
       if (g.state === 'menu_char') confirmChar();
       else if (g.state === 'menu_opp') confirmOpp();
-      else confirmSurface();
+      else if (g.state === 'menu_surface') confirmSurface();
+      else confirmDifficulty();
     } else {
       g.menuIdx = idx;
       audio.sfxMenu();
       if (g.state === 'menu_char') showCharMenu();
       else if (g.state === 'menu_opp') showOppMenu();
-      else ui.showSurfaceSelect(g.menuIdx);
+      else if (g.state === 'menu_surface') ui.showSurfaceSelect(g.menuIdx);
+      else ui.showDifficultySelect(DIFFICULTIES, g.menuIdx);
     }
   });
 
@@ -121,8 +132,10 @@ export function createGame(scene, cameraRig, input) {
     g.ball = createBallEntity(scene);
     g.human = createPlayer({ side: 'P', character: g.sel.player, scene });
     g.human.root.visible = false; // first-person view: own rig stays hidden
-    g.cpu = createPlayer({ side: 'C', character: g.sel.opp, scene });
-    g.ai = createAI(g.sel.opp);
+    g.ai = createAI(g.sel.opp, g.sel.difficulty);
+    g.cpu = createPlayer({
+      side: 'C', character: g.sel.opp, scene, speedMul: g.ai.diff.speedMul,
+    });
     g.match = createMatch('P');
     g.time = 0;
     g.state = 'match';
@@ -383,6 +396,17 @@ export function createGame(scene, cameraRig, input) {
       if (confirmPressed()) confirmSurface();
       return;
     }
+    if (g.state === 'menu_difficulty') {
+      if (handleMenuNav(3)) ui.showDifficultySelect(DIFFICULTIES, g.menuIdx);
+      if (input.wasPressed('Escape')) {
+        g.state = 'menu_surface';
+        g.menuIdx = SURFACE_IDS.indexOf(g.sel.surfaceId);
+        ui.showSurfaceSelect(g.menuIdx);
+        return;
+      }
+      if (confirmPressed()) confirmDifficulty();
+      return;
+    }
     if (g.state === 'results') {
       if (confirmPressed()) backToCharMenu();
       return;
@@ -453,6 +477,7 @@ export function createGame(scene, cameraRig, input) {
         human: g.human,
         gameTime: g.time,
         canHit: b.active && g.rally.lastHitBy === 'P',
+        bounced: g.rally.bounces > 0,
         requestSwing(type, aim) {
           const fh = ((b.pos.x - g.cpu.pos.x) * -1) >= 0; // CPU faces +z
           if (g.cpu.startSwing(type, fh)) {

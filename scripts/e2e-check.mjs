@@ -42,6 +42,9 @@ const surfTitle = await page.textContent('.title').catch(() => null);
 check('surface select shown', surfTitle === 'SELECT SURFACE', surfTitle);
 await press('ArrowLeft'); // hard(2) -> grass(1)
 await press('Enter');
+const diffTitle = await page.textContent('.title').catch(() => null);
+check('difficulty select shown', diffTitle === 'SELECT DIFFICULTY', diffTitle);
+await press('Enter'); // normal (default)
 await page.waitForTimeout(400);
 
 const state1 = await page.evaluate(() => ({
@@ -50,9 +53,11 @@ const state1 = await page.evaluate(() => ({
   surface: window.__game.sel.surfaceId,
   player: window.__game.sel.player.id,
   opp: window.__game.sel.opp.id,
+  difficulty: window.__game.sel.difficulty,
 }));
 check('match started', state1.state === 'match', JSON.stringify(state1));
 check('grass selected', state1.surface === 'grass', state1.surface);
+check('normal difficulty selected', state1.difficulty === 'normal', state1.difficulty);
 check('player is rojo, opp is dash', state1.player === 'rojo' && state1.opp === 'dash',
   `${state1.player} vs ${state1.opp}`);
 check('waiting for serve', state1.pointState === 'pre_serve', state1.pointState);

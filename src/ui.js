@@ -334,6 +334,20 @@ export function showSurfaceSelect(idx) {
     `</div><div class="hint">&larr; &rarr; select &middot; Enter confirm &middot; Esc back &middot; or tap (tap again to confirm)</div>`;
 }
 
+// levels: [{id, name, desc}], idx: selected index
+export function showDifficultySelect(levels, idx) {
+  els.menu.style.display = 'flex';
+  els.menu.dataset.screen = 'select';
+  els.menu.innerHTML =
+    `<div class="title">SELECT DIFFICULTY</div><div class="cards">` +
+    levels.map((l, i) =>
+      `<div class="card${i === idx ? ' sel' : ''}" data-idx="${i}">
+        <h3>${l.name.toUpperCase()}</h3>
+        <div class="desc">${l.desc}</div>
+      </div>`).join('') +
+    `</div><div class="hint">&larr; &rarr; select &middot; Enter confirm &middot; Esc back &middot; or tap (tap again to confirm)</div>`;
+}
+
 export function showResults(winnerName, loserName, games, playerWon) {
   els.menu.style.display = 'flex';
   els.menu.dataset.screen = 'results';

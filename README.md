@@ -68,12 +68,20 @@ Boom (big server) · Rojo (spin grinder) · Dash (counterpuncher) ·
 Sly (slice specialist) · Ace (all-rounder). The CPU plays with the same
 stat-driven physics and shot-selection personality.
 
+## Difficulty
+
+Pick **Easy / Normal / Hard** after choosing the surface. Difficulty changes
+only the CPU's brain — reaction time, read accuracy, swing timing, shot
+selection risk, serve toss quality, and a touch of foot speed — never the
+character's stats, so every opponent keeps their identity at every level.
+
 ## Development
 
 ```bash
 npm test             # scoring logic unit tests (vitest)
 npm run physcheck    # headless ball-physics sanity checks
 node scripts/rally-check.mjs   # serve/stroke in-rate sanity
+node scripts/ai-check.mjs      # CPU return rates per difficulty
 npm run dev -- --port 5199 & node scripts/e2e-check.mjs  # browser smoke test (playwright)
 node scripts/fpv-check.mjs    # first-person camera / gauge / markers (needs the dev server)
 npm run build        # production build

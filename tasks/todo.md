@@ -79,3 +79,33 @@ Plan: /home/ryo/.claude/plans/3d-1-mighty-ember.md
 - Physics targets landed: flat-drive retention grass 0.80 / hard 0.67 /
   clay 0.63, bounce apex clay 0.98 > hard 0.86 > grass 0.59; stretched
   contact (q=0.45) is 16% slower and ~0.7 m shorter than clean (q=0.91).
+
+## Smarter CPU + difficulty levels (4th task)
+
+Plan: /home/ryo/.claude/plans/3d-1-mighty-ember.md
+
+- [x] physics/ball.js: sampleHitPoints (candidate contacts between bounces)
+- [x] ai.js: reachability-aware interception, periodic re-prediction with
+      shrinking error, whiff retry, reaction delay, DIFFICULTIES table
+- [x] entities/player.js: optional speedMul; game.js passes it for the CPU
+- [x] ui.js + game.js: difficulty select screen (easy/normal/hard)
+- [x] scripts/ai-check.mjs: headless CPU return-rate harness
+- [x] update e2e/touch/fpv scripts for the extra menu step
+- [x] Verify: vitest, physcheck, rally, ai-check, e2e, touch, fpv, build
+- [x] README.md update
+
+### Review
+
+- The decisive "棒立ち" bug found by the new harness: any trajectory re-read
+  AFTER the ball's first bounce made `predictLanding` return the (always
+  out-of-court) SECOND bounce, so `landingOut` flipped true and the CPU
+  "let it go". Fixed by passing `bounced: g.rally.bounces > 0` through ctx;
+  out-ball judgment now only applies pre-bounce, and `sampleHitPoints` starts
+  sampling immediately when already bounced. Contact rates went 33–42% →
+  93–100% (mixed balls).
+- ai-check results: mixed contact easy/normal/hard = 93/99/100%;
+  corner-pressing returnIn = 62/98/97% — easy is beatable, hard is relentless.
+  Hard's returnIn can sit ~1-3 pts under normal under pressure because its
+  lower choiceNoise picks riskier corner targets — intended personality, so
+  the ordering assertion uses contact rate.
+- In-browser: CPU on hard returned 6/6 human serves (was: mostly aces).

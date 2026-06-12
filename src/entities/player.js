@@ -115,14 +115,14 @@ function kf(t, times, values) {
   return values[values.length - 1];
 }
 
-export function createPlayer({ side, character, scene }) {
+export function createPlayer({ side, character, scene, speedMul = 1 }) {
   const { root, joints } = buildRig(character.color);
   if (side === 'C') root.rotation.y = Math.PI;
   scene.add(root);
 
   const stats = character.stats;
-  const maxSpeed = STATS_MAP.runSpeed(stats.SPD);
-  const accel = STATS_MAP.runAccel(stats.SPD);
+  const maxSpeed = STATS_MAP.runSpeed(stats.SPD) * speedMul;
+  const accel = STATS_MAP.runAccel(stats.SPD) * speedMul;
 
   const p = {
     side, character, stats, root, joints,
