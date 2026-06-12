@@ -88,7 +88,6 @@ with both hands):
 
 Ball pace is globally scaled (`PACE` in `src/physics/constants.js`, 0.64) to
 80 % of the original speed — rallies leave plenty of time to position.
-Player movement speed is boosted 1.5× so you can still cover the court.
 
 Serves: **flat** is the cannonball; **kick** clears the net high and dives
 into the box (the safe second serve); **slice** curves visibly toward the
