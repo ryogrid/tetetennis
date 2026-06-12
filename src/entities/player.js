@@ -288,27 +288,33 @@ export function createPlayer({ side, character, scene, speedMul = 1 }) {
     },
   };
 
-  // Reach zone arcs — only for the human player, so they can see the
-  // maximum horizontal reach boundary on the left and right sides.
+  // Reach zone — filled ground circle + wireframe cylinder so the
+  // player can see the full 3D hittable volume (horizontal radius +
+  // vertical ceiling). Only for the human player.
   if (p.isHuman) {
     const reach = p.reach;
-    const arcMat = new THREE.MeshBasicMaterial({
-      color: 0x50e678, transparent: true, opacity: 0.5, side: THREE.DoubleSide,
+    const hMax = 1.15 + reach; // max contact height from contactQuality
+
+    // Filled circle on the ground — the full horizontal reach area
+    const circGeo = new THREE.CircleGeometry(reach, 48);
+    const circMat = new THREE.MeshBasicMaterial({
+      color: 0x3988ff, transparent: true, opacity: 0.25, side: THREE.DoubleSide,
     });
-    const mkArc = (start, len) =>
-      new THREE.RingGeometry(reach - 0.03, reach + 0.03, 48, 1, start, len);
+    const circle = new THREE.Mesh(circGeo, circMat);
+    circle.rotation.x = -Math.PI / 2;
+    circle.position.y = 0.012;
+    root.add(circle);
 
-    const rightArc = new THREE.Mesh(mkArc(-Math.PI / 3, (2 * Math.PI) / 3), arcMat);
-    rightArc.rotation.x = -Math.PI / 2;
-    rightArc.position.y = 0.012;
-    root.add(rightArc);
+    // Wireframe cylinder — the vertical extent (ground → hMax)
+    const cylGeo = new THREE.CylinderGeometry(reach, reach, hMax, 32, 4, true);
+    const cylMat = new THREE.MeshBasicMaterial({
+      color: 0x3988ff, wireframe: true, transparent: true, opacity: 0.35,
+    });
+    const cyl = new THREE.Mesh(cylGeo, cylMat);
+    cyl.position.y = hMax / 2;
+    root.add(cyl);
 
-    const leftArc = new THREE.Mesh(mkArc((2 * Math.PI) / 3, (2 * Math.PI) / 3), arcMat);
-    leftArc.rotation.x = -Math.PI / 2;
-    leftArc.position.y = 0.012;
-    root.add(leftArc);
-
-    p._reachArcs = [rightArc, leftArc];
+    p._reachZone = { circle, cyl };
   }
 
   return p;
