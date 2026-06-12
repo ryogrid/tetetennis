@@ -2,6 +2,7 @@
 import { SURFACES, RPM_TO_RADS, COURT } from '../src/physics/constants.js';
 import { makeBall, stepBall, predictLanding } from '../src/physics/ball.js';
 import { solveShot } from '../src/physics/shotSolver.js';
+import { computeStroke } from '../src/game/shots.js';
 
 let failures = 0;
 function check(name, cond, detail) {
@@ -97,6 +98,65 @@ console.log('--- surface behavior ---');
   check('grass slice faster through court than hard slice',
     sliGrass.retention > sliHard.retention,
     `${sliGrass.retention.toFixed(2)} vs ${sliHard.retention.toFixed(2)}`);
+}
+
+console.log('--- surface pace (flat drive ~28 m/s) ---');
+{
+  const flat = { speed: 28, spinRpm: 500, thetaMin: 1, thetaMax: 14, targetZ: -10.0 };
+  const hard = fireAndBounce(SURFACES.hard, flat);
+  const clay = fireAndBounce(SURFACES.clay, flat);
+  const grass = fireAndBounce(SURFACES.grass, flat);
+  console.log(`  flat hard : apex=${hard.apex.toFixed(2)} retention=${hard.retention.toFixed(2)}`);
+  console.log(`  flat clay : apex=${clay.apex.toFixed(2)} retention=${clay.retention.toFixed(2)}`);
+  console.log(`  flat grass: apex=${grass.apex.toFixed(2)} retention=${grass.retention.toFixed(2)}`);
+  check('pace order: grass > hard > clay',
+    grass.retention > hard.retention && hard.retention > clay.retention,
+    `g=${grass.retention.toFixed(2)} h=${hard.retention.toFixed(2)} c=${clay.retention.toFixed(2)}`);
+  check('bounce height order: clay > hard > grass',
+    clay.apex > hard.apex && hard.apex > grass.apex,
+    `c=${clay.apex.toFixed(2)} h=${hard.apex.toFixed(2)} g=${grass.apex.toFixed(2)}`);
+  check('grass keeps most of the pace (retention > 0.75)', grass.retention > 0.75,
+    grass.retention.toFixed(2));
+  check('clay takes pace off (retention < 0.70)', clay.retention < 0.70,
+    clay.retention.toFixed(2));
+}
+
+console.log('--- contact quality sensitivity (stroke) ---');
+{
+  const stats = { POW: 70, SPN: 70, SLC: 60, SRV: 60, SPD: 60, CTL: 70, REA: 60 };
+  function meanStroke(ballX) {
+    // ballX controls the distance from the player -> contact quality
+    let speedSum = 0, depthSum = 0, qSum = 0, n = 0;
+    for (let i = 0; i < 300; i++) {
+      const ballPos = { x: ballX, y: 1.0, z: 11.0 };
+      const res = computeStroke({
+        playerPos: { x: 0, z: 11.2 },
+        ballPos,
+        ballVel: { x: 0, y: -3, z: 14 },
+        stats, shotType: 'topspin', aim: { x: 0, depth: 0 }, side: 'P',
+      });
+      if (!res || res.type !== 'topspin') continue;
+      const ball = makeBall();
+      ball.pos = { ...ballPos };
+      ball.vel = res.vel;
+      ball.spin = res.spin;
+      const landing = predictLanding(ball, SURFACES.hard);
+      if (!landing || landing.pos.z > 0) continue;
+      speedSum += Math.hypot(res.vel.x, res.vel.y, res.vel.z);
+      depthSum += -landing.pos.z;
+      qSum += res.q;
+      n++;
+    }
+    return { speed: speedSum / n, depth: depthSum / n, q: qSum / n, n };
+  }
+  const clean = meanStroke(0.5);
+  const stretched = meanStroke(0.95); // near the edge of reach: q ~ 0.45
+  console.log(`  clean    : q=${clean.q.toFixed(2)} speed=${clean.speed.toFixed(1)} depth=${clean.depth.toFixed(1)}`);
+  console.log(`  stretched: q=${stretched.q.toFixed(2)} speed=${stretched.speed.toFixed(1)} depth=${stretched.depth.toFixed(1)}`);
+  check('stretched contact is >10% slower', stretched.speed < clean.speed * 0.9,
+    `${stretched.speed.toFixed(1)} vs ${clean.speed.toFixed(1)}`);
+  check('stretched contact lands shorter', stretched.depth < clean.depth - 0.5,
+    `${stretched.depth.toFixed(1)} vs ${clean.depth.toFixed(1)}`);
 }
 
 console.log('--- serve plausibility ---');

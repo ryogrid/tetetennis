@@ -5,8 +5,8 @@ import { solveShot } from '../physics/shotSolver.js';
 
 export const SHOT_TYPES = {
   flat:    { speedMul: 1.00, thetaMin: 1,  thetaMax: 14 },
-  topspin: { speedMul: 0.82, thetaMin: 4,  thetaMax: 26 },
-  slice:   { speedMul: 0.68, thetaMin: 1,  thetaMax: 18 },
+  topspin: { speedMul: 0.78, thetaMin: 4,  thetaMax: 26 },
+  slice:   { speedMul: 0.72, thetaMin: 1,  thetaMax: 18 },
   lob:     { speedMul: 1.00, thetaMin: 28, thetaMax: 55 },
 };
 
@@ -54,15 +54,15 @@ export function computeStroke({ playerPos, ballPos, ballVel, stats, shotType, ai
   const zSign = side === 'P' ? -1 : 1;
   const def = SHOT_TYPES[type];
 
-  // --- nominal target ---
-  const baseZ = type === 'slice' ? 9.5 : type === 'lob' ? 9.0 : 10.3;
+  // --- nominal target: poor contacts land shorter, not just wilder ---
+  const baseZ = (type === 'slice' ? 9.5 : type === 'lob' ? 9.0 : 10.3) - (1 - q) * 1.5;
   const target = {
     x: clamp(aim.x, -1, 1) * 2.8,
     z: zSign * clamp(baseZ + clamp(aim.depth, -1, 1) * 2.4, 4.5, 11.2),
   };
 
   // --- speed & spin from stats and quality ---
-  const flatSpeed = STATS_MAP.maxFlatSpeed(stats.POW) * (0.62 + 0.38 * q);
+  const flatSpeed = STATS_MAP.maxFlatSpeed(stats.POW) * (0.52 + 0.48 * q);
   let speed, spinRpm;
   if (type === 'flat') {
     speed = flatSpeed;

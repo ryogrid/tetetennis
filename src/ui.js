@@ -86,6 +86,34 @@ const css = `
   right: 34px; bottom: 30px; width: 62px; height: 62px; font-size: 11px;
   background: rgba(44,64,30,.6);
 }
+#tossgauge {
+  position: absolute; right: 22%; top: 50%; transform: translateY(-50%);
+  width: 26px; height: 190px; display: none;
+  background: rgba(10,10,18,.55); border: 1px solid rgba(255,255,255,.3);
+  border-radius: 13px;
+}
+#tossgauge .tg-band {
+  position: absolute; left: 0; right: 0;
+  background: rgba(80,230,120,.30);
+  border-top: 1px solid rgba(80,230,120,.9);
+  border-bottom: 1px solid rgba(80,230,120,.9);
+}
+#tossgauge .tg-dot {
+  position: absolute; left: 50%; width: 16px; height: 16px;
+  margin-left: -8px; margin-bottom: -8px; border-radius: 50%;
+  background: #d8f24b; box-shadow: 0 0 6px rgba(0,0,0,.5);
+}
+#tossgauge .tg-dot.sweet { background: #50e678; box-shadow: 0 0 12px #50e678; }
+#tossgauge .tg-label {
+  position: absolute; top: -22px; left: 50%; transform: translateX(-50%);
+  font-size: 11px; color: #aaa; letter-spacing: 1px; white-space: nowrap;
+}
+#movehint {
+  position: absolute; bottom: 24%; left: 50%; transform: translateX(-50%);
+  font-size: 38px; font-weight: 800; color: #39d7ff; display: none;
+  text-shadow: 0 2px 10px #000;
+}
+#movehint.here { color: #50e678; }
 #tc-bar { position: absolute; top: 12px; right: 12px; display: none; gap: 8px; }
 #tc-bar button {
   pointer-events: auto; width: 44px; height: 38px; border-radius: 8px;
@@ -132,6 +160,12 @@ export function initUI({ onVirtualKey } = {}) {
   els.toast = div('toast', hud);
   els.shotbar = div('shotbar', hud);
   els.controls = div('controls', hud);
+  els.tossgauge = div('tossgauge', hud);
+  els.tossgauge.innerHTML =
+    '<div class="tg-label">TOSS</div><div class="tg-band"></div><div class="tg-dot"></div>';
+  els.tgBand = els.tossgauge.querySelector('.tg-band');
+  els.tgDot = els.tossgauge.querySelector('.tg-dot');
+  els.movehint = div('movehint', hud);
   els.shotbar.innerHTML =
     '<div id="sb-flat">Z Flat</div><div id="sb-topspin">X Topspin</div><div id="sb-slice">C Slice</div>';
   els.controls.innerHTML =
@@ -324,6 +358,8 @@ export function hideHUD() {
   els.scoreboard.style.display = 'none';
   els.banner.style.opacity = 0;
   els.toast.style.opacity = 0;
+  hideTossGauge();
+  hideMoveHint();
   applyTouchVisibility();
 }
 
@@ -372,4 +408,55 @@ export function flashShot(type) {
 
 export function serveSpeedToast(kmh) {
   toast(`Serve: ${Math.round(kmh)} km/h`, 1600);
+}
+
+// ---------- toss gauge (serve timing aid for the fixed FPV camera) ----------
+
+let tossGaugeShown = false;
+
+// frac/bandLo/bandHi in [0,1], measured from the bottom of the gauge.
+export function updateTossGauge(frac, bandLo, bandHi, inSweet) {
+  if (!tossGaugeShown) {
+    els.tossgauge.style.display = 'block';
+    tossGaugeShown = true;
+  }
+  els.tgBand.style.bottom = `${(bandLo * 100).toFixed(1)}%`;
+  els.tgBand.style.height = `${((bandHi - bandLo) * 100).toFixed(1)}%`;
+  els.tgDot.style.bottom = `${(Math.max(0, Math.min(1, frac)) * 100).toFixed(1)}%`;
+  els.tgDot.classList.toggle('sweet', !!inSweet);
+}
+
+export function hideTossGauge() {
+  if (!tossGaugeShown) return;
+  els.tossgauge.style.display = 'none';
+  tossGaugeShown = false;
+}
+
+// ---------- move hint (FPV can't see a sweet spot behind the camera) ----------
+
+let moveHintShown = false;
+
+// dx/dz: vector from the player to the sweet spot, court coords
+// (+x screen right, +z toward the camera = backward).
+export function updateMoveHint(dx, dz) {
+  const ux = Math.abs(dx) > 0.45 ? Math.sign(dx) : 0;
+  const uz = Math.abs(dz) > 0.45 ? Math.sign(dz) : 0;
+  const ARROWS = {
+    '-1,-1': '↖', '0,-1': '↑', '1,-1': '↗',
+    '-1,0': '←', '1,0': '→',
+    '-1,1': '↙', '0,1': '↓', '1,1': '↘',
+  };
+  const a = ARROWS[`${ux},${uz}`];
+  els.movehint.textContent = a || '◎'; // on the spot
+  els.movehint.classList.toggle('here', !a);
+  if (!moveHintShown) {
+    els.movehint.style.display = 'block';
+    moveHintShown = true;
+  }
+}
+
+export function hideMoveHint() {
+  if (!moveHintShown) return;
+  els.movehint.style.display = 'none';
+  moveHintShown = false;
 }

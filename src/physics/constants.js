@@ -41,9 +41,9 @@ export const LINE_GRACE = BALL.r; // ball touching the line counts in
 
 // Surface bounce parameters. ey = vertical restitution, mu = sliding friction.
 export const SURFACES = {
-  clay:  { id: 'clay',  ey: 0.83, mu: 0.75 },
+  clay:  { id: 'clay',  ey: 0.83, mu: 0.80 },
   hard:  { id: 'hard',  ey: 0.78, mu: 0.56 },
-  grass: { id: 'grass', ey: 0.66, mu: 0.35 },
+  grass: { id: 'grass', ey: 0.64, mu: 0.38 },
 };
 
 // Player movement bounds (human side; mirror z for CPU)

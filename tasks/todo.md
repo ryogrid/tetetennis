@@ -49,3 +49,33 @@ all pass, e2e smoke passes with zero page errors, `vite build` clean.
 Lesson applied: synthetic pointer events lack active pointers, so
 setPointerCapture must be try/catch-wrapped (also more robust on quirky
 browsers).
+
+## FPV + realism update (3rd task)
+
+Plan: /home/ryo/.claude/plans/3d-1-mighty-ember.md
+
+- [x] camera.js: first-person view from the player's eyes (serve = fixed
+      forward, rally = clamped ball tracking); main.js FOV 55→70; hide own rig
+- [x] ui.js + game.js: toss-height gauge during the human serve
+- [x] physics tuning: surface ey/mu, stroke/serve quality scaling, shot-type
+      contrast; extended physics-check assertions
+- [x] ball.js: VISUAL_R 0.075 → 0.05
+- [x] sweet-spot "stand here" marker via predictHitPoint
+- [x] serve aim: continuous lateral + depth from D-pad at the hit instant
+- [x] Verify: vitest, physcheck, rally-check, fpv-check, e2e, touch, build
+- [x] README.md update
+
+### Review
+
+- FPV implemented as planned; one addition beyond the plan: a screen-space
+  **move hint arrow** (`#movehint`, driven from frameUpdate via g.sweetPos).
+  Screenshots showed the floor sweet-spot decal often sits BEHIND the FPV
+  camera (deep balls are met behind the baseline), so a court decal alone is
+  invisible exactly when needed.
+- fpv-check lesson: serve-direction A/B must be compared within the same
+  court side — courtSide alternates per point exactly like a naive left/right
+  alternation, so world-frame vel.x means cancel out. The check now picks the
+  missing direction for whichever side comes up.
+- Physics targets landed: flat-drive retention grass 0.80 / hard 0.67 /
+  clay 0.63, bounce apex clay 0.98 > hard 0.86 > grass 0.59; stretched
+  contact (q=0.45) is 16% slower and ~0.7 m shorter than clean (q=0.91).

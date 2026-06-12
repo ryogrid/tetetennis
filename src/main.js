@@ -19,10 +19,10 @@ const scene = new THREE.Scene();
 buildLights(scene);
 
 const camera = new THREE.PerspectiveCamera(
-  55, window.innerWidth / window.innerHeight, 0.1, 200,
+  70, window.innerWidth / window.innerHeight, 0.1, 200,
 );
-camera.position.set(0, 5.6, 18);
-camera.lookAt(0, 1, -2);
+camera.position.set(0, 1.62, 12.5);
+camera.lookAt(0, 0.9, -6);
 
 window.addEventListener('resize', () => {
   camera.aspect = window.innerWidth / window.innerHeight;
@@ -34,6 +34,7 @@ const cameraRig = createCameraRig(camera);
 const input = createInput(initAudio);
 const game = createGame(scene, cameraRig, input);
 window.__game = game; // for debugging / e2e checks
+window.__cam = camera;
 
 let last = performance.now();
 let acc = 0;

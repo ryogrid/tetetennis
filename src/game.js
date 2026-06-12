@@ -3,7 +3,7 @@
 import { CHARACTERS } from './characters.js';
 import { createMatch, addPoint, scoreStrings, pointNumberInGame } from './match.js';
 import { SURFACES, COURT, LINE_GRACE, STATS_MAP, G } from './physics/constants.js';
-import { stepBall, predictLanding } from './physics/ball.js';
+import { stepBall, predictLanding, predictHitPoint } from './physics/ball.js';
 import { computeStroke } from './game/shots.js';
 import { computeServe, serveStanceX, isServeBoxIn, serveBox } from './game/serve.js';
 import { createPlayer, SWING_CONTACT_T } from './entities/player.js';
@@ -31,6 +31,8 @@ export function createGame(scene, cameraRig, input) {
     courtSide: 'deuce',
     rally: null,
     ballStamp: 0,
+    sweetStamp: -1,
+    sweetPos: null,
     time: 0,
     stateTimer: 0,
     cpuServePlan: null,
@@ -102,12 +104,23 @@ export function createGame(scene, cameraRig, input) {
     ui.updateScore(scoreStrings(g.match), n.p, n.c, g.serveNumber);
   }
 
+  function showSweet(pos) {
+    g.sweetPos = pos;
+    g.ball.showSweetSpot(pos);
+  }
+  function hideSweet() {
+    g.sweetPos = null;
+    g.ball.hideSweetSpot();
+    ui.hideMoveHint();
+  }
+
   function startMatch() {
     g.surface = SURFACES[g.sel.surfaceId];
     g.court = buildCourt(g.sel.surfaceId);
     scene.add(g.court);
     g.ball = createBallEntity(scene);
     g.human = createPlayer({ side: 'P', character: g.sel.player, scene });
+    g.human.root.visible = false; // first-person view: own rig stays hidden
     g.cpu = createPlayer({ side: 'C', character: g.sel.opp, scene });
     g.ai = createAI(g.sel.opp);
     g.match = createMatch('P');
@@ -148,8 +161,10 @@ export function createGame(scene, cameraRig, input) {
     const box = serveBox(sv, g.courtSide);
     const boxCx = (box.xMin + box.xMax) / 2;
     ent(rc).place(boxCx * 1.4, -svSign * (COURT.halfLen + 0.7));
+    if (sv === 'P') cameraRig.setServeLookX(boxCx);
     g.ball.state.active = false;
     g.ball.hideLanding();
+    hideSweet();
     g.rally = { phase: 'idle', lastHitBy: null, bounces: 0, serveNetTouched: false };
     g.pointState = 'pre_serve';
     g.stateTimer = 0;
@@ -172,7 +187,7 @@ export function createGame(scene, cameraRig, input) {
     audio.sfxToss();
   }
 
-  function executeServe(type, qServe, preset, aimAdjust) {
+  function executeServe(type, qServe, preset, aimAdjust, aimDepth) {
     const sv = server();
     const e = ent(sv);
     const b = g.ball.state;
@@ -184,7 +199,7 @@ export function createGame(scene, cameraRig, input) {
     };
     const res = computeServe({
       stats: e.stats, type, from, servingSide: sv, courtSide: g.courtSide,
-      targetPreset: preset, aimAdjust, qServe,
+      targetPreset: preset, aimAdjust, aimDepth, qServe,
     });
     b.pos = from;
     b.vel = res.vel;
@@ -217,6 +232,7 @@ export function createGame(scene, cameraRig, input) {
       side,
     });
     if (!res) return; // whiff
+    if (side === 'P') hideSweet();
     b.vel = res.vel;
     b.spin = res.spin;
     g.rally.lastHitBy = side;
@@ -257,6 +273,7 @@ export function createGame(scene, cameraRig, input) {
     g.pointState = 'point_over';
     g.stateTimer = 0;
     g.ball.hideLanding();
+    hideSweet();
     const ev = addPoint(g.match, winner);
     const n = names();
     const winName = winner === 'P' ? n.p : n.c;
@@ -390,12 +407,10 @@ export function createGame(scene, cameraRig, input) {
         const contactH = STATS_MAP.serveContactH(g.human.stats.REA);
         const qServe = 0.4 + 0.6 * Math.max(0, 1 - Math.abs(b.pos.y - contactH) / 0.7);
         const type = shot === 'topspin' ? 'kick' : shot;
-        const aim = input.moveVec().x;
-        const box = serveBox('P', g.courtSide);
-        let preset = 'body';
-        if (aim * box.xSign > 0.4) preset = 'wide';
-        else if (aim * box.xSign < -0.4) preset = 'T';
-        executeServe(type, qServe, preset, 0);
+        // direction comes from the D-pad held at the hit instant:
+        // left/right sweep the box laterally, up = deep, down = short
+        const aim = input.aimVec();
+        executeServe(type, qServe, 'body', aim.x, aim.depth);
       }
       return;
     }
@@ -484,7 +499,7 @@ export function createGame(scene, cameraRig, input) {
       if (sv === 'C' && g.cpuServePlan && b.vel.y < 0 && b.pos.y <= contactH) {
         const plan = g.cpuServePlan;
         g.cpuServePlan = null;
-        executeServe(plan.type, plan.qServe, plan.preset, 0);
+        executeServe(plan.type, plan.qServe, plan.preset, 0, 0);
         return;
       }
       // uncaught toss: silently re-toss
@@ -514,6 +529,14 @@ export function createGame(scene, cameraRig, input) {
             processBounce(e);
             if (g.pointState !== 'rally') break;
           }
+        }
+        // "stand here" marker: where to meet the incoming ball cleanly
+        if (g.pointState === 'rally' && g.rally.lastHitBy === 'C' &&
+            g.sweetStamp !== g.ballStamp) {
+          g.sweetStamp = g.ballStamp;
+          const hp = predictHitPoint(b, g.surface, 1);
+          if (hp) showSweet(hp.pos);
+          else hideSweet();
         }
       }
       return;
@@ -558,6 +581,27 @@ export function createGame(scene, cameraRig, input) {
     if (g.ball) g.ball.updateVisual(dt);
     if (g.human && g.ball) {
       cameraRig.update(dt, cameraMode(), g.human, g.ball.state);
+    }
+    // toss gauge: the FPV camera doesn't look up, so show toss height here
+    if (g.state === 'match' && g.pointState === 'serving' && server() === 'P' &&
+        g.ball.state.active) {
+      const contactH = STATS_MAP.serveContactH(g.human.stats.REA);
+      const lo = 1.2, hi = contactH + 0.5;
+      const y = g.ball.state.pos.y;
+      ui.updateTossGauge(
+        (y - lo) / (hi - lo),
+        (contactH - 0.15 - lo) / (hi - lo),
+        (contactH + 0.15 - lo) / (hi - lo),
+        Math.abs(y - contactH) <= 0.15,
+      );
+    } else {
+      ui.hideTossGauge();
+    }
+    // where-to-stand hint (the floor marker is invisible when behind the FPV)
+    if (g.sweetPos && g.human) {
+      ui.updateMoveHint(g.sweetPos.x - g.human.pos.x, g.sweetPos.z - g.human.pos.z);
+    } else {
+      ui.hideMoveHint();
     }
   };
 

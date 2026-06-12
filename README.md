@@ -2,7 +2,7 @@
 
 A browser 3D tennis game (Three.js). One-set match, you vs the CPU, with
 physically-based ball flight (drag + Magnus effect) and surface-dependent
-bounces.
+bounces, rendered first-person from your player's eyes.
 
 ## Run
 
@@ -21,8 +21,8 @@ npm run dev      # open the printed URL
 | Flat shot | Z (or J) |
 | Topspin shot | X (or K) |
 | Slice shot | C (or L) |
-| Serve | Space to toss, then Z/X/C near the top of the toss (Z flat / X kick / C slice) |
-| Aim | hold a direction while swinging (left/right = sides, up = deep, down = short) |
+| Serve | Space to toss, then Z/X/C when the **toss gauge** dot is in the green band (Z flat / X kick / C slice) |
+| Aim | hold a direction **at the moment of the hit** — works for strokes and serves (left/right = sides, up = deep, down = short) |
 | Menus | Arrows + Enter, Esc = back / quit match |
 
 ### Touch / on-screen controls
@@ -40,9 +40,20 @@ with both hands):
   - **Top-right**: `⌨` / `🎮` toggles the on-screen controls on/off (the
     choice is remembered), `✕` quits to the menu.
 
+### Reading the screen (first-person view)
+
+- The camera is your player's eyes; your own body is not drawn.
+- **Yellow ring** — where the incoming ball will land.
+- **Cyan ring + arrow** — where to stand for a clean contact: the ring marks
+  the spot on the court, the on-screen arrow points the way (it turns into a
+  green ◎ when you are on the spot).
+- **Toss gauge** (during your serve) — the camera keeps facing the court, so
+  the toss height is shown as a vertical gauge; hit when the dot is in the
+  green band for full power and accuracy.
+
 - Shot quality depends on your position: hit the ball in the sweet spot
   (close, waist height) for clean power; stretching or getting jammed
-  produces weak, error-prone balls.
+  produces weak, short, error-prone balls.
 - Serve power/accuracy depends on hitting near the top of the toss.
 
 ## Surfaces
@@ -64,6 +75,7 @@ npm test             # scoring logic unit tests (vitest)
 npm run physcheck    # headless ball-physics sanity checks
 node scripts/rally-check.mjs   # serve/stroke in-rate sanity
 npm run dev -- --port 5199 & node scripts/e2e-check.mjs  # browser smoke test (playwright)
+node scripts/fpv-check.mjs    # first-person camera / gauge / markers (needs the dev server)
 npm run build        # production build
 ```
 

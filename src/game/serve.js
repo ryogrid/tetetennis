@@ -40,26 +40,32 @@ export const SERVE_TYPES = {
   slice: { speedMul: 0.84, thetaMin: -4, thetaMax: 6 },
 };
 
-// targetPreset: 'wide' | 'body' | 'T'; aimAdjust -1..1 fine lateral tweak.
+// targetPreset: 'wide' | 'body' | 'T'.
+// aimAdjust -1..1 lateral aim in WORLD x (press left -> lands further left),
+// spanning the box from T to wide around the preset.
+// aimDepth -1..1 (+1 deep near the service line, -1 short).
 // qServe in [0.4, 1] from toss timing. Returns {vel, spin}.
 export function computeServe({ stats, type, from, servingSide, courtSide,
-                               targetPreset, aimAdjust = 0, qServe }) {
+                               targetPreset, aimAdjust = 0, aimDepth = 0, qServe }) {
   const box = serveBox(servingSide, courtSide);
   const def = SERVE_TYPES[type];
 
   // target points 0.5m inside box lines
   const xInner = box.xSign > 0 ? 0.45 : -0.45;          // near center line (T)
   const xOuter = box.xSign * (COURT.halfWidth - 0.55);  // near sideline (wide)
-  const zDeep = box.zSign * (COURT.serviceLine - 0.55);
+  const depth = clamp(aimDepth, -1, 1);
+  const zInset = depth >= 0 ? 0.55 - 0.25 * depth : 0.55 - 1.05 * depth;
+  const zDeep = box.zSign * (COURT.serviceLine - zInset);
   let tx;
   if (targetPreset === 'T') tx = xInner;
   else if (targetPreset === 'wide') tx = xOuter;
   else tx = (xInner + xOuter) / 2;
-  tx += aimAdjust * box.xSign * 0.8;
+  tx += clamp(aimAdjust, -1, 1) * 1.6;
+  tx = clamp(tx, Math.min(xInner, xOuter), Math.max(xInner, xOuter));
 
   const target = { x: tx, z: zDeep };
 
-  let speed = STATS_MAP.serveFlatSpeed(stats.SRV) * (0.75 + 0.25 * qServe) * def.speedMul;
+  let speed = STATS_MAP.serveFlatSpeed(stats.SRV) * (0.68 + 0.32 * qServe) * def.speedMul;
 
   // spin: rpm and axis split between lateral (top/back) and vertical (side)
   let spinRpm = 0, ySpinFrac = 0;
