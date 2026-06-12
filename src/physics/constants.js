@@ -15,7 +15,7 @@ export const AERO = {
   cd: 0.55,
   // rho * A / (2m), A = pi r^2
   kAero: (1.21 * Math.PI * BALL.r * BALL.r) / (2 * BALL.m),
-  clMax: 0.35,
+  clMax: 0.40,
   spinDecayTau: 7.0, // s
 };
 
@@ -39,12 +39,21 @@ export function netHeight(x) {
 
 export const LINE_GRACE = BALL.r; // ball touching the line counts in
 
-// Surface bounce parameters. ey = vertical restitution, mu = sliding friction.
+// Surface bounce parameters. ey = vertical restitution at the ITF drop-test
+// impact speed (~7 m/s), mu = sliding friction. The ball is not rigid: its
+// effective restitution falls with impact speed (BOUNCE_EY below).
 export const SURFACES = {
-  clay:  { id: 'clay',  ey: 0.83, mu: 0.80 },
-  hard:  { id: 'hard',  ey: 0.78, mu: 0.56 },
-  grass: { id: 'grass', ey: 0.64, mu: 0.38 },
+  clay:  { id: 'clay',  ey: 0.81, mu: 0.80 },
+  hard:  { id: 'hard',  ey: 0.75, mu: 0.56 },
+  grass: { id: 'grass', ey: 0.66, mu: 0.38 },
 };
+
+// Speed dependence of the vertical restitution:
+//   eyEff = ey * clamp(1 - slope * (|vyIn| - vRef), minFrac, 1)
+// vRef is the ITF drop test impact speed (2.54 m drop ≈ 7.1 m/s), where the
+// table values above hold; harder impacts deform the ball more and return
+// proportionally less energy (hard court: 0.75 @ 7 m/s -> ~0.63 @ 20 m/s).
+export const BOUNCE_EY = { vRef: 7.1, slope: 0.012, minFrac: 0.65 };
 
 // Player movement bounds (human side; mirror z for CPU)
 export const PLAYER_BOUNDS = {
@@ -55,11 +64,16 @@ export const PLAYER_BOUNDS = {
 
 export const RPM_TO_RADS = Math.PI * 2 / 60;
 
+// The most efficient stroke contact: ball at waist height, a comfortable
+// arm-plus-racket length from the body (side-agnostic: forehand or backhand).
+export const IDEAL_CONTACT_H = 0.85; // m (rig waist)
+export const IDEAL_CONTACT_R = 0.65; // m (forearm + racket, comfortably bent)
+
 // Character stat (0-100) -> physics mappings
 export const STATS_MAP = {
   maxFlatSpeed:  (POW) => 26 + 10 * POW / 100,        // m/s
-  topspinRpm:    (SPN) => 1800 + 2400 * SPN / 100,
-  sliceRpm:      (SLC) => 1200 + 1600 * SLC / 100,
+  topspinRpm:    (SPN) => 2200 + 2600 * SPN / 100,
+  sliceRpm:      (SLC) => 1500 + 1800 * SLC / 100,
   serveFlatSpeed:(SRV) => 40 + 16 * SRV / 100,        // m/s
   runSpeed:      (SPD) => 5.2 + 2.6 * SPD / 100,      // m/s
   runAccel:      (SPD) => 9 + 6 * SPD / 100,          // m/s^2 (brake is 1.8x)

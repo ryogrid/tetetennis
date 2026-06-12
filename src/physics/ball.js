@@ -1,7 +1,7 @@
 // Ball flight: gravity + quadratic drag + Magnus lift (Stepanek empirical CL),
 // semi-implicit Euler. Also ground bounce + net collision, emitting events.
 // Render-free: plain {x,y,z} objects only.
-import { G, AERO, BALL, COURT, netHeight } from './constants.js';
+import { G, AERO, BALL, COURT, netHeight, IDEAL_CONTACT_H } from './constants.js';
 import { applyBounce } from './bounce.js';
 
 export function makeBall() {
@@ -121,9 +121,9 @@ export function predictLanding(ball, surface, maxT = 5) {
   return null;
 }
 
-// For the AI: find a comfortable strike point on `sideZSign`'s side --
-// after the first bounce on that side, the first descending point at/below
-// shoulder-ish height. Returns {pos, t} or null.
+// Find a comfortable strike point on `sideZSign`'s side -- after the first
+// bounce on that side, the first descending point at/just above the ideal
+// (waist-height) contact. Returns {pos, t} or null.
 export function predictHitPoint(ball, surface, sideZSign, maxT = 6) {
   const sim = copyBall(ball);
   const ev = [];
@@ -136,7 +136,7 @@ export function predictHitPoint(ball, surface, sideZSign, maxT = 6) {
         bouncedOnSide = true;
       }
     }
-    if (bouncedOnSide && sim.vel.y < 0 && sim.pos.y <= 1.05 &&
+    if (bouncedOnSide && sim.vel.y < 0 && sim.pos.y <= IDEAL_CONTACT_H + 0.1 &&
         Math.sign(sim.pos.z) === sideZSign) {
       return { pos: { ...sim.pos }, t, vel: { ...sim.vel } };
     }

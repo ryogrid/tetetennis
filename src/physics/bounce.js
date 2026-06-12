@@ -10,14 +10,23 @@
 //     dv_h = (2/5) * slip  -> mu no longer matters once it is sufficient,
 //   which is why heavy topspin loses similar pace on every surface while
 //   the bounce HEIGHT still differs via ey.
-import { BALL } from './constants.js';
+import { BALL, BOUNCE_EY } from './constants.js';
 
 const ALPHA = 2 / 5;
 
+// Effective vertical restitution at this impact speed: the ball is hollow
+// and deforms, so it returns proportionally less energy the harder it hits
+// (anchored at the ITF drop-test speed where surface.ey holds).
+export function effectiveEy(ey, vyInAbs) {
+  const f = 1 - BOUNCE_EY.slope * (vyInAbs - BOUNCE_EY.vRef);
+  return ey * Math.max(BOUNCE_EY.minFrac, Math.min(1, f));
+}
+
 // Mutates vel and spin in place. Surface = {ey, mu}.
 export function applyBounce(vel, spin, surface) {
-  const { ey, mu } = surface;
+  const { mu } = surface;
   const vyIn = vel.y; // < 0
+  const ey = effectiveEy(surface.ey, Math.abs(vyIn));
   const Jn = (1 + ey) * Math.abs(vyIn); // normal impulse per unit mass
   vel.y = -ey * vyIn;
 

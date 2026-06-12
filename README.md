@@ -46,7 +46,9 @@ with both hands):
 - **Yellow ring** — where the incoming ball will land.
 - **Trajectory dots** — the incoming ball's predicted path from just before
   the bounce: yellow dots down to the bounce, cyan dots for the arc after
-  it, so you can read where the ball is going before it gets there.
+  it, so you can read where the ball is going before it gets there. The
+  **big orange dot** marks the waist-height point of the arc — the ideal
+  place to meet the ball.
 - **Cyan ring + arrow** — where to stand for a clean contact: the ring marks
   the spot on the court, the on-screen arrow points the way (it turns into a
   green ◎ when you are on the spot).
@@ -54,18 +56,26 @@ with both hands):
   the toss height is shown as a vertical gauge; hit when the dot is in the
   green band for full power and accuracy.
 
-- Shot quality depends on your position: hit the ball in the sweet spot
-  (close, waist height) for clean power; stretching or getting jammed
-  produces weak, short, error-prone balls.
+- Shot quality depends on your position: the ideal contact is the ball at
+  **waist height, an arm-plus-racket length to your side** (forehand or
+  backhand). Stretching for it or getting jammed against the body produces
+  weak, short, error-prone balls.
 - Serve power/accuracy depends on hitting near the top of the toss.
 
 ## Shot types
 
 - **Flat** — fastest ball on a low line; shallow, skidding bounce.
-- **Topspin** — slower off the racket but arcs high over the net, dips
-  sharply (Magnus effect) and kicks up off the bounce.
-- **Slice** — clearly slower floater with backspin: it stays low and robs
-  the bounce of pace, especially on grass.
+- **Topspin** — slower off the racket but arcs high over the net and dips
+  sharply (Magnus effect: the same launch without spin would fly ~7 m
+  deeper), then kicks up off the bounce.
+- **Slice** — clearly slower floater whose backspin carries it on a
+  straighter, stretched line (~5 m deeper than the same launch without
+  spin); it stays low and robs the bounce of pace, especially on grass.
+
+Serves: **flat** is the cannonball; **kick** clears the net high and dives
+into the box (the safe second serve); **slice** curves visibly toward the
+receiver's right. The CPU serves like a player: flat (sometimes slice) on
+first serve, kick on second.
 
 ## Surfaces
 
@@ -74,9 +84,12 @@ with both hands):
 - **Hard** — medium pace, true bounce.
 
 Bounces are physical: vertical restitution plus a Coulomb friction impulse.
+The restitution is anchored to the ITF ball test (a 2.54 m drop on hard
+court rebounds ~1.35-1.47 m) and — because a tennis ball is not rigid —
+falls with impact speed, so hard-hit balls rebound proportionally lower.
 The ball always loses horizontal speed at the bounce, and the loss is driven
 by each surface's friction coefficient (clay μ=0.80 slows a flat drive by
-~7.6 m/s, hard μ=0.56 by ~5.5, grass μ=0.38 by ~3.5) — verified by
+~7.6 m/s, hard μ=0.56 by ~5.4, grass μ=0.38 by ~3.5) — verified by
 `npm run physcheck`.
 
 ## Characters

@@ -165,3 +165,60 @@ slide dv_h = mu*Jn, grip dv_h = (2/5)*slip). Work done:
 - [x] touch-check D-pad hold 400->700 ms (flaky once: accel ramp made the
       0.2 m threshold marginal)
 - [x] README "Reading the screen" updated
+
+## Realism pass (8th task)
+
+Plan: /home/ryo/.claude/plans/3d-1-mighty-ember.md
+
+- [x] 1. Speed-dependent bounce restitution (ITF-anchored ey, eyEff falls
+      with impact speed) + physics-check drop-test/COR assertions + retune
+- [x] 4. Stroke shape contrast (topspin dips / slice floats): spin maps up,
+      clMax 0.40, slice speed 0.68; shape-metric assertions
+- [x] 5. Serves: handedness-fixed side spin (slice curves to receiver's
+      right), kick dips after net; AI 1st=flat/sometimes slice, 2nd=kick
+- [x] 3. Waist-height sweet spot (radial arm+racket band), marker/AI stand
+      offset, trail ideal-point highlight
+- [x] 2. CPU motion readability: thicker rig, undamped stride + arm swing,
+      amplified swing/serve keyframes, ready stance, serveAnim cancel fix
+- [x] Verify: physcheck, vitest, rally, ai-check, fpv (+joint probes), e2e,
+      touch, build; README + review notes
+
+### Review
+
+- **Bounce height**: ey was constant per surface; real balls lose
+  proportionally more energy on faster impacts. Now
+  `eyEff = ey * clamp(1 - 0.012*(|vyIn| - 7.1), 0.65, 1)` with ITF-anchored
+  surface values (clay .81 / hard .75 / grass .66). ITF drop test asserted
+  (2.54 m -> 1.33 m on hard); fast flat drives bounce ~15-20% lower than
+  before (hard flat-drive apex 0.86 -> 0.80, clay topspin 1.44 -> 1.37).
+- **Trajectory shapes**: spin maps raised (topspin 2200+2600, slice
+  1500+1800 rpm), clMax 0.40, slice speedMul 0.62 -> 0.68. New physics-check
+  block proves the Magnus effect directly: the same launch without spin
+  lands 7.1 m deeper than the topspin ball, and 4.8 m shorter than the
+  slice (backspin "stretches" the flight). Topspin descends 22deg vs flat
+  14deg.
+- **Serve types**: the side-spin sign was per-box, so the slice curve
+  FLIPPED direction between deuce/ad. Now handedness-fixed (spin.y > 0):
+  curves to the receiver's right from both ends (latDev +0.83 m, asserted
+  both for CPU and human serves). Kick: 3200+1600 rpm, theta 2-14deg,
+  speedMul 0.64 -> clears the net 1.14 m vs flat 0.33 m and dives 23 vs
+  13 deg. AI: 1st = flat (slice 15-35% by style), 2nd = always kick.
+- **Sweet spot**: ideal contact = waist height (0.85 m) at an arm+racket
+  radial band (0.3-0.9 m, side-agnostic); cramped contacts near the body
+  penalized, vertical cap from body+arm+racket. The stand-here marker and
+  the AI's stand position now offset to the forehand side so contact lands
+  in the band. Trail gets a 2.2x orange dot at the post-bounce waist-height
+  point (asserted in fpv-check via instance colors).
+- **CPU motion**: animations existed but were illegible (~30 px rig, 1 px
+  limbs, 80 ms pose low-pass halving the 3 Hz stride). Fixed by thickening
+  limbs (~1.4x), an athletic ready stance, amplified swing/serve keyframes
+  (lunge, knee load, deeper trophy), and applying the stride additively
+  AFTER the smoothing (filter state moved to a side table `_sm`).
+  fpv-check now asserts stride >0.35 rad and swing turn >0.8 rad on the
+  live rig. Bug found during the rewrite: smoothed-height init read its own
+  undefined value -> NaN hips (rig invisible); also a lingering serve
+  follow-through could block startSwing for up to 1.4 s — now cancelled.
+- All suites green: vitest 8/8, physcheck, rally, ai-check, fpv, e2e,
+  touch, build. AI contact rates unchanged on normal/hard (99/100 mixed);
+  easy dropped to 84% mixed / 28% pressing (lateral stand offset costs the
+  slowest setting most) — accepted, easy should be beatable.

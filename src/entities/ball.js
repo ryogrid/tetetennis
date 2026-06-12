@@ -49,6 +49,7 @@ export function createBallEntity(scene) {
   const _m = new THREE.Matrix4();
   const _cPre = new THREE.Color(0xffe34d);
   const _cPost = new THREE.Color(0x39d7ff);
+  const _cIdeal = new THREE.Color(0xff8a3d); // ideal (waist-height) hit point
 
   // "stand here" marker: where the player should be to make a clean contact
   const sweet = new THREE.Group();
@@ -101,15 +102,17 @@ export function createBallEntity(scene) {
       sweet.position.z = pos.z;
     },
     hideSweetSpot() { sweet.visible = false; },
-    // points: [{x, y, z, afterBounce}]
-    showTrail(points) {
+    // points: [{x, y, z, afterBounce}]; idealIdx (optional) marks the
+    // waist-height point of the arc — drawn bigger and orange
+    showTrail(points, idealIdx = -1) {
       const n = Math.min(points.length, TRAIL_CAP);
       for (let i = 0; i < n; i++) {
         const p = points[i];
-        _m.makeScale(1, 1, 1);
+        const s = i === idealIdx ? 2.2 : 1;
+        _m.makeScale(s, s, s);
         _m.setPosition(p.x, Math.max(p.y, 0.04), p.z);
         trail.setMatrixAt(i, _m);
-        trail.setColorAt(i, p.afterBounce ? _cPost : _cPre);
+        trail.setColorAt(i, i === idealIdx ? _cIdeal : (p.afterBounce ? _cPost : _cPre));
       }
       trail.count = n;
       trail.instanceMatrix.needsUpdate = true;

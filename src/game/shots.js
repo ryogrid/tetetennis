@@ -1,6 +1,6 @@
 // Stroke model: shot type table, contact quality, error model.
 // Where character stats meet physics.
-import { STATS_MAP, RPM_TO_RADS, COURT } from '../physics/constants.js';
+import { STATS_MAP, RPM_TO_RADS, COURT, IDEAL_CONTACT_H, IDEAL_CONTACT_R } from '../physics/constants.js';
 import { solveShot } from '../physics/shotSolver.js';
 
 // Three distinct physical regimes: flat = fast low liner, topspin = slower
@@ -9,7 +9,7 @@ import { solveShot } from '../physics/shotSolver.js';
 export const SHOT_TYPES = {
   flat:    { speedMul: 1.00, thetaMin: 0,  thetaMax: 10 },
   topspin: { speedMul: 0.85, thetaMin: 10, thetaMax: 32 },
-  slice:   { speedMul: 0.62, thetaMin: 1,  thetaMax: 10 },
+  slice:   { speedMul: 0.68, thetaMin: 1,  thetaMax: 10 },
   lob:     { speedMul: 1.00, thetaMin: 28, thetaMax: 55 },
 };
 
@@ -27,20 +27,30 @@ export function gauss() {
 function clamp(v, a, b) { return Math.max(a, Math.min(b, v)); }
 
 // Contact quality q in [0,1] from player/ball geometry at the contact instant.
+// The ideal stroke contact is the ball at WAIST height, an arm-plus-racket
+// length from the body — radial, so forehand and backhand are equivalent.
 // Returns {q, whiff, d, stretched}.
 export function contactQuality({ playerPos, ballPos, ballVel, stats }) {
   const d = Math.hypot(ballPos.x - playerPos.x, ballPos.z - playerPos.z);
   const h = ballPos.y;
   const reach = STATS_MAP.reach(stats.REA);
-  if (d > reach || h > 2.3) return { q: 0, whiff: true, d, stretched: true };
+  // vertical ceiling: shoulder + arm + racket (scales with the reach stat)
+  const hMax = 1.15 + reach;
+  if (d > reach || h > hMax) return { q: 0, whiff: true, d, stretched: true };
 
-  const qDist = clamp(1 - Math.max(0, d - 0.45) / (reach - 0.45), 0, 1);
-  const qHeight = 1 - clamp((Math.abs(h - 1.0) - 0.55) / 0.9, 0, 0.55);
+  // radial: best in a band around IDEAL_CONTACT_R; jammed near the body,
+  // stretched toward the limit of the reach
+  const lo = IDEAL_CONTACT_R - 0.35, hi = IDEAL_CONTACT_R + 0.25;
+  let qDist;
+  if (d < lo) qDist = 0.55 + 0.45 * (d / lo); // cramped against the body
+  else if (d <= hi) qDist = 1;
+  else qDist = clamp(1 - (d - hi) / (reach - hi), 0, 1);
+  // best at waist height, degrading toward the shoelaces / over the shoulder
+  const qHeight = 1 - clamp((Math.abs(h - IDEAL_CONTACT_H) - 0.3) / 0.9, 0, 0.55);
   const vIn = Math.hypot(ballVel.x, ballVel.y, ballVel.z);
   const qSpeed = clamp(1 - (vIn - 18) / 55, 0.65, 1);
-  const qJam = d < 0.18 ? 0.55 : 1;
-  const q = qDist * qHeight * qSpeed * qJam;
-  return { q, whiff: false, d, stretched: qDist < 0.35 };
+  const q = qDist * qHeight * qSpeed;
+  return { q, whiff: false, d, stretched: d > hi && qDist < 0.35 };
 }
 
 // Compute a stroke. side: 'P' hits toward -z, 'C' toward +z.

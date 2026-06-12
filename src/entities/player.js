@@ -50,17 +50,18 @@ function buildRig(color) {
   head.castShadow = true;
   hips.add(head);
 
-  // arms (limbs extend -y from their joint)
+  // arms (limbs extend -y from their joint). Limbs are deliberately thick:
+  // the only rig the player ever sees is 12-24 m away in FPV.
   for (const side of ['R', 'L']) {
     const sx = side === 'R' ? 1 : -1;
     const shoulder = new THREE.Group();
     shoulder.position.set(sx * 0.23, 0.52, 0);
     hips.add(shoulder);
-    shoulder.add(limbMesh(0.28, 0.045, SKIN));
+    shoulder.add(limbMesh(0.28, 0.062, SKIN));
     const elbow = new THREE.Group();
     elbow.position.y = -0.28;
     shoulder.add(elbow);
-    elbow.add(limbMesh(0.26, 0.04, SKIN));
+    elbow.add(limbMesh(0.26, 0.055, SKIN));
     joints['shoulder' + side] = shoulder;
     joints['elbow' + side] = elbow;
   }
@@ -69,19 +70,19 @@ function buildRig(color) {
   const racket = new THREE.Group();
   racket.position.y = -0.26;
   joints.elbowR.add(racket);
-  const handle = limbMesh(0.3, 0.02, 0x333333);
+  const handle = limbMesh(0.3, 0.028, 0x333333);
   racket.add(handle);
   const headRing = new THREE.Mesh(
-    new THREE.TorusGeometry(0.13, 0.016, 8, 18),
-    new THREE.MeshLambertMaterial({ color: 0xcccccc }),
+    new THREE.TorusGeometry(0.15, 0.022, 8, 18),
+    new THREE.MeshLambertMaterial({ color: 0xdddddd }),
   );
-  headRing.position.y = -0.42;
+  headRing.position.y = -0.44;
   racket.add(headRing);
   const strings = new THREE.Mesh(
-    new THREE.CircleGeometry(0.12, 16),
+    new THREE.CircleGeometry(0.14, 16),
     new THREE.MeshLambertMaterial({ color: 0xeeeeee, transparent: true, opacity: 0.45, side: THREE.DoubleSide }),
   );
-  strings.position.y = -0.42;
+  strings.position.y = -0.44;
   racket.add(strings);
   joints.racket = racket;
 
@@ -91,11 +92,11 @@ function buildRig(color) {
     const hip = new THREE.Group();
     hip.position.set(sx * 0.10, -0.02, 0);
     hips.add(hip);
-    hip.add(limbMesh(0.40, 0.05, SHORTS));
+    hip.add(limbMesh(0.40, 0.068, SHORTS));
     const knee = new THREE.Group();
     knee.position.y = -0.40;
     hip.add(knee);
-    knee.add(limbMesh(0.42, 0.045, SKIN));
+    knee.add(limbMesh(0.42, 0.06, SKIN));
     joints['hip' + side] = hip;
     joints['knee' + side] = knee;
   }
@@ -136,7 +137,8 @@ export function createPlayer({ side, character, scene, speedMul = 1 }) {
     reach: STATS_MAP.reach(stats.REA),
 
     startSwing(type, fh) {
-      if (this.swing || this.serveAnim) return false;
+      if (this.swing) return false;
+      this.serveAnim = null; // a lingering follow-through must not block a hit
       this.swing = { t: 0, type, fh, contactDone: false };
       return true;
     },
@@ -200,57 +202,85 @@ export function createPlayer({ side, character, scene, speedMul = 1 }) {
       const dirSign = side === 'P' ? 1 : -1;
       const lvx = this.vel.x * dirSign;
 
-      // base targets: idle/run blend
+      // base targets: athletic ready stance (knees bent, racket in front),
+      // leaning into the run. The stride oscillation is NOT in here — it is
+      // added after the smoothing so the low-pass can't flatten it.
       const t = {};
-      const sw = Math.sin(this.runPhase) * 0.6 * spN;
-      t.hips = [0.12 * spN, 0, -lvx / maxSpeed * 0.12];
-      t.hipR = [sw, 0, 0];
-      t.hipL = [-sw, 0, 0];
-      t.kneeR = [Math.max(0, -sw) * 0.9 + 0.06, 0, 0];
-      t.kneeL = [Math.max(0, sw) * 0.9 + 0.06, 0, 0];
-      t.shoulderR = [-sw * 0.5, 0, 0.18];
-      t.shoulderL = [sw * 0.5, 0, -0.18];
-      t.elbowR = [0.5, 0, 0];
-      t.elbowL = [0.5, 0, 0];
+      t.hips = [0.10 + 0.22 * spN, 0, -lvx / maxSpeed * 0.25];
+      t.hipR = [0, 0, 0];
+      t.hipL = [0, 0, 0];
+      t.kneeR = [0.22, 0, 0];
+      t.kneeL = [0.22, 0, 0];
+      t.shoulderR = [0.25, 0, 0.18];
+      t.shoulderL = [0.25, 0, -0.18];
+      t.elbowR = [0.9, 0, 0];
+      t.elbowL = [0.9, 0, 0];
       t.racket = [0.3, 0, 0];
-      const bobY = 0.86 + Math.sin(this.runPhase * 2) * 0.02 * (0.4 + spN);
+      let baseY = 0.83;
 
       if (this.swing) {
         const n = this.swing.t / SWING_DUR; // contact at 0.4
         const m = this.swing.fh ? 1 : -1;
-        t.hips[1] = m * kf(n, [0, 0.3, 0.4, 0.75, 1], [-0.15, -0.75, 0.25, 0.85, 0.6]);
+        t.hips[0] = kf(n, [0, 0.3, 0.4, 0.7, 1], [0.1, 0.15, 0.3, 0.2, 0.12]);
+        t.hips[1] = m * kf(n, [0, 0.3, 0.4, 0.75, 1], [-0.3, -1.1, 0.35, 1.2, 0.85]);
         t.shoulderR = [
-          kf(n, [0, 0.3, 0.4, 0.7, 1], [-0.2, -0.5, -0.35, -0.2, 0]),
-          m * kf(n, [0, 0.3, 0.4, 0.7, 1], [0, -0.9, 0.1, 1.1, 0.8]),
-          kf(n, [0, 0.3, 0.4, 0.7, 1], [0.2, 0.5, 1.25, 0.9, 0.4]),
+          kf(n, [0, 0.3, 0.4, 0.7, 1], [-0.2, -0.55, -0.35, -0.2, 0.1]),
+          m * kf(n, [0, 0.3, 0.4, 0.7, 1], [0, -1.2, 0.15, 1.5, 1.1]),
+          kf(n, [0, 0.3, 0.4, 0.7, 1], [0.25, 0.7, 1.45, 1.0, 0.5]),
         ];
-        t.elbowR = [kf(n, [0, 0.3, 0.4, 0.8, 1], [0.5, 1.0, 0.25, 0.7, 0.5]), 0, 0];
-        t.racket = [kf(n, [0, 0.3, 0.4, 1], [0.3, 0.8, 0.1, 0.4]), 0, 0];
+        t.elbowR = [kf(n, [0, 0.3, 0.4, 0.8, 1], [0.6, 1.1, 0.2, 0.7, 0.6]), 0, 0];
+        t.racket = [kf(n, [0, 0.3, 0.4, 1], [0.3, 0.9, 0.05, 0.4]), 0, 0];
+        // load the legs into the shot, then push up through contact
+        const bend = kf(n, [0, 0.3, 0.4, 0.8, 1], [0.3, 0.55, 0.35, 0.2, 0.22]);
+        t.kneeR[0] = bend; t.kneeL[0] = bend;
+        baseY = 0.83 - kf(n, [0, 0.3, 0.4, 0.8, 1], [0.02, 0.09, 0.03, 0, 0.01]);
       }
 
       if (this.serveAnim) {
         const n = Math.min(this.serveAnim.t / 1.1, 1);
         // toss arm (left) rises, hitting arm trophy -> overhead extension
         t.shoulderL = [kf(n, [0, 0.3, 0.55, 1], [0.3, 2.3, 2.6, 0.6]), 0, -0.1];
-        t.elbowL = [kf(n, [0, 0.3, 1], [0.3, 0.1, 0.3]), 0, 0];
+        t.elbowL = [kf(n, [0, 0.3, 1], [0.3, 0.05, 0.3]), 0, 0];
         t.shoulderR = [
           kf(n, [0, 0.35, 0.55, 0.62, 0.85, 1], [0.4, 1.9, 2.3, 3.05, 1.6, 0.8]),
           0, 0.25,
         ];
-        t.elbowR = [kf(n, [0, 0.35, 0.55, 0.62, 1], [0.4, 1.6, 1.8, 0.1, 0.5]), 0, 0];
+        t.elbowR = [kf(n, [0, 0.35, 0.55, 0.62, 1], [0.4, 1.6, 1.8, 0.05, 0.5]), 0, 0];
         t.racket = [kf(n, [0, 0.5, 0.62, 1], [0.5, 0.8, 0.05, 0.3]), 0, 0];
-        t.hips[0] = kf(n, [0, 0.45, 0.62, 1], [0, -0.18, 0.12, 0.05]);
+        // deep knee bend + back arch in the trophy, drive up into the contact
+        t.hips[0] = kf(n, [0, 0.45, 0.62, 1], [0, -0.35, 0.18, 0.06]);
+        const bend = kf(n, [0, 0.45, 0.62, 1], [0.15, 0.65, 0.05, 0.2]);
+        t.kneeR[0] = bend; t.kneeL[0] = bend;
+        baseY = 0.83 - kf(n, [0, 0.45, 0.58, 0.66, 1], [0, 0.12, 0.02, -0.06, 0.02]);
       }
 
-      // smooth-apply
-      const k = 1 - Math.pow(0.000001, dt); // fast but not instant
+      // smooth-apply the base pose. The filter state lives in this._sm (NOT
+      // in the joint rotations) so the additive stride below never leaks
+      // into the smoothing.
+      const k = 1 - Math.pow(0.00000001, dt); // tau ~54 ms
+      const sm = this._sm || (this._sm = {});
       for (const name of Object.keys(t)) {
-        const j = J[name];
-        j.rotation.x += (t[name][0] - j.rotation.x) * k;
-        j.rotation.y += (t[name][1] - j.rotation.y) * k;
-        j.rotation.z += (t[name][2] - j.rotation.z) * k;
+        const s = sm[name] ||
+          (sm[name] = { x: t[name][0], y: t[name][1], z: t[name][2] });
+        s.x += (t[name][0] - s.x) * k;
+        s.y += (t[name][1] - s.y) * k;
+        s.z += (t[name][2] - s.z) * k;
+        J[name].rotation.set(s.x, s.y, s.z);
       }
-      J.hips.position.y += (bobY - J.hips.position.y) * k;
+      if (this._smY === undefined) this._smY = baseY;
+      this._smY += (baseY - this._smY) * k;
+      J.hips.position.y = this._smY +
+        Math.sin(this.runPhase * 2) * 0.025 * (0.3 + spN) * spN;
+
+      // full-amplitude run stride on top of the smoothed pose
+      const sw = Math.sin(this.runPhase) * 0.9 * spN;
+      J.hipR.rotation.x += sw;
+      J.hipL.rotation.x -= sw;
+      J.kneeR.rotation.x += Math.max(0, -sw) * 1.0;
+      J.kneeL.rotation.x += Math.max(0, sw) * 1.0;
+      // arms pump counter to the legs (unless they are busy)
+      if (!this.swing && !this.serveAnim) J.shoulderR.rotation.x -= sw * 0.8;
+      if (!this.serveAnim) J.shoulderL.rotation.x += sw * 0.8;
     },
 
     dispose() {

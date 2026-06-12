@@ -36,7 +36,7 @@ export function serveStanceX(servingSide, courtSide) {
 
 export const SERVE_TYPES = {
   flat:  { speedMul: 1.00, thetaMin: -6, thetaMax: 4 },
-  kick:  { speedMul: 0.66, thetaMin: 1,  thetaMax: 12 },
+  kick:  { speedMul: 0.64, thetaMin: 2,  thetaMax: 14 },
   slice: { speedMul: 0.84, thetaMin: -4, thetaMax: 6 },
 };
 
@@ -68,13 +68,14 @@ export function computeServe({ stats, type, from, servingSide, courtSide,
   let speed = STATS_MAP.serveFlatSpeed(stats.SRV) * (0.68 + 0.32 * qServe) * def.speedMul;
 
   // spin: rpm and axis split between lateral (top/back) and vertical (side)
-  let spinRpm = 0, ySpinFrac = 0;
+  let spinRpm = 0, ySpinFrac = 0, ySpinSign = 0;
   if (type === 'flat') {
     spinRpm = 400; ySpinFrac = 0;
   } else if (type === 'kick') {
-    spinRpm = 2600 + 1400 * stats.SPN / 100; ySpinFrac = 0.4; // topspin + side
+    // heavy topspin + some side: clears the net high, then dives into the box
+    spinRpm = 3200 + 1600 * stats.SPN / 100; ySpinFrac = 0.4; ySpinSign = -1;
   } else { // slice serve
-    spinRpm = -(1800 + 900 * stats.SRV / 100); ySpinFrac = 0.7; // mostly side
+    spinRpm = -(1800 + 900 * stats.SRV / 100); ySpinFrac = 0.7; ySpinSign = 1;
   }
 
   // error model (same shape as strokes)
@@ -85,8 +86,11 @@ export function computeServe({ stats, type, from, servingSide, courtSide,
 
   const wTotal = Math.abs(spinRpm) * RPM_TO_RADS;
   const lateral = spinRpm * RPM_TO_RADS * (1 - ySpinFrac);
-  // side spin curves the ball; sign chosen so slice curves toward the wide side
-  const ySpin = wTotal * ySpinFrac * (box.xSign > 0 ? -1 : 1);
+  // Side spin is handedness-fixed (right-handed server), NOT box-dependent:
+  // spin.y > 0 curves toward the receiver's right on both sides of the court
+  // (Magnus ax = k * spin.y * vel.z), which is what a slice serve does. The
+  // kick spins the other way over the top, so its side component is opposite.
+  const ySpin = wTotal * ySpinFrac * ySpinSign;
 
   const solveArgs = {
     from,

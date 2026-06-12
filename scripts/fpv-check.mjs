@@ -114,6 +114,48 @@ if (sweetPos) {
 }
 await page.screenshot({ path: 'scripts/shots/22-fpv-rally.png' });
 
+// --- CPU motion + ideal-point probes (rig actually animates; the trail
+// highlights a waist-height hit point in orange) ---
+let maxStride = 0, maxSwingTurn = 0, maxServeArm = 0, sawIdealDot = false;
+for (let t = 0; t < 160; t++) {
+  const s = await page.evaluate(() => {
+    const g = window.__game; const c = g.cpu;
+    const tr = g.ball.trailMarker;
+    let ideal = false;
+    if (tr.visible && tr.instanceColor) {
+      const a = tr.instanceColor.array;
+      for (let i = 0; i < tr.count; i++) {
+        const r = a[3 * i], gg = a[3 * i + 1], b = a[3 * i + 2];
+        if (r > 0.8 && gg < 0.6 && b < 0.3) { ideal = true; break; }
+      }
+    }
+    return {
+      ps: g.pointState, server: g.match.server,
+      vel: Math.hypot(c.vel.x, c.vel.z),
+      swing: !!c.swing, serveAnim: !!c.serveAnim,
+      hipX: Math.abs(c.joints.hipR.rotation.x),
+      shY: Math.abs(c.joints.shoulderR.rotation.y),
+      shX: c.joints.shoulderR.rotation.x,
+      ideal,
+    };
+  });
+  if (s.vel > 2.5 && !s.swing) maxStride = Math.max(maxStride, s.hipX);
+  if (s.swing) maxSwingTurn = Math.max(maxSwingTurn, s.shY);
+  if (s.serveAnim) maxServeArm = Math.max(maxServeArm, s.shX);
+  if (s.ideal) sawIdealDot = true;
+  if (s.ps === 'pre_serve' && s.server === 'P') {
+    await page.keyboard.press('Space');
+    await page.waitForTimeout(520);
+    await page.keyboard.press('KeyZ');
+  }
+  await page.waitForTimeout(60);
+}
+check('CPU run stride animates the legs (>0.35 rad)', maxStride > 0.35,
+  `${maxStride.toFixed(2)} rad`);
+check('CPU swing turns the hitting arm/body (>0.8 rad)', maxSwingTurn > 0.8,
+  `${maxSwingTurn.toFixed(2)} rad`);
+check('trail highlights a waist-height ideal hit point (orange dot)', sawIdealDot);
+
 // --- serve aim: D-pad at the hit instant steers the serve ---
 // Collect serve landing-x with left vs right held, on the same court side.
 async function waitFor(cond, timeout = 12000) {
@@ -124,8 +166,9 @@ async function waitFor(cond, timeout = 12000) {
   return false;
 }
 async function aimedServe(pickDir) {
+  // a whole CPU service game may have to play out first (~25 s)
   const ok = await waitFor(() =>
-    window.__game.pointState === 'pre_serve' && window.__game.match.server === 'P');
+    window.__game.pointState === 'pre_serve' && window.__game.match.server === 'P', 40000);
   if (!ok) return null;
   const side = await page.evaluate(() => window.__game.courtSide);
   const dirKey = pickDir(side);

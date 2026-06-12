@@ -1,7 +1,7 @@
 // CPU brain: exact physics prediction degraded by stat- and difficulty-driven
 // error. Imports physics only; receives entities via ctx.
 import { sampleHitPoints, predictLanding } from './physics/ball.js';
-import { COURT, LINE_GRACE, STATS_MAP, PLAYER_BOUNDS } from './physics/constants.js';
+import { COURT, LINE_GRACE, STATS_MAP, PLAYER_BOUNDS, IDEAL_CONTACT_H } from './physics/constants.js';
 import { gauss } from './game/shots.js';
 
 const STYLE_BIAS = {
@@ -105,13 +105,13 @@ export function chooseServe(ai, isSecond) {
   const r = Math.random();
   let type, preset;
   if (isSecond) {
-    type = stats.SPN >= stats.SLC ? 'kick' : 'slice';
+    // safe spin serve: the kick's high net clearance + dip keeps it in
+    type = 'kick';
     preset = 'body';
   } else {
-    if (style === 'server') type = r < 0.7 ? 'flat' : 'slice';
-    else if (style === 'grinder') type = r < 0.5 ? 'kick' : 'flat';
-    else if (style === 'slicer') type = r < 0.55 ? 'slice' : 'flat';
-    else type = r < 0.45 ? 'flat' : (r < 0.75 ? 'slice' : 'kick');
+    // first serve: flat, with an occasional slice for variety
+    const sliceP = style === 'slicer' ? 0.35 : style === 'server' ? 0.25 : 0.15;
+    type = r < sliceP ? 'slice' : 'flat';
     const r2 = Math.random();
     // hard goes for the corners more often
     const wideP = diff.id === 'hard' ? 0.45 : 0.4;
@@ -148,7 +148,7 @@ function pickIntercept(ai, ctx, opts) {
     const spare = p.t - arrive;
     const inBounds = Math.abs(p.pos.z) <= zReach;
     if (spare >= 0.05 && inBounds) {
-      const u = -Math.abs(p.pos.y - 1.0) + Math.min(spare, 0.6) * 0.5;
+      const u = -Math.abs(p.pos.y - IDEAL_CONTACT_H) + Math.min(spare, 0.6) * 0.5;
       if (u > bestU) { bestU = u; best = p; }
     } else {
       const bad = (inBounds ? 0 : 10) + Math.max(0, -spare);
@@ -232,9 +232,10 @@ export function updateAI(ai, ctx) {
     return move;
   }
 
-  // run to the strike point (stand a bit behind it, facing the net)
+  // run to the strike point: a bit behind it and to the forehand side, so
+  // the contact lands in the ideal arm-plus-racket band (not jammed)
   const stand = {
-    x: Math.max(PLAYER_BOUNDS.xMin, Math.min(PLAYER_BOUNDS.xMax, ai.pred.pos.x)),
+    x: Math.max(PLAYER_BOUNDS.xMin, Math.min(PLAYER_BOUNDS.xMax, ai.pred.pos.x + 0.55)),
     z: Math.max(-PLAYER_BOUNDS.zMax, Math.min(-PLAYER_BOUNDS.zMin, ai.pred.pos.z - 0.35)),
   };
   seek(move, ctx.cpu.pos, stand, 0.08);
