@@ -4,12 +4,88 @@ import { makeBall } from '../physics/ball.js';
 
 const VISUAL_R = 0.05; // slightly exaggerated for readability (physics uses 0.033)
 
+// Procedural tennis-ball texture: yellow-green felt base with white seam lines.
+// Drawn once on an off-screen canvas so we never load an image asset.
+function createBallTexture() {
+  const W = 256, H = 128;
+  const canvas = document.createElement('canvas');
+  canvas.width = W; canvas.height = H;
+  const ctx = canvas.getContext('2d');
+
+  // Base felt colour with subtle noise for a fibrous look
+  const img = ctx.createImageData(W, H);
+  for (let i = 0; i < img.data.length; i += 4) {
+    // yellow-green base with small random variation
+    const r = 200 + (Math.random() - 0.5) * 18;
+    const g = 224 + (Math.random() - 0.5) * 18;
+    const b = 48 + (Math.random() - 0.5) * 14;
+    img.data[i] = r;
+    img.data[i + 1] = g;
+    img.data[i + 2] = b;
+    img.data[i + 3] = 255;
+  }
+  ctx.putImageData(img, 0, 0);
+
+  // Two white seam curves (equirectangular projection of a tennis ball)
+  ctx.strokeStyle = '#ffffff';
+  ctx.lineWidth = 3.5;
+  ctx.lineCap = 'round';
+
+  // Curve 1: sinusoidal sweep across u (x axis)
+  for (let pass = 0; pass < 2; pass++) {
+    ctx.beginPath();
+    const uOff = pass * Math.PI;
+    for (let py = 0; py <= H; py++) {
+      const v = py / H; // 0 (top) → 1 (bottom)
+      const u = 0.5 + uOff / (2 * Math.PI) + 0.18 * Math.sin(v * Math.PI * 2);
+      const px = (u * W + W) % W;
+      if (py === 0) ctx.moveTo(px, py);
+      else ctx.lineTo(px, py);
+    }
+    ctx.stroke();
+  }
+
+  // Blur the seams slightly for a soft edge
+  ctx.filter = 'blur(0.6px)';
+  ctx.globalAlpha = 0.3;
+  for (let pass = 0; pass < 2; pass++) {
+    ctx.beginPath();
+    const uOff = pass * Math.PI;
+    for (let py = 0; py <= H; py++) {
+      const v = py / H;
+      const u = 0.5 + uOff / (2 * Math.PI) + 0.18 * Math.sin(v * Math.PI * 2);
+      const px = (u * W + W) % W;
+      if (py === 0) ctx.moveTo(px, py);
+      else ctx.lineTo(px, py);
+    }
+    ctx.stroke();
+  }
+
+  const tex = new THREE.CanvasTexture(canvas);
+  tex.wrapS = THREE.RepeatWrapping;
+  tex.wrapU = THREE.RepeatWrapping;
+  tex.colorSpace = THREE.SRGBColorSpace;
+  return tex;
+}
+
+let _ballTex = null;
+function ballTexture() {
+  if (!_ballTex) _ballTex = createBallTexture();
+  return _ballTex;
+}
+
 export function createBallEntity(scene) {
   const state = makeBall();
 
   const mesh = new THREE.Mesh(
-    new THREE.SphereGeometry(VISUAL_R, 16, 12),
-    new THREE.MeshLambertMaterial({ color: 0xd8f24b, emissive: 0x5a6b10 }),
+    new THREE.SphereGeometry(VISUAL_R, 24, 18),
+    new THREE.MeshStandardMaterial({
+      map: ballTexture(),
+      roughness: 0.88,
+      metalness: 0,
+      emissive: 0x1a1a00,
+      emissiveIntensity: 0.3,
+    }),
   );
   mesh.castShadow = true;
   scene.add(mesh);
@@ -77,6 +153,17 @@ export function createBallEntity(scene) {
       mesh.visible = state.active;
       blob.visible = state.active && state.pos.y < 12;
       mesh.position.set(state.pos.x, Math.max(state.pos.y, VISUAL_R), state.pos.z);
+      // Spin-based rotation: the white seam lines tumble with the spin so
+      // the player can read topspin (rolls forward), slice (spins back), etc.
+      const s = state.spin;
+      const mag = Math.hypot(s.x, s.y, s.z);
+      if (mag > 0.1) {
+        const vis = Math.min(mag * 0.5, 50); // cap for readability
+        mesh.rotateOnWorldAxis(
+          new THREE.Vector3(s.x, s.y, s.z).normalize(),
+          vis * dt,
+        );
+      }
       blob.position.x = state.pos.x;
       blob.position.z = state.pos.z;
       const h = Math.min(state.pos.y / 8, 1);
