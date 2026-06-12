@@ -72,7 +72,7 @@ export const IDEAL_CONTACT_R = 0.65; // m (forearm + racket, comfortably bent)
 // Global pace: scales every shot's base launch speed (strokes, serves,
 // lobs). Player movement and CPU foot speed are NOT affected, so a lower
 // value gives everyone more time on the ball.
-export const PACE = 0.8;
+export const PACE = 0.64;
 
 // Character stat (0-100) -> physics mappings
 export const STATS_MAP = {
@@ -80,8 +80,8 @@ export const STATS_MAP = {
   topspinRpm:    (SPN) => 2200 + 2600 * SPN / 100,
   sliceRpm:      (SLC) => 1500 + 1800 * SLC / 100,
   serveFlatSpeed:(SRV) => (40 + 16 * SRV / 100) * PACE,  // m/s
-  runSpeed:      (SPD) => 5.2 + 2.6 * SPD / 100,      // m/s
-  runAccel:      (SPD) => 9 + 6 * SPD / 100,          // m/s^2 (brake is 1.8x)
+  runSpeed:      (SPD) => (5.2 + 2.6 * SPD / 100) * 1.5,      // m/s
+  runAccel:      (SPD) => (9 + 6 * SPD / 100) * 1.5,          // m/s^2 (brake is 1.8x)
   errMulBase:    (CTL) => 1.6 - 1.2 * CTL / 100,
   reach:         (REA) => (1.25 + 0.25 * REA / 100) * 1.5,    // m
   serveContactH: (REA) => 2.55 + 0.55 * REA / 100,    // m

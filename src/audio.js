@@ -196,3 +196,18 @@ export function sfxConfirm() {
   beep(520, 0, 0.06, 0.12);
   beep(780, 0.07, 0.09, 0.12);
 }
+
+// Subtle alert when the ball enters the player's reach zone
+export function sfxReachAlert() {
+  if (!ctx) return;
+  const t = ctx.currentTime;
+  const osc = ctx.createOscillator();
+  osc.type = 'sine';
+  osc.frequency.setValueAtTime(800, t);
+  osc.frequency.exponentialRampToValueAtTime(1200, t + 0.04);
+  const g = ctx.createGain();
+  env(g, 0.10, 0.005, 0.06);
+  osc.connect(g).connect(master);
+  osc.start(t);
+  osc.stop(t + 0.08);
+}

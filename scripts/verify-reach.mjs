@@ -36,11 +36,7 @@ const arcInfo = await page.evaluate(() => {
     reach,
     hasZone: !!zone,
     circleVisible: zone ? zone.circle.visible : false,
-    cylVisible: zone ? zone.cyl.visible : false,
     circleRadius: zone ? zone.circle.geometry.parameters.radius : 0,
-    cylRadius: zone ? zone.cyl.geometry.parameters.radiusTop : 0,
-    cylHeight: zone ? zone.cyl.geometry.parameters.height : 0,
-    expectedHMax: 1.15 + reach,
     color: zone ? '#' + zone.circle.material.color.getHexString() : 'none',
     rootVisible: human.root.visible,
   };
@@ -50,13 +46,8 @@ console.log('  zone info:', JSON.stringify(arcInfo, null, 2));
 check('player is human', arcInfo.isHuman);
 check('reach zone exists', arcInfo.hasZone);
 check('ground circle visible', arcInfo.circleVisible);
-check('cylinder visible', arcInfo.cylVisible);
 check('circle radius matches reach', Math.abs(arcInfo.circleRadius - arcInfo.reach) < 0.01,
   `radius=${arcInfo.circleRadius.toFixed(2)} reach=${arcInfo.reach.toFixed(2)}`);
-check('cylinder radius matches reach', Math.abs(arcInfo.cylRadius - arcInfo.reach) < 0.01,
-  `cylR=${arcInfo.cylRadius.toFixed(2)} reach=${arcInfo.reach.toFixed(2)}`);
-check('cylinder height = hMax', Math.abs(arcInfo.cylHeight - arcInfo.expectedHMax) < 0.01,
-  `cylH=${arcInfo.cylHeight.toFixed(2)} hMax=${arcInfo.expectedHMax.toFixed(2)}`);
 check('color is blue', arcInfo.color === '#3988ff', arcInfo.color);
 check('player root visible', arcInfo.rootVisible);
 

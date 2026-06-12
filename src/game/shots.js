@@ -9,9 +9,9 @@ import { solveShot } from '../physics/shotSolver.js';
 // Theta bands are sized so the PACE-slowed speeds can still reach the type
 // depths without the solver re-inflating v0 (which would undo the pace).
 export const SHOT_TYPES = {
-  flat:    { speedMul: 1.00, thetaMin: 0,  thetaMax: 13 },
+  flat:    { speedMul: 1.00, thetaMin: 0,  thetaMax: 16 },
   topspin: { speedMul: 0.85, thetaMin: 10, thetaMax: 32 },
-  slice:   { speedMul: 0.76, thetaMin: 1,  thetaMax: 13 },
+  slice:   { speedMul: 0.76, thetaMin: 1,  thetaMax: 16 },
   lob:     { speedMul: 1.00, thetaMin: 28, thetaMax: 55 },
 };
 
@@ -72,8 +72,8 @@ export function computeStroke({ playerPos, ballPos, ballVel, stats, shotType, ai
   // --- nominal target: poor contacts land shorter, not just wilder ---
   // per-type depth consistent with the type's natural speed (the solver must
   // not have to inflate a slow slice to reach a flat-drive depth)
-  const typeZ = type === 'flat' ? 10.6 : type === 'topspin' ? 9.8
-    : type === 'slice' ? 9.0 : 9.0;
+  const typeZ = type === 'flat' ? 6.5 : type === 'topspin' ? 8.0
+    : type === 'slice' ? 5.5 : 5.5;
   const baseZ = typeZ - (1 - q) * 1.5;
   const target = {
     x: clamp(aim.x, -1, 1) * 2.8,

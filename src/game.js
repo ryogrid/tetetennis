@@ -641,6 +641,8 @@ export function createGame(scene, cameraRig, input) {
           Math.hypot(b.pos.x - g.human.pos.x, b.pos.z - g.human.pos.z) <= g.human.reach &&
           b.pos.y <= 1.15 + g.human.reach;
         g.human.setReachZoneColor(inReach ? 0xff50a0 : 0x3988ff);
+        if (inReach && !g._wasInReach) audio.sfxReachAlert();
+        g._wasInReach = inReach;
       }
     }
     // toss gauge: the FPV camera doesn't look up, so show toss height here

@@ -288,12 +288,10 @@ export function createPlayer({ side, character, scene, speedMul = 1 }) {
     },
   };
 
-  // Reach zone — filled ground circle + wireframe cylinder so the
-  // player can see the full 3D hittable volume (horizontal radius +
-  // vertical ceiling). Only for the human player.
+  // Reach zone — filled ground circle showing the horizontal reach area.
+  // Only for the human player.
   if (p.isHuman) {
     const reach = p.reach;
-    const hMax = 1.15 + reach; // max contact height from contactQuality
 
     // Filled circle on the ground — the full horizontal reach area
     const circGeo = new THREE.CircleGeometry(reach, 48);
@@ -305,21 +303,11 @@ export function createPlayer({ side, character, scene, speedMul = 1 }) {
     circle.position.y = 0.012;
     root.add(circle);
 
-    // Wireframe cylinder — the vertical extent (ground → hMax)
-    const cylGeo = new THREE.CylinderGeometry(reach, reach, hMax, 32, 4, true);
-    const cylMat = new THREE.MeshBasicMaterial({
-      color: 0x3988ff, wireframe: true, transparent: true, opacity: 0.35,
-    });
-    const cyl = new THREE.Mesh(cylGeo, cylMat);
-    cyl.position.y = hMax / 2;
-    root.add(cyl);
-
-    p._reachZone = { circle, cyl, circMat, cylMat };
+    p._reachZone = { circle, circMat };
 
     // Change the reach zone colour on the fly (blue = idle, pink = ball in range)
     p.setReachZoneColor = (hex) => {
       circMat.color.setHex(hex);
-      cylMat.color.setHex(hex);
     };
   }
 
