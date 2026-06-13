@@ -137,7 +137,14 @@ export function createBallEntity(scene) {
     new THREE.CircleGeometry(0.09, 16),
     new THREE.MeshBasicMaterial({ color: 0x39d7ff, transparent: true, opacity: 0.4 }),
   );
-  sweet.add(sweetRing, sweetDot);
+  // countdown ring: starts wide and shrinks onto the sweet ring as the ideal
+  // contact instant approaches, so depth-over-time is read in-world
+  const sweetCount = new THREE.Mesh(
+    new THREE.RingGeometry(0.30, 0.35, 28),
+    new THREE.MeshBasicMaterial({ color: 0x39d7ff, transparent: true, opacity: 0.8, side: THREE.DoubleSide }),
+  );
+  sweetCount.visible = false;
+  sweet.add(sweetRing, sweetDot, sweetCount);
   sweet.rotation.x = -Math.PI / 2;
   sweet.position.y = 0.012;
   sweet.visible = false;
@@ -188,7 +195,16 @@ export function createBallEntity(scene) {
       sweet.position.x = pos.x;
       sweet.position.z = pos.z;
     },
-    hideSweetSpot() { sweet.visible = false; },
+    hideSweetSpot() { sweet.visible = false; sweetCount.visible = false; },
+    // frac in [0,1]: 1 = contact far off, 0 = contact now. good => snap green.
+    setSweetCountdown(frac, good) {
+      const f = Math.max(0, Math.min(1, frac));
+      sweetCount.visible = true;
+      sweetCount.scale.setScalar(1 + f * 1.6);
+      sweetCount.material.color.setHex(good ? 0x50e678 : 0x39d7ff);
+      sweetCount.material.opacity = 0.5 + 0.4 * (1 - f);
+    },
+    hideSweetCountdown() { sweetCount.visible = false; },
     // points: [{x, y, z, afterBounce}]; idealIdx (optional) marks the
     // waist-height point of the arc — drawn bigger and orange
     showTrail(points, idealIdx = -1) {

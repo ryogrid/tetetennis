@@ -706,6 +706,14 @@ export function createGame(scene, cameraRig, input) {
     } else {
       ui.setRecommendedShot(null);
     }
+    // time-to-contact countdown ring on the sweet-spot marker
+    if (g.ball) {
+      if (ttc != null && g.sweetPos) {
+        g.ball.setSweetCountdown(Math.max(0, Math.min(1, ttc / TIMING_WINDOW)), ttc <= SWING_CONTACT_T);
+      } else {
+        g.ball.hideSweetCountdown();
+      }
+    }
   };
 
   // Seconds until the predicted ideal contact for an incoming CPU ball, or
