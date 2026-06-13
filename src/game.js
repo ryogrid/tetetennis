@@ -10,11 +10,18 @@ import { createPlayer, SWING_CONTACT_T } from './entities/player.js';
 import { createBallEntity } from './entities/ball.js';
 import { buildCourt } from './court.js';
 import { createAI, updateAI, chooseServe, DIFFICULTIES } from './ai.js';
+import { assistOn } from './assist.js';
 import * as ui from './ui.js';
 import * as audio from './audio.js';
 
 const SURFACE_IDS = ['clay', 'grass', 'hard'];
 const POINT_OVER_DUR = 2.0;
+
+// Approach slow-motion: how slow time runs while an incoming ball is near the
+// human, and how far out (beyond the reach radius) it engages.
+const SLOWMO_SCALE = 0.6;
+const SLOWMO_MARGIN = 2.0; // metres beyond reach where slow-mo starts
+const SLOWMO_TAU = 0.08;   // ramp smoothing (s)
 
 export function createGame(scene, cameraRig, input) {
   const g = {
@@ -666,6 +673,28 @@ export function createGame(scene, cameraRig, input) {
     } else {
       ui.hideMoveHint();
     }
+  };
+
+  // ---------- approach slow-motion ----------
+  // Returns the current simulation time-scale (1 = real time). Eases toward a
+  // slow factor while an incoming CPU ball is approaching the human and near
+  // striking range, giving more real reaction time. Camera and physics step
+  // are untouched — only how fast simulated time advances.
+  g._timeScale = 1;
+  g.getTimeScale = function (dt) {
+    let target = 1;
+    if (assistOn() && g.state === 'match' && g.pointState === 'rally' &&
+        g.rally && g.rally.lastHitBy === 'C' && g.ball && g.human) {
+      const b = g.ball.state;
+      const approaching = b.active && b.vel.z > 0; // moving toward the human (+z)
+      const near = approaching &&
+        Math.hypot(b.pos.x - g.human.pos.x, b.pos.z - g.human.pos.z)
+          <= g.human.reach + SLOWMO_MARGIN;
+      if (near) target = SLOWMO_SCALE;
+    }
+    const k = Math.min(1, dt / SLOWMO_TAU);
+    g._timeScale += (target - g._timeScale) * k;
+    return g._timeScale;
   };
 
   return g;

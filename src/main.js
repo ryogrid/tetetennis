@@ -48,12 +48,15 @@ function frame(now) {
   last = now;
 
   game.handleInput();
-  acc += dt;
+  // Approach slow-motion: scale simulated time (not the camera or physics
+  // step) so the ball gives the player more real milliseconds to react.
+  const sdt = dt * game.getTimeScale(dt);
+  acc += sdt;
   while (acc >= DT) {
     game.fixedUpdate(DT);
     acc -= DT;
   }
-  game.frameUpdate(dt);
+  game.frameUpdate(sdt);
   input.endFrame();
   renderer.render(scene, camera);
 }
