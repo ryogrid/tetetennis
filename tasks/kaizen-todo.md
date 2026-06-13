@@ -26,7 +26,7 @@ Camera position/angle stay untouched in every commit.
 - [x] 10. Auto-swing assist — assistFull-gated auto contact timing
 - [x] 11. Positioning magnetism — assistFull-gated nudge toward sweet spot
 - [x] 12. Unified Assist Mode toggle — Off/On/Full menu screen, persisted
-- [ ] 13. Touch-control ergonomics — bigger buttons, more forgiving D-pad
+- [x] 13. Touch-control ergonomics — bigger buttons, more forgiving D-pad
 - [ ] 14. Soften mishit / velocity penalty — assist-gated in `shots.js`
 
 ## Review

@@ -58,7 +58,7 @@ const css = `
 }
 #touchui { position: absolute; inset: 0; pointer-events: none; display: none; }
 #dpad {
-  position: absolute; left: 16px; bottom: 16px; width: 176px; height: 176px;
+  position: absolute; left: 16px; bottom: 16px; width: 200px; height: 200px;
   border-radius: 50%; background: rgba(18,18,28,.35);
   border: 1px solid rgba(255,255,255,.18);
   pointer-events: auto; touch-action: none;
@@ -74,18 +74,18 @@ const css = `
 #dpad .dr { left: 83%; top: 50%; }
 .tbtn {
   position: absolute; pointer-events: auto; touch-action: none;
-  width: 74px; height: 74px; border-radius: 50%;
+  width: 86px; height: 86px; border-radius: 50%;
   background: rgba(18,18,28,.55); border: 2px solid rgba(255,255,255,.3);
-  color: #eee; font-weight: 700; font-size: 13px; letter-spacing: 1px;
+  color: #eee; font-weight: 700; font-size: 14px; letter-spacing: 1px;
   display: flex; align-items: center; justify-content: center;
 }
 .tbtn.pressed, .tbtn.flash { background: #e8f24b; color: #111; border-color: #e8f24b; }
 .tbtn.recommend { box-shadow: 0 0 12px 2px rgba(80,230,120,.9); border-color: #50e678; }
-#tb-flat  { right: 140px; bottom: 16px; }
-#tb-top   { right: 104px; bottom: 96px; }
-#tb-slice { right: 24px;  bottom: 148px; }
+#tb-flat  { right: 150px; bottom: 18px; }
+#tb-top   { right: 110px; bottom: 116px; }
+#tb-slice { right: 22px;  bottom: 178px; }
 #tb-serve {
-  right: 34px; bottom: 30px; width: 62px; height: 62px; font-size: 11px;
+  right: 40px; bottom: 34px; width: 72px; height: 72px; font-size: 12px;
   background: rgba(44,64,30,.6);
 }
 #tossgauge {
@@ -272,12 +272,15 @@ function buildTouchControls(hud, onKey) {
     const dy = e.clientY - (r.top + r.height / 2);
     const d = Math.hypot(dx, dy);
     const want = new Set();
-    if (d > r.width * 0.12) {
+    if (d > r.width * 0.14) { // small central dead zone
       const nx = dx / d, ny = dy / d;
-      if (nx < -0.42) want.add('ArrowLeft');
-      if (nx > 0.42) want.add('ArrowRight');
-      if (ny < -0.42) want.add('ArrowUp');
-      if (ny > 0.42) want.add('ArrowDown');
+      // hysteresis: easier to engage a direction (0.30) than to drop it
+      // (0.20), so held diagonals stay stable instead of flickering
+      const t = (dir) => (held.has(dir) ? 0.20 : 0.30);
+      if (nx < -t('ArrowLeft')) want.add('ArrowLeft');
+      if (nx > t('ArrowRight')) want.add('ArrowRight');
+      if (ny < -t('ArrowUp')) want.add('ArrowUp');
+      if (ny > t('ArrowDown')) want.add('ArrowDown');
     }
     return want;
   }
