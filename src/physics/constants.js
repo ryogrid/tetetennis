@@ -74,12 +74,20 @@ export const IDEAL_CONTACT_R = 0.65; // m (forearm + racket, comfortably bent)
 // value gives everyone more time on the ball.
 export const PACE = 0.64;
 
+// Runtime pace multiplier applied on top of PACE. 1 = classic balance; the
+// assist axis lowers it so incoming balls give the player more time. Affects
+// every launch speed (strokes, serves, lobs) via effPace().
+let paceFactor = 1;
+export function setPaceFactor(f) { paceFactor = f; }
+export function getPaceFactor() { return paceFactor; }
+export const effPace = () => PACE * paceFactor;
+
 // Character stat (0-100) -> physics mappings
 export const STATS_MAP = {
-  maxFlatSpeed:  (POW) => (26 + 10 * POW / 100) * PACE,  // m/s
+  maxFlatSpeed:  (POW) => (26 + 10 * POW / 100) * effPace(),  // m/s
   topspinRpm:    (SPN) => 2200 + 2600 * SPN / 100,
   sliceRpm:      (SLC) => 1500 + 1800 * SLC / 100,
-  serveFlatSpeed:(SRV) => (40 + 16 * SRV / 100) * PACE,  // m/s
+  serveFlatSpeed:(SRV) => (40 + 16 * SRV / 100) * effPace(),  // m/s
   runSpeed:      (SPD) => (5.2 + 2.6 * SPD / 100) * 1.5,      // m/s
   runAccel:      (SPD) => (9 + 6 * SPD / 100) * 1.5,          // m/s^2 (brake is 1.8x)
   errMulBase:    (CTL) => 1.6 - 1.2 * CTL / 100,

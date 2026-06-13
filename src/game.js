@@ -2,7 +2,7 @@
 // scoring, UI and audio together.
 import { CHARACTERS } from './characters.js';
 import { createMatch, addPoint, scoreStrings, pointNumberInGame } from './match.js';
-import { SURFACES, COURT, LINE_GRACE, STATS_MAP, G, IDEAL_CONTACT_H, PLAYER_BOUNDS } from './physics/constants.js';
+import { SURFACES, COURT, LINE_GRACE, STATS_MAP, G, IDEAL_CONTACT_H, PLAYER_BOUNDS, setPaceFactor } from './physics/constants.js';
 import { stepBall, predictLanding, predictHitPoint, predictTrajectory } from './physics/ball.js';
 import { computeStroke } from './game/shots.js';
 import { computeServe, serveStanceX, isServeBoxIn, serveBox } from './game/serve.js';
@@ -160,6 +160,8 @@ export function createGame(scene, cameraRig, input) {
   }
 
   function startMatch() {
+    // assist eases incoming-ball pace (decoupled from CPU difficulty)
+    setPaceFactor(assistOn() ? 0.85 : 1.0);
     g.surface = SURFACES[g.sel.surfaceId];
     g.court = buildCourt(g.sel.surfaceId);
     scene.add(g.court);

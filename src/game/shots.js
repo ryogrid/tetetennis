@@ -1,6 +1,6 @@
 // Stroke model: shot type table, contact quality, error model.
 // Where character stats meet physics.
-import { STATS_MAP, RPM_TO_RADS, COURT, IDEAL_CONTACT_H, IDEAL_CONTACT_R, PACE } from '../physics/constants.js';
+import { STATS_MAP, RPM_TO_RADS, COURT, IDEAL_CONTACT_H, IDEAL_CONTACT_R, effPace } from '../physics/constants.js';
 import { solveShot } from '../physics/shotSolver.js';
 
 // Three distinct physical regimes: flat = fast low liner, topspin = slower
@@ -93,7 +93,7 @@ export function computeStroke({ playerPos, ballPos, ballVel, stats, shotType, ai
     speed = flatSpeed * def.speedMul;
     spinRpm = -STATS_MAP.sliceRpm(stats.SLC) * (0.5 + 0.5 * q);
   } else { // lob
-    speed = (15 + 4 * stats.POW / 100) * PACE;
+    speed = (15 + 4 * stats.POW / 100) * effPace();
     spinRpm = 500;
   }
 
