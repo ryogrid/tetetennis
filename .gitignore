@@ -2,3 +2,6 @@ node_modules/
 dist/
 scripts/shots/
 \#CLAUDE.md\#
+# editor backups
+*.bak
+*~
