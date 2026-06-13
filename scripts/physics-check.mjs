@@ -5,6 +5,11 @@ import { effectiveEy } from '../src/physics/bounce.js';
 import { solveShot } from '../src/physics/shotSolver.js';
 import { computeStroke } from '../src/game/shots.js';
 import { SERVE_TYPES } from '../src/game/serve.js';
+import { setAssistLevel } from '../src/assist.js';
+
+// These checks validate the canonical (assist-off) physics balance. The assist
+// axis intentionally eases the human's contact model and pace on top of this.
+setAssistLevel('off');
 
 let failures = 0;
 function check(name, cond, detail) {

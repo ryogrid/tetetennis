@@ -2,6 +2,7 @@
 // Where character stats meet physics.
 import { STATS_MAP, RPM_TO_RADS, COURT, IDEAL_CONTACT_H, IDEAL_CONTACT_R, effPace } from '../physics/constants.js';
 import { solveShot } from '../physics/shotSolver.js';
+import { assistOn } from '../assist.js';
 
 // Three distinct physical regimes: flat = fast low liner, topspin = slower
 // but heavily arced (high clearance, dips, kicks off the bounce), slice =
@@ -32,7 +33,7 @@ function clamp(v, a, b) { return Math.max(a, Math.min(b, v)); }
 // The ideal stroke contact is the ball at WAIST height, an arm-plus-racket
 // length from the body — radial, so forehand and backhand are equivalent.
 // Returns {q, whiff, d, stretched}.
-export function contactQuality({ playerPos, ballPos, ballVel, stats }) {
+export function contactQuality({ playerPos, ballPos, ballVel, stats, side }) {
   const d = Math.hypot(ballPos.x - playerPos.x, ballPos.z - playerPos.z);
   const h = ballPos.y;
   const reach = STATS_MAP.reach(stats.REA);
@@ -40,15 +41,20 @@ export function contactQuality({ playerPos, ballPos, ballVel, stats }) {
   const hMax = 1.15 + reach;
   if (d > reach || h > hMax) return { q: 0, whiff: true, d, stretched: true };
 
+  // Assist (human only) widens the forgiving bands so off-centre contact still
+  // produces a decent ball; the CPU's contact is never eased.
+  const aid = side === 'P' && assistOn();
+
   // radial: best in a band around IDEAL_CONTACT_R; jammed near the body,
   // stretched toward the limit of the reach
-  const lo = IDEAL_CONTACT_R - 0.35, hi = IDEAL_CONTACT_R + 0.25;
+  const lo = IDEAL_CONTACT_R - 0.35, hi = IDEAL_CONTACT_R + (aid ? 0.40 : 0.25);
   let qDist;
-  if (d < lo) qDist = 0.55 + 0.45 * (d / lo); // cramped against the body
+  if (d < lo) qDist = (aid ? 0.70 : 0.55) + (aid ? 0.30 : 0.45) * (d / lo); // cramped against the body
   else if (d <= hi) qDist = 1;
   else qDist = clamp(1 - (d - hi) / (reach - hi), 0, 1);
   // best at waist height, degrading toward the shoelaces / over the shoulder
-  const qHeight = 1 - clamp((Math.abs(h - IDEAL_CONTACT_H) - 0.3) / 0.9, 0, 0.55);
+  const hFlat = aid ? 0.45 : 0.3, hCap = aid ? 0.40 : 0.55;
+  const qHeight = 1 - clamp((Math.abs(h - IDEAL_CONTACT_H) - hFlat) / 0.9, 0, hCap);
   const vIn = Math.hypot(ballVel.x, ballVel.y, ballVel.z);
   const qSpeed = clamp(1 - (vIn - 18) / 55, 0.65, 1);
   const q = qDist * qHeight * qSpeed;
@@ -59,7 +65,7 @@ export function contactQuality({ playerPos, ballPos, ballVel, stats }) {
 // aim: {x: -1..1, depth: -1..1} (depth +1 deep, -1 short).
 // Returns {vel, spin, q, mishit, type} or null on whiff.
 export function computeStroke({ playerPos, ballPos, ballVel, stats, shotType, aim, side }) {
-  const cq = contactQuality({ playerPos, ballPos, ballVel, stats });
+  const cq = contactQuality({ playerPos, ballPos, ballVel, stats, side });
   if (cq.whiff) return null;
   const { q, stretched } = cq;
 
