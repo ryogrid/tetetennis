@@ -24,7 +24,7 @@ Camera position/angle stay untouched in every commit.
 - [x] 8. Widen contact quality bands — assist-gated tolerances in `shots.js`
 - [x] 9. Incoming-height bar — rally height gauge in `ui.js`
 - [x] 10. Auto-swing assist — assistFull-gated auto contact timing
-- [ ] 11. Positioning magnetism — assistFull-gated nudge toward sweet spot
+- [x] 11. Positioning magnetism — assistFull-gated nudge toward sweet spot
 - [ ] 12. Unified Assist Mode toggle — Off/On/Full menu screen, persisted
 - [ ] 13. Touch-control ergonomics — bigger buttons, more forgiving D-pad
 - [ ] 14. Soften mishit / velocity penalty — assist-gated in `shots.js`

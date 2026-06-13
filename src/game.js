@@ -28,6 +28,13 @@ const SLOWMO_TAU = 0.08;   // ramp smoothing (s)
 const TIMING_WINDOW = 1.0; // s of look-ahead shown on the meter
 const TIMING_TOL = 0.07;   // s tolerance of the good band
 
+// Positioning magnetism (full assist): gentle pull onto the sweet spot when
+// the player has mostly stopped within this radius. Never overrides deliberate
+// movement — it fades out as the player's own input grows.
+const MAGNET_RADIUS = 1.2;   // m
+const MAGNET_STRENGTH = 0.6;  // fraction of run speed at full pull
+const MAGNET_INPUT_CUT = 0.3; // input magnitude above which magnetism is off
+
 export function createGame(scene, cameraRig, input) {
   const g = {
     scene, cameraRig, input,
@@ -495,6 +502,20 @@ export function createGame(scene, cameraRig, input) {
     let humanMove = input.moveVec();
     if ((g.pointState === 'pre_serve' || g.pointState === 'serving') && server() === 'P') {
       humanMove = { x: humanMove.x, z: 0 }; // slide along the baseline only
+    }
+    // positioning magnetism: nudge a near-stationary player onto the sweet spot
+    if (assistFull() && g.pointState === 'rally' && g.rally.lastHitBy === 'C' &&
+        g.sweetPos) {
+      const dx = g.sweetPos.x - g.human.pos.x;
+      const dz = g.sweetPos.z - g.human.pos.z;
+      const dist = Math.hypot(dx, dz);
+      const inputMag = Math.hypot(humanMove.x, humanMove.z);
+      if (dist < MAGNET_RADIUS && dist > 0.05 && inputMag < MAGNET_INPUT_CUT) {
+        const pull = MAGNET_STRENGTH * (1 - inputMag / MAGNET_INPUT_CUT);
+        humanMove = { x: humanMove.x + (dx / dist) * pull, z: humanMove.z + (dz / dist) * pull };
+        const m = Math.hypot(humanMove.x, humanMove.z);
+        if (m > 1) { humanMove.x /= m; humanMove.z /= m; }
+      }
     }
     g.human.update(dt, humanMove);
     // clamp server stance to the correct half during serve
