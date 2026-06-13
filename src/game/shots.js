@@ -56,7 +56,8 @@ export function contactQuality({ playerPos, ballPos, ballVel, stats, side }) {
   const hFlat = aid ? 0.45 : 0.3, hCap = aid ? 0.40 : 0.55;
   const qHeight = 1 - clamp((Math.abs(h - IDEAL_CONTACT_H) - hFlat) / 0.9, 0, hCap);
   const vIn = Math.hypot(ballVel.x, ballVel.y, ballVel.z);
-  const qSpeed = clamp(1 - (vIn - 18) / 55, 0.65, 1);
+  // assist raises the floor so fast balls don't also wreck the human's contact
+  const qSpeed = clamp(1 - (vIn - 18) / 55, aid ? 0.80 : 0.65, 1);
   const q = qDist * qHeight * qSpeed;
   return { q, whiff: false, d, stretched: d > hi && qDist < 0.35 };
 }
@@ -68,6 +69,7 @@ export function computeStroke({ playerPos, ballPos, ballVel, stats, shotType, ai
   const cq = contactQuality({ playerPos, ballPos, ballVel, stats, side });
   if (cq.whiff) return null;
   const { q, stretched } = cq;
+  const aid = side === 'P' && assistOn(); // human-only assist easing
 
   let type = shotType;
   if (stretched && type !== 'slice') type = 'lob'; // forced defensive ball
@@ -114,7 +116,7 @@ export function computeStroke({ playerPos, ballPos, ballVel, stats, shotType, ai
 
   let mishit = false;
   let yawErr = 0;
-  if (q < 0.3 && Math.random() < 0.35) {
+  if (q < 0.3 && Math.random() < (aid ? 0.15 : 0.35)) {
     mishit = true;
     yawErr = (Math.random() - 0.5) * 0.5;
     speed *= 0.55;

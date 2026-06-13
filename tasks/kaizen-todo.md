@@ -27,8 +27,34 @@ Camera position/angle stay untouched in every commit.
 - [x] 11. Positioning magnetism — assistFull-gated nudge toward sweet spot
 - [x] 12. Unified Assist Mode toggle — Off/On/Full menu screen, persisted
 - [x] 13. Touch-control ergonomics — bigger buttons, more forgiving D-pad
-- [ ] 14. Soften mishit / velocity penalty — assist-gated in `shots.js`
+- [x] 14. Soften mishit / velocity penalty — assist-gated in `shots.js`
 
 ## Review
 
-(to be filled in as items complete)
+All 14 items implemented in priority order, one commit each, every commit green
+on `npm test` + `npm run build` (+ `npm run physcheck` for tuning items).
+
+Architecture:
+- `src/assist.js` is the single assist axis (`off`/`on`/`full`), persisted to
+  localStorage, restored on load, and chosen on the new ASSIST (FOR YOU) menu
+  screen (task 12). Every feature reads `assistOn()`/`assistFull()`.
+- A shared contact-time clock (`game.timeToContact()`) drives the timing meter,
+  countdown ring, height-bar window, and auto-swing timing from one prediction.
+
+Gating outcome (as agreed — "tiered default-on"):
+- Always on (info only): swing timing meter, court depth ladder, recommended-shot
+  highlight, time-to-contact countdown, always-readable shadow, incoming-height bar.
+- Default on (`on`): approach slow-motion, assist pace (0.85x), widened contact
+  bands, softened mishit/velocity penalty — all human-only where balance-relevant.
+- Default off (`full` only): auto-swing, positioning magnetism.
+
+Notes:
+- Camera untouched in every commit (`src/camera.js` and `main.js` camera setup
+  unchanged).
+- Contact-model easing is gated to `side === 'P'` so the CPU is never helped.
+- `scripts/physics-check.mjs` pinned to assist-off to validate the canonical
+  balance; browser e2e scripts updated to pass through the new assist screen.
+
+Suggested manual verification: `npm run dev`, start a match, confirm the new HUD
+elements render, slow-mo engages on incoming balls, and the Assist screen toggles
+Off/On/Full (Full enabling auto-swing + magnetism).
