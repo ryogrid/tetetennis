@@ -22,6 +22,21 @@ function lineStrip(x1, z1, x2, z2, color, width = 0.06) {
   return m;
 }
 
+// Faint, unlit cross-court reference line (depth ladder). Sits just under the
+// real court lines so those still render on top.
+function faintLine(x1, z1, x2, z2, color, opacity = 0.13, width = 0.05) {
+  const len = Math.hypot(x2 - x1, z2 - z1);
+  const geo = new THREE.PlaneGeometry(
+    Math.abs(x2 - x1) > Math.abs(z2 - z1) ? len : width,
+    Math.abs(x2 - x1) > Math.abs(z2 - z1) ? width : len,
+  );
+  const mat = new THREE.MeshBasicMaterial({ color, transparent: true, opacity });
+  const m = new THREE.Mesh(geo, mat);
+  m.rotation.x = -Math.PI / 2;
+  m.position.set((x1 + x2) / 2, 0.009, (z1 + z2) / 2);
+  return m;
+}
+
 export function buildCourt(surfaceId) {
   const theme = SURFACE_THEMES[surfaceId];
   const g = new THREE.Group();
@@ -65,6 +80,11 @@ export function buildCourt(surfaceId) {
   // center marks
   g.add(lineStrip(0, L - 0.2, 0, L, lc));
   g.add(lineStrip(0, -L, 0, -L + 0.2, lc));
+  // depth ladder: faint cross-court reference lines on the human (+z) half so
+  // the fixed camera has perspective references for judging ball distance
+  for (const f of [0.3, 0.55, 0.8]) {
+    g.add(faintLine(-W, L * f, W, L * f, lc));
+  }
 
   // net
   const netMesh = new THREE.Mesh(
