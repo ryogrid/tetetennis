@@ -1,13 +1,25 @@
 {
   "import": [
-    "tetetetennis/logic/ffi"
+    "tetetetennis/logic/vec",
+    "tetetetennis/logic/physics",
+    "tetetetennis/logic/rng",
+    "tetetetennis/logic/rules",
+    "tetetetennis/logic/shots",
+    "tetetetennis/logic/ai",
+    "tetetetennis/logic/assist",
+    "tetetetennis/logic/ffi",
+    "moonbitlang/core/math"
   ],
   "link": {
     "js": {
       "format": "esm",
       "exports": [
         "game_init:init",
-        "fixed_update:fixedUpdate"
+        "handle_input:handleInput",
+        "fixed_update:fixedUpdate",
+        "frame_update:frameUpdate",
+        "get_time_scale:getTimeScale",
+        "menu_tap:menuTap"
       ]
     }
   }
