@@ -404,6 +404,23 @@ export function showDifficultySelect(levels, idx) {
     `</div><div class="hint">&larr; &rarr; select &middot; Enter confirm &middot; Esc back &middot; or tap (tap again to confirm)</div>`;
 }
 
+// options: [{id, name, desc}], idx: selected index. This is the player-side
+// assist axis, separate from the opponent (difficulty) selection above.
+export function showAssistSelect(options, idx) {
+  els.menu.style.display = 'flex';
+  els.menu.dataset.screen = 'select';
+  els.menu.innerHTML =
+    `<div class="title">ASSIST (FOR YOU)</div>` +
+    `<div class="subtitle">Help for the player &mdash; independent of opponent strength</div>` +
+    `<div class="cards">` +
+    options.map((o, i) =>
+      `<div class="card${i === idx ? ' sel' : ''}" data-idx="${i}">
+        <h3>${o.name.toUpperCase()}</h3>
+        <div class="desc">${o.desc}</div>
+      </div>`).join('') +
+    `</div><div class="hint">&larr; &rarr; select &middot; Enter confirm &middot; Esc back &middot; or tap (tap again to confirm)</div>`;
+}
+
 export function showResults(winnerName, loserName, games, playerWon) {
   els.menu.style.display = 'flex';
   els.menu.dataset.screen = 'results';

@@ -45,6 +45,7 @@ await press('Enter');
 const diffTitle = await page.textContent('.title').catch(() => null);
 check('difficulty select shown', diffTitle === 'SELECT DIFFICULTY', diffTitle);
 await press('Enter'); // normal (default)
+await press('ArrowLeft'); await press('Enter'); // assist Off -> start match
 await page.waitForTimeout(400);
 
 const state1 = await page.evaluate(() => ({

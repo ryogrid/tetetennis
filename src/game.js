@@ -10,12 +10,19 @@ import { createPlayer, SWING_CONTACT_T } from './entities/player.js';
 import { createBallEntity } from './entities/ball.js';
 import { buildCourt } from './court.js';
 import { createAI, updateAI, chooseServe, DIFFICULTIES } from './ai.js';
-import { assistOn, assistFull } from './assist.js';
+import { assist, assistOn, assistFull, setAssistLevel, saveAssist, loadAssist } from './assist.js';
 import * as ui from './ui.js';
 import * as audio from './audio.js';
 
 const SURFACE_IDS = ['clay', 'grass', 'hard'];
 const POINT_OVER_DUR = 2.0;
+
+// Player-side assist axis (see assist.js), chosen on its own menu screen.
+const ASSIST_OPTIONS = [
+  { id: 'off',  name: 'Off',  desc: 'Classic challenge. No player-side help.' },
+  { id: 'on',   name: 'On',   desc: 'Slow-motion approach, easier pace, forgiving contact.' },
+  { id: 'full', name: 'Full', desc: 'Everything in On, plus auto-swing and auto-positioning.' },
+];
 
 // Approach slow-motion: how slow time runs while an incoming ball is near the
 // human, and how far out (beyond the reach radius) it engages.
@@ -60,6 +67,7 @@ export function createGame(scene, cameraRig, input) {
     events: [],
   };
 
+  loadAssist(); // restore the player's saved assist preference
   ui.initUI({ onVirtualKey: (code, isDown) => input.setVirtualKey(code, isDown) });
   ui.showCharSelect('SELECT YOUR PLAYER', CHARACTERS, g.menuIdx);
 
@@ -95,6 +103,14 @@ export function createGame(scene, cameraRig, input) {
   function confirmDifficulty() {
     audio.sfxConfirm();
     g.sel.difficulty = DIFFICULTIES[g.menuIdx].id;
+    g.state = 'menu_assist';
+    g.menuIdx = Math.max(0, ASSIST_OPTIONS.findIndex((o) => o.id === assist.level));
+    ui.showAssistSelect(ASSIST_OPTIONS, g.menuIdx);
+  }
+  function confirmAssist() {
+    audio.sfxConfirm();
+    setAssistLevel(ASSIST_OPTIONS[g.menuIdx].id);
+    saveAssist();
     startMatch();
   }
   function backToCharMenu() {
@@ -106,22 +122,25 @@ export function createGame(scene, cameraRig, input) {
   ui.setMenuTapHandler((idx) => {
     if (g.state === 'results') { backToCharMenu(); return; }
     if (g.state !== 'menu_char' && g.state !== 'menu_opp' &&
-        g.state !== 'menu_surface' && g.state !== 'menu_difficulty') return;
+        g.state !== 'menu_surface' && g.state !== 'menu_difficulty' &&
+        g.state !== 'menu_assist') return;
     const count = (g.state === 'menu_surface' || g.state === 'menu_difficulty')
-      ? 3 : CHARACTERS.length;
+      ? 3 : g.state === 'menu_assist' ? ASSIST_OPTIONS.length : CHARACTERS.length;
     if (typeof idx !== 'number' || idx < 0 || idx >= count) return;
     if (idx === g.menuIdx) {
       if (g.state === 'menu_char') confirmChar();
       else if (g.state === 'menu_opp') confirmOpp();
       else if (g.state === 'menu_surface') confirmSurface();
-      else confirmDifficulty();
+      else if (g.state === 'menu_difficulty') confirmDifficulty();
+      else confirmAssist();
     } else {
       g.menuIdx = idx;
       audio.sfxMenu();
       if (g.state === 'menu_char') showCharMenu();
       else if (g.state === 'menu_opp') showOppMenu();
       else if (g.state === 'menu_surface') ui.showSurfaceSelect(g.menuIdx);
-      else ui.showDifficultySelect(DIFFICULTIES, g.menuIdx);
+      else if (g.state === 'menu_difficulty') ui.showDifficultySelect(DIFFICULTIES, g.menuIdx);
+      else ui.showAssistSelect(ASSIST_OPTIONS, g.menuIdx);
     }
   });
 
@@ -448,6 +467,18 @@ export function createGame(scene, cameraRig, input) {
         return;
       }
       if (confirmPressed()) confirmDifficulty();
+      return;
+    }
+    if (g.state === 'menu_assist') {
+      if (handleMenuNav(ASSIST_OPTIONS.length)) ui.showAssistSelect(ASSIST_OPTIONS, g.menuIdx);
+      if (input.wasPressed('Escape')) {
+        g.state = 'menu_difficulty';
+        g.menuIdx = DIFFICULTIES.findIndex((d) => d.id === g.sel.difficulty);
+        if (g.menuIdx < 0) g.menuIdx = 1;
+        ui.showDifficultySelect(DIFFICULTIES, g.menuIdx);
+        return;
+      }
+      if (confirmPressed()) confirmAssist();
       return;
     }
     if (g.state === 'results') {

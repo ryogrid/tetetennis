@@ -6,7 +6,9 @@ page.on('pageerror', (e) => errs.push(String(e)));
 await page.goto('http://localhost:5199/');
 await page.waitForTimeout(800);
 async function press(k){ await page.keyboard.press(k); await page.waitForTimeout(60); }
-await press('Enter'); await press('Enter'); await press('Enter'); // Boom vs Boom, hard
+await press('Enter'); await press('Enter'); await press('Enter'); // char, opp, hard surface
+await press('Enter'); // difficulty (normal)
+await press('ArrowLeft'); await press('Enter'); // assist Off -> start match
 await page.waitForTimeout(1500); // let camera settle
 const cam = await page.evaluate(() => {
   const g = window.__game;

@@ -30,6 +30,7 @@ for (let i = 0; i < 2; i++) await press('ArrowRight');
 await press('Enter');
 await press('Enter'); // hard surface
 await press('Enter'); // normal difficulty
+await press('ArrowLeft'); await press('Enter'); // assist Off -> start match
 await page.waitForTimeout(400);
 
 const st = await page.evaluate(() => window.__game.state);

@@ -22,8 +22,9 @@ async function press(key) {
   await page.waitForTimeout(60);
 }
 
-// Navigate: Ace, Ace, hard, normal
+// Navigate: Ace, Ace, hard, normal, assist Off
 await press('Enter'); await press('Enter'); await press('Enter'); await press('Enter');
+await press('ArrowLeft'); await press('Enter'); // assist Off -> start match
 await page.waitForTimeout(500);
 
 // Check reach arcs exist on human player

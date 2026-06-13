@@ -45,7 +45,13 @@ st = await page.evaluate(() => window.__game.state);
 check('difficulty select shown after surface tap', st === 'menu_difficulty', st);
 await page.tap('[data-idx="0"]'); // select easy
 await page.waitForTimeout(150);
-await page.tap('[data-idx="0"]'); // confirm easy
+await page.tap('[data-idx="0"]'); // confirm easy -> assist select
+await page.waitForTimeout(200);
+st = await page.evaluate(() => window.__game.state);
+check('assist select shown after difficulty', st === 'menu_assist', st);
+await page.tap('[data-idx="0"]'); // select assist Off
+await page.waitForTimeout(150);
+await page.tap('[data-idx="0"]'); // confirm assist -> start match
 await page.waitForTimeout(400);
 st = await page.evaluate(() => ({
   state: window.__game.state,

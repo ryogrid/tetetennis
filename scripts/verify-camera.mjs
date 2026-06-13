@@ -28,6 +28,7 @@ await press('Enter'); // player = ace (default)
 await press('Enter'); // opponent = ace (default)
 await press('Enter'); // surface = hard (default)
 await press('Enter'); // difficulty = normal (default)
+await press('ArrowLeft'); await press('Enter'); // assist = Off -> start match
 await page.waitForTimeout(500);
 
 // --- Check 1: Player model is visible ---
