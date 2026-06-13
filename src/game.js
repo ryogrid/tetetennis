@@ -35,6 +35,10 @@ const SLOWMO_TAU = 0.08;   // ramp smoothing (s)
 const TIMING_WINDOW = 1.0; // s of look-ahead shown on the meter
 const TIMING_TOL = 0.07;   // s tolerance of the good band
 
+// Human swing timing leniency (always on, difficulty-independent): the swing
+// connects anywhere in +/- this window around the nominal contact instant.
+const SWING_WINDOW = 0.09; // s
+
 // Positioning magnetism (full assist): gentle pull onto the sweet spot when
 // the player has mostly stopped within this radius. Never overrides deliberate
 // movement — it fades out as the player's own input grows.
@@ -68,7 +72,10 @@ export function createGame(scene, cameraRig, input) {
   };
 
   loadAssist(); // restore the player's saved assist preference
-  ui.initUI({ onVirtualKey: (code, isDown) => input.setVirtualKey(code, isDown) });
+  ui.initUI({
+    onVirtualKey: (code, isDown) => input.setVirtualKey(code, isDown),
+    onMoveAxis: (x, z) => input.setMoveAxis(x, z),
+  });
   ui.showCharSelect('SELECT YOUR PLAYER', CHARACTERS, g.menuIdx);
 
   // ---------- menu navigation (shared by keyboard and tap) ----------
@@ -290,12 +297,14 @@ export function createGame(scene, cameraRig, input) {
     if (sv === 'P') ui.flashShot(type === 'kick' ? 'topspin' : type);
   }
 
+  // Returns true if a stroke was actually made (false on any guard/whiff), so
+  // the human swing window can keep trying until the ball is hittable.
   function attemptContact(side, type, aim) {
     const b = g.ball.state;
-    if (!b.active || !g.rally || g.rally.phase !== 'live') return;
-    if (g.rally.lastHitBy === side) return;
+    if (!b.active || !g.rally || g.rally.phase !== 'live') return false;
+    if (g.rally.lastHitBy === side) return false;
     const sideSign = side === 'P' ? 1 : -1;
-    if (b.pos.z * sideSign < -0.2) return; // ball not on this player's side
+    if (b.pos.z * sideSign < -0.2) return false; // ball not on this player's side
     const e = ent(side);
     const res = computeStroke({
       playerPos: { x: e.pos.x, z: e.pos.z },
@@ -306,7 +315,7 @@ export function createGame(scene, cameraRig, input) {
       aim,
       side,
     });
-    if (!res) return; // whiff
+    if (!res) return false; // whiff
     if (side === 'P') hideSweet();
     b.vel = res.vel;
     b.spin = res.spin;
@@ -319,6 +328,7 @@ export function createGame(scene, cameraRig, input) {
     const landing = predictLanding(b, g.surface);
     if (landing) g.ball.showLanding(landing.pos);
     else g.ball.hideLanding();
+    return true;
   }
 
   function fault() {
@@ -420,14 +430,36 @@ export function createGame(scene, cameraRig, input) {
 
   function handleMenuNav(count) {
     let moved = false;
-    if (input.wasPressed('ArrowLeft') || input.wasPressed('KeyA')) { g.menuIdx = (g.menuIdx + count - 1) % count; moved = true; }
-    if (input.wasPressed('ArrowRight') || input.wasPressed('KeyD')) { g.menuIdx = (g.menuIdx + 1) % count; moved = true; }
+    if (input.wasPressed('ArrowLeft')) { g.menuIdx = (g.menuIdx + count - 1) % count; moved = true; }
+    if (input.wasPressed('ArrowRight')) { g.menuIdx = (g.menuIdx + 1) % count; moved = true; }
     if (moved) audio.sfxMenu();
     return moved;
   }
 
   function confirmPressed() {
     return input.wasPressed('Enter') || input.wasPressed('Space');
+  }
+
+  // Serve / stroke dispatch shared by keyboard (chosen type) and touch (random).
+  const STROKE_KINDS = ['flat', 'topspin', 'slice'];
+  function randStroke() { return STROKE_KINDS[Math.floor(Math.random() * STROKE_KINDS.length)]; }
+  function doServe(shotKind) {
+    const b = g.ball.state;
+    const contactH = STATS_MAP.serveContactH(g.human.stats.REA);
+    const qServe = 0.4 + 0.6 * Math.max(0, 1 - Math.abs(b.pos.y - contactH) / 0.7);
+    const type = shotKind === 'topspin' ? 'kick' : shotKind;
+    // aim from the direction held at the hit instant: left/right sweep the box
+    // laterally, up = deep, down = short
+    const aim = input.aimVec();
+    executeServe(type, qServe, 'body', aim.x, aim.depth);
+  }
+  function doStroke(shotKind) {
+    g._lastShotPref = shotKind; // remembered for auto-swing's type choice
+    if (!assistFull()) {
+      const b = g.ball.state;
+      const fh = (b.pos.x - g.human.pos.x) >= 0; // ball on right side -> forehand
+      g.human.startSwing(shotKind, fh);
+    }
   }
 
   g.handleInput = function () {
@@ -493,32 +525,21 @@ export function createGame(scene, cameraRig, input) {
       return;
     }
 
-    const shot = input.shotKeyPressed();
+    const shot = input.shotKeyPressed();           // keyboard: Z/X/C
+    const touchShot = input.wasPressed('TouchShot'); // touch: single button (random type)
 
     if (g.pointState === 'pre_serve' && server() === 'P') {
-      if (input.wasPressed('Space')) startToss();
+      if (input.wasPressed('Space') || touchShot) startToss();
       return;
     }
     if (g.pointState === 'serving' && server() === 'P') {
-      if (shot) {
-        const b = g.ball.state;
-        const contactH = STATS_MAP.serveContactH(g.human.stats.REA);
-        const qServe = 0.4 + 0.6 * Math.max(0, 1 - Math.abs(b.pos.y - contactH) / 0.7);
-        const type = shot === 'topspin' ? 'kick' : shot;
-        // direction comes from the D-pad held at the hit instant:
-        // left/right sweep the box laterally, up = deep, down = short
-        const aim = input.aimVec();
-        executeServe(type, qServe, 'body', aim.x, aim.depth);
-      }
+      if (shot) doServe(shot);
+      else if (touchShot) doServe(randStroke());
       return;
     }
-    if (g.pointState === 'rally' && shot) {
-      const b = g.ball.state;
-      g._lastShotPref = shot; // remembered for auto-swing's type choice
-      if (!assistFull()) {
-        const fh = (b.pos.x - g.human.pos.x) >= 0; // ball on right side -> forehand
-        g.human.startSwing(shot, fh);
-      }
+    if (g.pointState === 'rally') {
+      if (shot) doStroke(shot);
+      else if (touchShot) doStroke(randStroke());
     }
   };
 
@@ -601,16 +622,19 @@ export function createGame(scene, cameraRig, input) {
       }
     }
 
-    // swing contacts
-    for (const side of ['P', 'C']) {
-      const e = ent(side);
-      if (e.swing && !e.swing.contactDone && e.swing.t >= SWING_CONTACT_T) {
-        e.swing.contactDone = true;
-        if (side === 'P') {
-          attemptContact('P', e.swing.type, input.aimVec());
-        } else {
-          attemptContact('C', e.pendingType || e.swing.type, e.pendingAim || { x: 0, depth: 0 });
-        }
+    // swing contacts. The human gets a forgiving timing window: from a touch
+    // early to a touch late, connect at the first instant the ball is hittable
+    // (and only miss if it never is). The CPU keeps the exact-instant fire.
+    {
+      const ph = g.human;
+      if (ph.swing && !ph.swing.contactDone && ph.swing.t >= SWING_CONTACT_T - SWING_WINDOW) {
+        if (attemptContact('P', ph.swing.type, input.aimVec())) ph.swing.contactDone = true;
+        else if (ph.swing.t >= SWING_CONTACT_T + SWING_WINDOW) ph.swing.contactDone = true;
+      }
+      const pc = g.cpu;
+      if (pc.swing && !pc.swing.contactDone && pc.swing.t >= SWING_CONTACT_T) {
+        pc.swing.contactDone = true;
+        attemptContact('C', pc.pendingType || pc.swing.type, pc.pendingAim || { x: 0, depth: 0 });
       }
     }
 

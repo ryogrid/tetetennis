@@ -28,7 +28,7 @@ The app icons are drawn, not stored as art — regenerate them with
 
 | Action | Keys |
 |---|---|
-| Move | WASD / Arrow keys — you strafe facing forward; diagonals combine (e.g. up+left); movement has real acceleration and braking |
+| Move | Arrow keys — you strafe facing forward; diagonals combine (e.g. up+left); movement has real acceleration and braking |
 | Flat shot | Z (or J) |
 | Topspin shot | X (or K) |
 | Slice shot | C (or L) |
@@ -43,11 +43,12 @@ with both hands):
 
 - Menus: tap a card to select it, tap it again to confirm.
 - On the court, an on-screen pad appears:
-  - **Left thumb** — D-pad (bottom-left): move; slide your thumb to change
-    direction (8-way). Hold a direction while swinging to aim.
-  - **Right thumb** — shot buttons (bottom-right): **FLAT** / **TOP** /
-    **SLICE**, plus **SERVE** for the toss (then hit a shot button near the
-    top of the toss).
+  - **Left thumb** — analog stick (bottom-left): drag to move; it works like a
+    console thumbstick — push further to move faster, and the knob springs back
+    to centre when you let go. Hold a direction while swinging to aim.
+  - **Right thumb** — one **SHOT** button (bottom-right): it tosses and serves,
+    and hits your strokes during a rally. The shot type is chosen **at random**
+    each time (flat / topspin / slice), so just focus on timing and position.
   - **Top-right**: `⌨` / `🎮` toggles the on-screen controls on/off (the
     choice is remembered), `✕` quits to the menu.
 

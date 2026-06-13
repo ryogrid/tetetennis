@@ -67,21 +67,21 @@ const overlayVisible = await page.evaluate(() =>
 check('touch overlay visible on mobile', overlayVisible);
 await page.screenshot({ path: 'scripts/shots/10-touch-overlay.png' });
 
-// --- serve by buttons: SERVE (toss) then FLAT near apex ---
-await page.tap('#tb-serve');
+// --- serve by the single shot button: tap to toss, tap again near apex ---
+await page.tap('#tb-shot');
 await page.waitForTimeout(500);
-await page.tap('#tb-flat');
+await page.tap('#tb-shot');
 await page.waitForTimeout(300);
 const serve = await page.evaluate(() => ({
   ps: window.__game.pointState,
   active: window.__game.ball.state.active,
   phase: window.__game.rally ? window.__game.rally.phase : null,
 }));
-check('serve fired via touch buttons', serve.ps === 'rally' && serve.active,
+check('serve fired via touch shot button', serve.ps === 'rally' && serve.active,
   JSON.stringify(serve));
 await page.waitForTimeout(3500); // let the point resolve
 
-// --- D-pad: hold left region, player.x must decrease ---
+// --- analog stick: hold left region, player.x must decrease ---
 async function waitPreServe() {
   for (let i = 0; i < 20; i++) {
     const s = await page.evaluate(() => ({ ps: window.__game.pointState, sv: window.__game.match.server }));
@@ -92,19 +92,19 @@ async function waitPreServe() {
 }
 await waitPreServe();
 const x0 = await page.evaluate(() => window.__game.human.pos.x);
-const dpadBox = await page.locator('#dpad').boundingBox();
-const cx = dpadBox.x + dpadBox.width / 2, cy = dpadBox.y + dpadBox.height / 2;
-await page.dispatchEvent('#dpad', 'pointerdown', {
+const stickBox = await page.locator('#stick').boundingBox();
+const cx = stickBox.x + stickBox.width / 2, cy = stickBox.y + stickBox.height / 2;
+await page.dispatchEvent('#stick', 'pointerdown', {
   pointerId: 7, pointerType: 'touch', isPrimary: true,
-  clientX: cx - dpadBox.width * 0.38, clientY: cy,
+  clientX: cx - stickBox.width * 0.38, clientY: cy,
 });
 await page.waitForTimeout(700); // movement now accelerates; allow the ramp
-await page.dispatchEvent('#dpad', 'pointerup', {
+await page.dispatchEvent('#stick', 'pointerup', {
   pointerId: 7, pointerType: 'touch', isPrimary: true,
-  clientX: cx - dpadBox.width * 0.38, clientY: cy,
+  clientX: cx - stickBox.width * 0.38, clientY: cy,
 });
 const x1 = await page.evaluate(() => window.__game.human.pos.x);
-check('D-pad left moves the player left', x1 < x0 - 0.2,
+check('analog stick left moves the player left', x1 < x0 - 0.2,
   `x ${x0.toFixed(2)} -> ${x1.toFixed(2)}`);
 
 // --- toggle hides the overlay and restores keyboard HUD ---

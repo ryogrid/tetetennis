@@ -16,6 +16,10 @@ export const SHOT_TYPES = {
   lob:     { speedMul: 1.00, thetaMin: 28, thetaMax: 55 },
 };
 
+// Always-on reach grace for the human (metres): connect to slightly
+// out-of-position balls. In-reach quality is unchanged.
+const REACH_GRACE = 0.2;
+
 let _spare = null;
 export function gauss() {
   if (_spare !== null) { const v = _spare; _spare = null; return v; }
@@ -37,13 +41,18 @@ export function contactQuality({ playerPos, ballPos, ballVel, stats, side }) {
   const d = Math.hypot(ballPos.x - playerPos.x, ballPos.z - playerPos.z);
   const h = ballPos.y;
   const reach = STATS_MAP.reach(stats.REA);
+  // Baseline human leniency (always on, difficulty-independent): a small grace
+  // on the reach so slightly-out-of-position balls still connect (at low
+  // quality). In-reach contact quality is unchanged.
+  const human = side === 'P';
+  const reachEff = reach + (human ? REACH_GRACE : 0);
   // vertical ceiling: shoulder + arm + racket (scales with the reach stat)
-  const hMax = 1.15 + reach;
-  if (d > reach || h > hMax) return { q: 0, whiff: true, d, stretched: true };
+  const hMax = 1.15 + reachEff;
+  if (d > reachEff || h > hMax) return { q: 0, whiff: true, d, stretched: true };
 
   // Assist (human only) widens the forgiving bands so off-centre contact still
   // produces a decent ball; the CPU's contact is never eased.
-  const aid = side === 'P' && assistOn();
+  const aid = human && assistOn();
 
   // radial: best in a band around IDEAL_CONTACT_R; jammed near the body,
   // stretched toward the limit of the reach

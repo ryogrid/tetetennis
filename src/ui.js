@@ -57,21 +57,20 @@ const css = `
   background: rgba(10,10,18,.7); padding: 8px 12px; border-radius: 6px; text-align: right;
 }
 #touchui { position: absolute; inset: 0; pointer-events: none; display: none; }
-#dpad {
-  position: absolute; left: 16px; bottom: 16px; width: 200px; height: 200px;
-  border-radius: 50%; background: rgba(18,18,28,.35);
+#stick {
+  position: absolute; left: 22px; bottom: 22px; width: 176px; height: 176px;
+  border-radius: 50%; background: rgba(18,18,28,.32);
   border: 1px solid rgba(255,255,255,.18);
   pointer-events: auto; touch-action: none;
 }
-#dpad span {
-  position: absolute; font-size: 26px; color: rgba(255,255,255,.55);
-  transform: translate(-50%,-50%);
+#stick-knob {
+  position: absolute; left: 50%; top: 50%; width: 76px; height: 76px;
+  margin-left: -38px; margin-top: -38px; border-radius: 50%;
+  background: rgba(92,92,124,.55); border: 2px solid rgba(255,255,255,.4);
+  transform: translate(0,0); transition: transform .04s linear;
+  box-shadow: 0 2px 8px rgba(0,0,0,.4);
 }
-#dpad span.lit { color: #e8f24b; }
-#dpad .du { left: 50%; top: 17%; }
-#dpad .dd { left: 50%; top: 83%; }
-#dpad .dl { left: 17%; top: 50%; }
-#dpad .dr { left: 83%; top: 50%; }
+#stick-knob.active { background: rgba(126,126,168,.7); transition: none; }
 .tbtn {
   position: absolute; pointer-events: auto; touch-action: none;
   width: 86px; height: 86px; border-radius: 50%;
@@ -81,11 +80,8 @@ const css = `
 }
 .tbtn.pressed, .tbtn.flash { background: #e8f24b; color: #111; border-color: #e8f24b; }
 .tbtn.recommend { box-shadow: 0 0 12px 2px rgba(80,230,120,.9); border-color: #50e678; }
-#tb-flat  { right: 150px; bottom: 18px; }
-#tb-top   { right: 110px; bottom: 116px; }
-#tb-slice { right: 22px;  bottom: 178px; }
-#tb-serve {
-  right: 40px; bottom: 34px; width: 72px; height: 72px; font-size: 12px;
+#tb-shot {
+  right: 40px; bottom: 40px; width: 124px; height: 124px; font-size: 16px;
   background: rgba(44,64,30,.6);
 }
 #tossgauge {
@@ -193,7 +189,7 @@ function statBars(stats) {
   ).join('');
 }
 
-export function initUI({ onVirtualKey } = {}) {
+export function initUI({ onVirtualKey, onMoveAxis } = {}) {
   const style = document.createElement('style');
   style.textContent = css;
   document.head.appendChild(style);
@@ -225,7 +221,7 @@ export function initUI({ onVirtualKey } = {}) {
   els.shotbar.innerHTML =
     '<div id="sb-flat">Z Flat</div><div id="sb-topspin">X Topspin</div><div id="sb-slice">C Slice</div>';
   els.controls.innerHTML =
-    'Move: WASD / Arrows<br>Shots: Z flat &middot; X topspin &middot; C slice<br>' +
+    'Move: Arrow keys<br>Shots: Z flat &middot; X topspin &middot; C slice<br>' +
     'Serve: Space toss, then Z/X/C<br>Aim: hold a direction while swinging';
 
   // menu tap support (tap a card to select it, tap again to confirm)
@@ -236,92 +232,72 @@ export function initUI({ onVirtualKey } = {}) {
     else if (els.menu.dataset.screen === 'results') menuTapHandler('confirm');
   });
 
-  buildTouchControls(hud, onVirtualKey || (() => {}));
+  buildTouchControls(hud, onVirtualKey || (() => {}), onMoveAxis || (() => {}));
   hideHUD();
 }
 
 // ---------- on-screen controls (two-handed phone grip) ----------
 
-function buildTouchControls(hud, onKey) {
+function buildTouchControls(hud, onKey, onAxis) {
   els.touchui = div('touchui', hud);
 
-  // D-pad, bottom-left (left thumb): 8-way, position based, slideable
-  const dpad = div('dpad', els.touchui);
-  dpad.innerHTML =
-    '<span class="du">&#9650;</span><span class="dd">&#9660;</span>' +
-    '<span class="dl">&#9664;</span><span class="dr">&#9654;</span>';
-  const arrows = {
-    ArrowUp: dpad.querySelector('.du'),
-    ArrowDown: dpad.querySelector('.dd'),
-    ArrowLeft: dpad.querySelector('.dl'),
-    ArrowRight: dpad.querySelector('.dr'),
-  };
-  const DIRS = Object.keys(arrows);
-  let dpadPointer = null;
-  const held = new Set();
-  function applyDirs(want) {
-    for (const k of DIRS) {
-      const w = want.has(k);
-      if (w && !held.has(k)) { held.add(k); onKey(k, true); arrows[k].classList.add('lit'); }
-      if (!w && held.has(k)) { held.delete(k); onKey(k, false); arrows[k].classList.remove('lit'); }
-    }
-  }
-  function dirsFromEvent(e) {
-    const r = dpad.getBoundingClientRect();
-    const dx = e.clientX - (r.left + r.width / 2);
-    const dy = e.clientY - (r.top + r.height / 2);
+  // analog stick, bottom-left (left thumb): PS-style, knob follows the thumb
+  // and returns to centre, feeding a continuous movement vector
+  const stick = div('stick', els.touchui);
+  const knob = document.createElement('div');
+  knob.id = 'stick-knob';
+  stick.appendChild(knob);
+  let stickPointer = null;
+  function stickFromEvent(e) {
+    const r = stick.getBoundingClientRect();
+    let dx = e.clientX - (r.left + r.width / 2);
+    let dy = e.clientY - (r.top + r.height / 2);
+    const maxR = r.width / 2 - 10;
     const d = Math.hypot(dx, dy);
-    const want = new Set();
-    if (d > r.width * 0.14) { // small central dead zone
-      const nx = dx / d, ny = dy / d;
-      // hysteresis: easier to engage a direction (0.30) than to drop it
-      // (0.20), so held diagonals stay stable instead of flickering
-      const t = (dir) => (held.has(dir) ? 0.20 : 0.30);
-      if (nx < -t('ArrowLeft')) want.add('ArrowLeft');
-      if (nx > t('ArrowRight')) want.add('ArrowRight');
-      if (ny < -t('ArrowUp')) want.add('ArrowUp');
-      if (ny > t('ArrowDown')) want.add('ArrowDown');
-    }
-    return want;
+    if (d > maxR) { dx = dx / d * maxR; dy = dy / d * maxR; }
+    knob.style.transform = `translate(${dx}px, ${dy}px)`;
+    const dead = maxR * 0.12;
+    if (d <= dead) { onAxis(0, 0); return; }
+    // +x = screen right, +z = screen down (= backward), matching the old D-pad
+    onAxis(dx / maxR, dy / maxR);
   }
-  dpad.addEventListener('pointerdown', (e) => {
-    if (dpadPointer !== null) return;
-    dpadPointer = e.pointerId;
-    try { dpad.setPointerCapture(e.pointerId); } catch { /* synthetic event */ }
-    applyDirs(dirsFromEvent(e));
+  function stickRecenter() {
+    knob.style.transform = 'translate(0,0)';
+    knob.classList.remove('active');
+    onAxis(0, 0);
+  }
+  stick.addEventListener('pointerdown', (e) => {
+    if (stickPointer !== null) return;
+    stickPointer = e.pointerId;
+    try { stick.setPointerCapture(e.pointerId); } catch { /* synthetic event */ }
+    knob.classList.add('active');
+    stickFromEvent(e);
     e.preventDefault();
   });
-  dpad.addEventListener('pointermove', (e) => {
-    if (e.pointerId === dpadPointer) applyDirs(dirsFromEvent(e));
+  stick.addEventListener('pointermove', (e) => {
+    if (e.pointerId === stickPointer) stickFromEvent(e);
   });
-  const dpadRelease = (e) => {
-    if (e.pointerId !== dpadPointer) return;
-    dpadPointer = null;
-    applyDirs(new Set());
+  const stickRelease = (e) => {
+    if (e.pointerId !== stickPointer) return;
+    stickPointer = null;
+    stickRecenter();
   };
-  dpad.addEventListener('pointerup', dpadRelease);
-  dpad.addEventListener('pointercancel', dpadRelease);
+  stick.addEventListener('pointerup', stickRelease);
+  stick.addEventListener('pointercancel', stickRelease);
 
-  // shot + serve buttons, bottom-right (right thumb), arced for reach
-  const BUTTONS = [
-    ['tb-flat', 'FLAT', 'KeyZ'],
-    ['tb-top', 'TOP', 'KeyX'],
-    ['tb-slice', 'SLICE', 'KeyC'],
-    ['tb-serve', 'SERVE', 'Space'],
-  ];
-  for (const [id, label, code] of BUTTONS) {
-    const b = div(id, els.touchui, 'tbtn');
-    b.textContent = label;
-    b.addEventListener('pointerdown', (e) => {
-      try { b.setPointerCapture(e.pointerId); } catch { /* synthetic event */ }
-      b.classList.add('pressed');
-      onKey(code, true);
-      e.preventDefault();
-    });
-    const up = () => { b.classList.remove('pressed'); onKey(code, false); };
-    b.addEventListener('pointerup', up);
-    b.addEventListener('pointercancel', up);
-  }
+  // single shot button, bottom-right (right thumb): tosses + serves and hits;
+  // shot type is chosen randomly by the game on each press
+  const shotBtn = div('tb-shot', els.touchui, 'tbtn');
+  shotBtn.textContent = 'SHOT';
+  shotBtn.addEventListener('pointerdown', (e) => {
+    try { shotBtn.setPointerCapture(e.pointerId); } catch { /* synthetic event */ }
+    shotBtn.classList.add('pressed');
+    onKey('TouchShot', true);
+    e.preventDefault();
+  });
+  const shotUp = () => { shotBtn.classList.remove('pressed'); onKey('TouchShot', false); };
+  shotBtn.addEventListener('pointerup', shotUp);
+  shotBtn.addEventListener('pointercancel', shotUp);
 
   // toggle + quit, top-right
   els.tcBar = div('tc-bar', hud);
@@ -487,9 +463,9 @@ export function toast(text, ms = 1600) {
   toastTimer = setTimeout(() => { els.toast.style.opacity = 0; }, ms);
 }
 
-const TOUCH_FLASH_IDS = { flat: 'tb-flat', topspin: 'tb-top', slice: 'tb-slice' };
 export function flashShot(type) {
-  const ids = ['sb-' + type, TOUCH_FLASH_IDS[type]];
+  // keyboard shot bar shows the type; touch has a single shot button
+  const ids = ['sb-' + type, 'tb-shot'];
   for (const id of ids) {
     const el = id && document.getElementById(id);
     if (!el) continue;
@@ -499,12 +475,13 @@ export function flashShot(type) {
   }
 }
 
-// Highlight the suggested shot button (keyboard bar + touch). type | null.
+// Highlight the suggested shot on the keyboard shot bar. type | null.
+// (Touch mode has a single random-type button, so there is nothing to suggest.)
 let recommendedShot = null;
 const RECOMMEND_IDS = {
-  flat: ['sb-flat', 'tb-flat'],
-  topspin: ['sb-topspin', 'tb-top'],
-  slice: ['sb-slice', 'tb-slice'],
+  flat: ['sb-flat'],
+  topspin: ['sb-topspin'],
+  slice: ['sb-slice'],
 };
 export function setRecommendedShot(type) {
   if (type === recommendedShot) return;
