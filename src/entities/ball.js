@@ -173,9 +173,12 @@ export function createBallEntity(scene) {
       }
       blob.position.x = state.pos.x;
       blob.position.z = state.pos.z;
+      // Always-readable shadow: stays visible at height (the old version faded
+      // out exactly when the ball was hardest to read), darkening and tightening
+      // as the ball nears the ground so the landing spot reads clearly.
       const h = Math.min(state.pos.y / 8, 1);
-      blob.material.opacity = 0.48 * (1 - h * 0.6);
-      blob.scale.setScalar(1 + h * 1.2);
+      blob.material.opacity = 0.30 + 0.25 * (1 - h);
+      blob.scale.setScalar(1 + h * 0.9);
       ringT += dt;
       if (ring.visible) {
         ring.scale.setScalar(1 + 0.12 * Math.sin(ringT * 9));

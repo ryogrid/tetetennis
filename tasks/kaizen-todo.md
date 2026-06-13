@@ -20,7 +20,7 @@ Camera position/angle stay untouched in every commit.
 - [x] 4. Recommended-shot highlight — `ui.js setRecommendedShot` + `game.js` heuristic
 - [x] 5. Time-to-contact countdown — shrinking ring on sweet-spot marker in `ball.js`
 - [x] 6. Difficulty-linked PACE — runtime `paceFactor` in `constants.js`, set from assist
-- [ ] 7. Enhanced ball shadow — always-readable shadow in `ball.js`
+- [x] 7. Enhanced ball shadow — always-readable shadow in `ball.js`
 - [ ] 8. Widen contact quality bands — assist-gated tolerances in `shots.js`
 - [ ] 9. Incoming-height bar — rally height gauge in `ui.js`
 - [ ] 10. Auto-swing assist — assistFull-gated auto contact timing
