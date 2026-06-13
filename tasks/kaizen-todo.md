@@ -15,7 +15,7 @@ Camera position/angle stay untouched in every commit.
 ## Tasks (priority order)
 
 - [x] 1. Approach slow-motion — `assist.js` (new) + `main.js` time-scale + `game.js getTimeScale`
-- [ ] 2. Swing timing meter — contact-time clock + `ui.js` timing gauge
+- [x] 2. Swing timing meter — contact-time clock + `ui.js` timing gauge
 - [ ] 3. Court depth ladder — faint floor reference lines in `court.js`
 - [ ] 4. Recommended-shot highlight — `ui.js setRecommendedShot` + `game.js` heuristic
 - [ ] 5. Time-to-contact countdown — shrinking ring on sweet-spot marker in `ball.js`

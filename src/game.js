@@ -23,6 +23,11 @@ const SLOWMO_SCALE = 0.6;
 const SLOWMO_MARGIN = 2.0; // metres beyond reach where slow-mo starts
 const SLOWMO_TAU = 0.08;   // ramp smoothing (s)
 
+// Swing timing meter: how far ahead of ideal contact the meter appears, and
+// the half-width of the "press now" window centered on SWING_CONTACT_T.
+const TIMING_WINDOW = 1.0; // s of look-ahead shown on the meter
+const TIMING_TOL = 0.07;   // s tolerance of the good band
+
 export function createGame(scene, cameraRig, input) {
   const g = {
     scene, cameraRig, input,
@@ -40,6 +45,8 @@ export function createGame(scene, cameraRig, input) {
     ballStamp: 0,
     sweetStamp: -1,
     sweetPos: null,
+    sweetHitT: null,   // predicted seconds to ideal contact (at prediction time)
+    sweetHitClock: 0,  // simulated time elapsed since that prediction
     time: 0,
     stateTimer: 0,
     cpuServePlan: null,
@@ -585,17 +592,22 @@ export function createGame(scene, cameraRig, input) {
         // "stand here" marker: where to STAND to meet the incoming ball in
         // the ideal band — a bit behind the contact and to the forehand side
         // (the ideal contact is an arm-plus-racket length from the body)
+        // advance the contact-time clock so timeToContact() stays live between
+        // re-predictions (drives the timing meter / countdown / auto-swing)
+        if (g.rally.lastHitBy === 'C') g.sweetHitClock += dt;
         if (g.pointState === 'rally' && g.rally.lastHitBy === 'C' &&
             g.sweetStamp !== g.ballStamp) {
           g.sweetStamp = g.ballStamp;
           const hp = predictHitPoint(b, g.surface, 1);
           if (hp) {
+            g.sweetHitT = hp.t;
+            g.sweetHitClock = 0;
             showSweet({
               x: Math.max(PLAYER_BOUNDS.xMin, Math.min(PLAYER_BOUNDS.xMax, hp.pos.x - 0.55)),
               y: hp.pos.y,
               z: Math.min(PLAYER_BOUNDS.zMax, hp.pos.z + 0.15),
             });
-          } else hideSweet();
+          } else { hideSweet(); g.sweetHitT = null; }
           showTrajectoryTrail();
         }
       }
@@ -673,6 +685,27 @@ export function createGame(scene, cameraRig, input) {
     } else {
       ui.hideMoveHint();
     }
+    // swing timing meter: teach WHEN to press during a CPU rally. Contact
+    // fires SWING_CONTACT_T after the key, so the press window sits there.
+    const ttc = g.timeToContact();
+    if (ttc != null && ttc <= TIMING_WINDOW && ttc > -0.15) {
+      const W = TIMING_WINDOW;
+      const cl = (v) => Math.max(0, Math.min(1, v));
+      const frac = cl(1 - ttc / W);
+      const bandLo = cl(1 - (SWING_CONTACT_T + TIMING_TOL) / W);
+      const bandHi = cl(1 - (SWING_CONTACT_T - TIMING_TOL) / W);
+      ui.updateTimingMeter(frac, bandLo, bandHi, Math.abs(ttc - SWING_CONTACT_T) <= TIMING_TOL);
+    } else {
+      ui.hideTimingMeter();
+    }
+  };
+
+  // Seconds until the predicted ideal contact for an incoming CPU ball, or
+  // null when there is no live incoming ball. Stays current between
+  // re-predictions via the simulated clock advanced in fixedUpdate.
+  g.timeToContact = function () {
+    if (g.sweetHitT == null || !g.rally || g.rally.lastHitBy !== 'C') return null;
+    return g.sweetHitT - g.sweetHitClock;
   };
 
   // ---------- approach slow-motion ----------

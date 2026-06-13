@@ -114,6 +114,28 @@ const css = `
   text-shadow: 0 2px 10px #000;
 }
 #movehint.here { color: #50e678; }
+#timingmeter {
+  position: absolute; bottom: 15%; left: 50%; transform: translateX(-50%);
+  width: 210px; height: 16px; display: none;
+  background: rgba(10,10,18,.55); border: 1px solid rgba(255,255,255,.3);
+  border-radius: 8px;
+}
+#timingmeter .tm-band {
+  position: absolute; top: 0; bottom: 0;
+  background: rgba(80,230,120,.30);
+  border-left: 1px solid rgba(80,230,120,.9);
+  border-right: 1px solid rgba(80,230,120,.9);
+}
+#timingmeter .tm-dot {
+  position: absolute; top: 50%; width: 14px; height: 14px;
+  margin-top: -7px; margin-left: -7px; border-radius: 50%;
+  background: #d8f24b; box-shadow: 0 0 6px rgba(0,0,0,.5);
+}
+#timingmeter .tm-dot.good { background: #50e678; box-shadow: 0 0 12px #50e678; }
+#timingmeter .tm-label {
+  position: absolute; top: -20px; left: 50%; transform: translateX(-50%);
+  font-size: 11px; color: #aaa; letter-spacing: 1px; white-space: nowrap;
+}
 #tc-bar { position: absolute; top: 12px; right: 12px; display: none; gap: 8px; }
 #tc-bar button {
   pointer-events: auto; width: 44px; height: 38px; border-radius: 8px;
@@ -166,6 +188,11 @@ export function initUI({ onVirtualKey } = {}) {
   els.tgBand = els.tossgauge.querySelector('.tg-band');
   els.tgDot = els.tossgauge.querySelector('.tg-dot');
   els.movehint = div('movehint', hud);
+  els.timingmeter = div('timingmeter', hud);
+  els.timingmeter.innerHTML =
+    '<div class="tm-label">HIT</div><div class="tm-band"></div><div class="tm-dot"></div>';
+  els.tmBand = els.timingmeter.querySelector('.tm-band');
+  els.tmDot = els.timingmeter.querySelector('.tm-dot');
   els.shotbar.innerHTML =
     '<div id="sb-flat">Z Flat</div><div id="sb-topspin">X Topspin</div><div id="sb-slice">C Slice</div>';
   els.controls.innerHTML =
@@ -374,6 +401,7 @@ export function hideHUD() {
   els.toast.style.opacity = 0;
   hideTossGauge();
   hideMoveHint();
+  hideTimingMeter();
   applyTouchVisibility();
 }
 
@@ -444,6 +472,29 @@ export function hideTossGauge() {
   if (!tossGaugeShown) return;
   els.tossgauge.style.display = 'none';
   tossGaugeShown = false;
+}
+
+// ---------- swing timing meter (rally "when to press" aid) ----------
+
+let timingMeterShown = false;
+
+// frac/bandLo/bandHi in [0,1], measured left-to-right; the dot sweeps toward
+// the right (1) as the ideal contact approaches. inGood => in the press window.
+export function updateTimingMeter(frac, bandLo, bandHi, inGood) {
+  if (!timingMeterShown) {
+    els.timingmeter.style.display = 'block';
+    timingMeterShown = true;
+  }
+  els.tmBand.style.left = `${(bandLo * 100).toFixed(1)}%`;
+  els.tmBand.style.width = `${((bandHi - bandLo) * 100).toFixed(1)}%`;
+  els.tmDot.style.left = `${(Math.max(0, Math.min(1, frac)) * 100).toFixed(1)}%`;
+  els.tmDot.classList.toggle('good', !!inGood);
+}
+
+export function hideTimingMeter() {
+  if (!timingMeterShown) return;
+  els.timingmeter.style.display = 'none';
+  timingMeterShown = false;
 }
 
 // ---------- move hint (FPV can't see a sweet spot behind the camera) ----------
