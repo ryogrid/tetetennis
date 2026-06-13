@@ -716,6 +716,17 @@ export function createGame(scene, cameraRig, input) {
         g.ball.hideSweetCountdown();
       }
     }
+    // incoming-height bar: live ball height vs the ideal waist band, so the
+    // player can decide to move in/back to meet it comfortably
+    if (ttc != null && ttc <= TIMING_WINDOW && g.ball.state.active) {
+      const hlo = 0.1, hhi = 2.6;
+      const y = g.ball.state.pos.y;
+      const f = (v) => Math.max(0, Math.min(1, (v - hlo) / (hhi - hlo)));
+      ui.updateHeightBar(f(y), f(IDEAL_CONTACT_H - 0.3), f(IDEAL_CONTACT_H + 0.3),
+        Math.abs(y - IDEAL_CONTACT_H) <= 0.3);
+    } else {
+      ui.hideHeightBar();
+    }
   };
 
   // Seconds until the predicted ideal contact for an incoming CPU ball, or

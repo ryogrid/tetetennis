@@ -22,7 +22,7 @@ Camera position/angle stay untouched in every commit.
 - [x] 6. Difficulty-linked PACE — runtime `paceFactor` in `constants.js`, set from assist
 - [x] 7. Enhanced ball shadow — always-readable shadow in `ball.js`
 - [x] 8. Widen contact quality bands — assist-gated tolerances in `shots.js`
-- [ ] 9. Incoming-height bar — rally height gauge in `ui.js`
+- [x] 9. Incoming-height bar — rally height gauge in `ui.js`
 - [ ] 10. Auto-swing assist — assistFull-gated auto contact timing
 - [ ] 11. Positioning magnetism — assistFull-gated nudge toward sweet spot
 - [ ] 12. Unified Assist Mode toggle — Off/On/Full menu screen, persisted

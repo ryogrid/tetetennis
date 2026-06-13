@@ -110,6 +110,28 @@ const css = `
   position: absolute; top: -22px; left: 50%; transform: translateX(-50%);
   font-size: 11px; color: #aaa; letter-spacing: 1px; white-space: nowrap;
 }
+#heightbar {
+  position: absolute; left: 22%; top: 50%; transform: translateY(-50%);
+  width: 26px; height: 190px; display: none;
+  background: rgba(10,10,18,.55); border: 1px solid rgba(255,255,255,.3);
+  border-radius: 13px;
+}
+#heightbar .hb-band {
+  position: absolute; left: 0; right: 0;
+  background: rgba(80,230,120,.30);
+  border-top: 1px solid rgba(80,230,120,.9);
+  border-bottom: 1px solid rgba(80,230,120,.9);
+}
+#heightbar .hb-dot {
+  position: absolute; left: 50%; width: 16px; height: 16px;
+  margin-left: -8px; margin-bottom: -8px; border-radius: 50%;
+  background: #d8f24b; box-shadow: 0 0 6px rgba(0,0,0,.5);
+}
+#heightbar .hb-dot.good { background: #50e678; box-shadow: 0 0 12px #50e678; }
+#heightbar .hb-label {
+  position: absolute; top: -22px; left: 50%; transform: translateX(-50%);
+  font-size: 11px; color: #aaa; letter-spacing: 1px; white-space: nowrap;
+}
 #movehint {
   position: absolute; bottom: 24%; left: 50%; transform: translateX(-50%);
   font-size: 38px; font-weight: 800; color: #39d7ff; display: none;
@@ -190,6 +212,11 @@ export function initUI({ onVirtualKey } = {}) {
   els.tgBand = els.tossgauge.querySelector('.tg-band');
   els.tgDot = els.tossgauge.querySelector('.tg-dot');
   els.movehint = div('movehint', hud);
+  els.heightbar = div('heightbar', hud);
+  els.heightbar.innerHTML =
+    '<div class="hb-label">HEIGHT</div><div class="hb-band"></div><div class="hb-dot"></div>';
+  els.hbBand = els.heightbar.querySelector('.hb-band');
+  els.hbDot = els.heightbar.querySelector('.hb-dot');
   els.timingmeter = div('timingmeter', hud);
   els.timingmeter.innerHTML =
     '<div class="tm-label">HIT</div><div class="tm-band"></div><div class="tm-dot"></div>';
@@ -404,6 +431,7 @@ export function hideHUD() {
   hideTossGauge();
   hideMoveHint();
   hideTimingMeter();
+  hideHeightBar();
   setRecommendedShot(null);
   applyTouchVisibility();
 }
@@ -517,6 +545,28 @@ export function hideTimingMeter() {
   if (!timingMeterShown) return;
   els.timingmeter.style.display = 'none';
   timingMeterShown = false;
+}
+
+// ---------- incoming-height bar (rally version of the toss gauge) ----------
+
+let heightBarShown = false;
+
+// frac/bandLo/bandHi in [0,1] measured from the bottom; inBand => waist height.
+export function updateHeightBar(frac, bandLo, bandHi, inBand) {
+  if (!heightBarShown) {
+    els.heightbar.style.display = 'block';
+    heightBarShown = true;
+  }
+  els.hbBand.style.bottom = `${(bandLo * 100).toFixed(1)}%`;
+  els.hbBand.style.height = `${((bandHi - bandLo) * 100).toFixed(1)}%`;
+  els.hbDot.style.bottom = `${(Math.max(0, Math.min(1, frac)) * 100).toFixed(1)}%`;
+  els.hbDot.classList.toggle('good', !!inBand);
+}
+
+export function hideHeightBar() {
+  if (!heightBarShown) return;
+  els.heightbar.style.display = 'none';
+  heightBarShown = false;
 }
 
 // ---------- move hint (FPV can't see a sweet spot behind the camera) ----------
