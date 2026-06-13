@@ -10,7 +10,7 @@ import { createPlayer, SWING_CONTACT_T } from './entities/player.js';
 import { createBallEntity } from './entities/ball.js';
 import { buildCourt } from './court.js';
 import { createAI, updateAI, chooseServe, DIFFICULTIES } from './ai.js';
-import { assistOn } from './assist.js';
+import { assistOn, assistFull } from './assist.js';
 import * as ui from './ui.js';
 import * as audio from './audio.js';
 
@@ -476,8 +476,11 @@ export function createGame(scene, cameraRig, input) {
     }
     if (g.pointState === 'rally' && shot) {
       const b = g.ball.state;
-      const fh = (b.pos.x - g.human.pos.x) >= 0; // ball on right side -> forehand
-      g.human.startSwing(shot, fh);
+      g._lastShotPref = shot; // remembered for auto-swing's type choice
+      if (!assistFull()) {
+        const fh = (b.pos.x - g.human.pos.x) >= 0; // ball on right side -> forehand
+        g.human.startSwing(shot, fh);
+      }
     }
   };
 
@@ -527,6 +530,23 @@ export function createGame(scene, cameraRig, input) {
     if ((g.pointState === 'pre_serve' || g.pointState === 'serving') && server() === 'C') {
       g.cpu.pos.z = -(COURT.halfLen + 0.4);
       g.cpu.pos.x = serveStanceX('C', g.courtSide);
+    }
+
+    // auto-swing assist (full assist only): trigger the human swing so contact
+    // (which fires SWING_CONTACT_T later) lands at the ideal instant. The
+    // player still controls shot type (last pressed / suggested) and aim
+    // (movement sampled at contact); positioning still drives contact quality.
+    if (assistFull() && g.pointState === 'rally' && g.rally.lastHitBy === 'C' &&
+        !g.human.swing) {
+      const ttc = g.timeToContact();
+      if (ttc != null && ttc <= SWING_CONTACT_T) {
+        const type = g._lastShotPref || recommendShotType();
+        if (type) {
+          const fh = (b.pos.x - g.human.pos.x) >= 0;
+          g.human.startSwing(type, fh);
+          g._lastShotPref = null;
+        }
+      }
     }
 
     // swing contacts
@@ -701,13 +721,7 @@ export function createGame(scene, cameraRig, input) {
       ui.hideTimingMeter();
     }
     // recommended shot: suggest a high-percentage choice by contact height
-    // (low -> slice, high -> flat, comfortable waist -> topspin)
-    if (ttc != null && g.sweetPos) {
-      const y = g.sweetPos.y;
-      ui.setRecommendedShot(y < 0.6 ? 'slice' : y > 1.3 ? 'flat' : 'topspin');
-    } else {
-      ui.setRecommendedShot(null);
-    }
+    ui.setRecommendedShot(ttc != null ? recommendShotType() : null);
     // time-to-contact countdown ring on the sweet-spot marker
     if (g.ball) {
       if (ttc != null && g.sweetPos) {
@@ -736,6 +750,14 @@ export function createGame(scene, cameraRig, input) {
     if (g.sweetHitT == null || !g.rally || g.rally.lastHitBy !== 'C') return null;
     return g.sweetHitT - g.sweetHitClock;
   };
+
+  // High-percentage shot for the incoming ball, by predicted contact height
+  // (low -> slice, high -> flat, comfortable waist -> topspin). Null if none.
+  function recommendShotType() {
+    if (!g.sweetPos) return null;
+    const y = g.sweetPos.y;
+    return y < 0.6 ? 'slice' : y > 1.3 ? 'flat' : 'topspin';
+  }
 
   // ---------- approach slow-motion ----------
   // Returns the current simulation time-scale (1 = real time). Eases toward a
