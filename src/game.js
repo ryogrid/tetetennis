@@ -698,6 +698,14 @@ export function createGame(scene, cameraRig, input) {
     } else {
       ui.hideTimingMeter();
     }
+    // recommended shot: suggest a high-percentage choice by contact height
+    // (low -> slice, high -> flat, comfortable waist -> topspin)
+    if (ttc != null && g.sweetPos) {
+      const y = g.sweetPos.y;
+      ui.setRecommendedShot(y < 0.6 ? 'slice' : y > 1.3 ? 'flat' : 'topspin');
+    } else {
+      ui.setRecommendedShot(null);
+    }
   };
 
   // Seconds until the predicted ideal contact for an incoming CPU ball, or

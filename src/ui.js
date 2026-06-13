@@ -51,6 +51,7 @@ const css = `
   border: 1px solid #333;
 }
 #shotbar div.flash { background: #e8f24b; color: #111; }
+#shotbar div.recommend { border-color: #50e678; box-shadow: 0 0 8px rgba(80,230,120,.85); }
 #controls {
   position: absolute; bottom: 14px; right: 14px; font-size: 12px; color: #888;
   background: rgba(10,10,18,.7); padding: 8px 12px; border-radius: 6px; text-align: right;
@@ -79,6 +80,7 @@ const css = `
   display: flex; align-items: center; justify-content: center;
 }
 .tbtn.pressed, .tbtn.flash { background: #e8f24b; color: #111; border-color: #e8f24b; }
+.tbtn.recommend { box-shadow: 0 0 12px 2px rgba(80,230,120,.9); border-color: #50e678; }
 #tb-flat  { right: 140px; bottom: 16px; }
 #tb-top   { right: 104px; bottom: 96px; }
 #tb-slice { right: 24px;  bottom: 148px; }
@@ -402,6 +404,7 @@ export function hideHUD() {
   hideTossGauge();
   hideMoveHint();
   hideTimingMeter();
+  setRecommendedShot(null);
   applyTouchVisibility();
 }
 
@@ -445,6 +448,25 @@ export function flashShot(type) {
     el.classList.add('flash');
     if (flashTimers[id]) clearTimeout(flashTimers[id]);
     flashTimers[id] = setTimeout(() => el.classList.remove('flash'), 350);
+  }
+}
+
+// Highlight the suggested shot button (keyboard bar + touch). type | null.
+let recommendedShot = null;
+const RECOMMEND_IDS = {
+  flat: ['sb-flat', 'tb-flat'],
+  topspin: ['sb-topspin', 'tb-top'],
+  slice: ['sb-slice', 'tb-slice'],
+};
+export function setRecommendedShot(type) {
+  if (type === recommendedShot) return;
+  recommendedShot = type;
+  for (const key of Object.keys(RECOMMEND_IDS)) {
+    const on = key === type;
+    for (const id of RECOMMEND_IDS[key]) {
+      const el = document.getElementById(id);
+      if (el) el.classList.toggle('recommend', on);
+    }
   }
 }
 
