@@ -1,0 +1,14 @@
+{
+  "import": [
+    "tetetetennis/logic/ffi"
+  ],
+  "link": {
+    "js": {
+      "format": "esm",
+      "exports": [
+        "game_init:init",
+        "fixed_update:fixedUpdate"
+      ]
+    }
+  }
+}
