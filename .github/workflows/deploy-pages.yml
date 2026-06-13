@@ -16,9 +16,10 @@ jobs:
   build:
     runs-on: ubuntu-latest
     steps:
+      # No `ref:` — checks out the branch this workflow is dispatched from,
+      # so you can deploy any branch (e.g. introduce-moonbit) from the
+      # "Run workflow" UI.
       - uses: actions/checkout@v4
-        with:
-          ref: master
       - uses: actions/setup-node@v4
         with:
           node-version: 22
