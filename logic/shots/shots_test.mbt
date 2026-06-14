@@ -272,6 +272,60 @@ test "smash: a high forecourt flat is much faster than a high baseline flat" {
   assert_true(sm_sp > bl_sp * 1.4) // and the smash is far faster
 }
 
+// Mean launch speed and mean |landing x| of a forecourt Flat, with/without the
+// volley block. aim_x = 0, so tighter landings cluster nearer x = 0.
+///|
+fn volley_profile(volley : Bool) -> (Double, Double, Bool) {
+  let g = @rng.Gauss::new(77)
+  let mut sum_speed = 0.0
+  let mut sum_absx = 0.0
+  let mut n = 0
+  let mut flag = false
+  for _i = 0; _i < 150; _i = _i + 1 {
+    let r = compute_stroke(
+      0.0, 5.0, 0.5, 1.0, 4.5, 0.0, 2.0, 10.0, test_stats, Flat, 0.0, 0.0,
+      @rules.P, g, volley~,
+    )
+    match r {
+      Some(s) => {
+        flag = s.volley
+        let b = @physics.make_ball()
+        b.px = 0.5
+        b.py = 1.0
+        b.pz = 4.5
+        b.vx = s.vx
+        b.vy = s.vy
+        b.vz = s.vz
+        b.sx = s.sx
+        b.sy = s.sy
+        b.sz = s.sz
+        b.activate()
+        match @physics.predict_landing(b, @physics.surface_hard) {
+          Some(l) => {
+            sum_speed = sum_speed + @vec.hypot3(s.vx, s.vy, s.vz)
+            sum_absx = sum_absx + @vec.dabs(l.x)
+            n = n + 1
+          }
+          None => ()
+        }
+      }
+      None => ()
+    }
+  }
+  let nn = (if n == 0 { 1 } else { n }).to_double()
+  (sum_speed / nn, sum_absx / nn, flag)
+}
+
+///|
+test "volley: restrained power but tighter aim than a groundstroke" {
+  @assist.set_assist_level(Off)
+  let (sp_v, ax_v, f_v) = volley_profile(true)
+  let (sp_n, ax_n, f_n) = volley_profile(false)
+  assert_true(f_v && !f_n) // the flag reflects the volley
+  assert_true(sp_v < sp_n) // restrained block is slower
+  assert_true(ax_v < ax_n) // and lands tighter to the aimed line
+}
+
 ///|
 test "contact quality: whiff out of reach, full quality in the band" {
   @assist.set_assist_level(Off)

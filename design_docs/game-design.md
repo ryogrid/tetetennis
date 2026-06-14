@@ -221,6 +221,16 @@ the ball down — charge still adds up to +25 %. It is the finisher for high bou
 short lobs; the same high ball at the baseline is just a weak high flat. `Stroke.smash`
 drives a "SMASH!" cue.
 
+### 6.7 Volley (net play)
+
+A **Flat or Slice** taken **out of the air** (the ball has not bounced, `ms.bounces == 0`)
+within `volley_forecourt = 7 m` of the net is a **Volley** (`game.js.mbt:attempt_contact`
+→ `compute_stroke`): a block/punch with **restrained power** (×0.80, and charge barely
+matters — `power`/overcharge are neutralised), a **flatter** punch (θ capped at 12°), and
+**much tighter aim** (error ×0.4). It is the way to rush the net and *accurately* finish a
+weak ball, distinct from baseline power shots. A high forecourt flat still prefers the
+Smash (§6.6).
+
 ## 7. Serve
 
 ### 7.1 Serve types
@@ -391,8 +401,6 @@ current build** — the figures here are *proposed*, not measured from code. The
 for reference and possible future work.
 
 ### A.3 Situational shots
-- **Volley / net play** — pre-bounce block/punch near the net: restrained power, high
-  accuracy, little charge effect; lobs and passing shots as counters.
 - **Fast-ball jam model** — a pace-threshold (>26 m/s) mishit weighted by shot type
   (Slice block strongest, Topspin weakest), plus **counter/redirect** speed bonuses
   (+~30 % Flat/Slice, +~12 % Topspin) for redirecting incoming pace.

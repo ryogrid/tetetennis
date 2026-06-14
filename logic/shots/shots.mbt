@@ -135,6 +135,7 @@ pub(all) struct Stroke {
   mishit : Bool
   perfect : Bool
   smash : Bool
+  volley : Bool
   shot_type : ShotType
 }
 
@@ -160,6 +161,7 @@ pub fn compute_stroke(
   perfect_eligible~ : Bool = false,
   overcharge~ : Double = 0.0,
   charge_cc~ : Double = 0.0,
+  volley~ : Bool = false,
 ) -> Stroke? {
   let cq = contact_quality(
     player_x, player_z, ball_x, ball_y, ball_z, vx, vy, vz, stats, side,
@@ -231,9 +233,17 @@ pub fn compute_stroke(
     def_theta_min = smash_theta_min
     def_theta_max = smash_theta_max
   }
+  // Volley: a Flat/Slice taken out of the air in the forecourt is a block/punch
+  // (restrained power, flatter, very accurate, and charge barely matters). The
+  // game layer passes `volley` when the ball has not bounced and is near the net.
+  let do_volley = volley && !is_smash
+  if do_volley {
+    speed = speed * 0.80 // restrained block
+    def_theta_max = @vec.dmin(def_theta_max, 12.0) // punch flatter
+  }
   // Topspin/Slice charge enhancements: charge amplifies each shot's identity.
   let cc = @vec.clampd(charge_cc, 0.0, 1.0)
-  if cc > 0.0 {
+  if cc > 0.0 && !do_volley {
     match typ {
       Topspin => {
         // heavier topspin + wider cross-court angle
@@ -270,17 +280,21 @@ pub fn compute_stroke(
   // charge: power scales the launch speed; a sweet-spot release (Perfect Hit)
   // adds a modest speed/spin bonus and tightens aim; overcharge sprays the ball.
   let perfect = perfect_eligible && q >= 0.90
-  speed = speed * power_mul
+  let eff_power = if do_volley { 1.0 } else { power_mul } // charge barely matters
+  let eff_overcharge = if do_volley { 0.0 } else { overcharge }
+  speed = speed * eff_power
   if perfect {
     speed = speed * 1.08
     spin_rpm = spin_rpm * 1.12
   }
-  let aim_acc = if perfect { 0.6 } else { 1.0 }
+  // a volley is a precise block -> much tighter aim
+  let aim_acc = (if perfect { 0.6 } else { 1.0 }) * (if do_volley { 0.4 } else { 1.0 })
   // error model
   let err_mul = @physics.err_mul_base(stats.ctl) * (1.0 + 2.2 * (1.0 - q))
-  tx = tx + rng.draw() * 0.30 * err_mul * aim_acc + rng.draw() * overcharge * 2.8
+  tx = tx + rng.draw() * 0.30 * err_mul * aim_acc + rng.draw() * eff_overcharge * 2.8
   tz = tz +
-    z_sign * (rng.draw() * 0.55 * err_mul * aim_acc + rng.draw() * overcharge * 2.8)
+    z_sign *
+    (rng.draw() * 0.55 * err_mul * aim_acc + rng.draw() * eff_overcharge * 2.8)
   tz = z_sign *
     @vec.clampd(@vec.dabs(tz), 2.0, @physics.court_half_len + 2.5)
   spin_rpm = spin_rpm * (1.0 + rng.draw() * 0.06 * err_mul)
@@ -333,6 +347,7 @@ pub fn compute_stroke(
     mishit,
     perfect,
     smash: is_smash,
+    volley: do_volley,
     shot_type: typ,
   })
 }

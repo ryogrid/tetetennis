@@ -72,6 +72,9 @@ let stiff_factor : Double = 0.12 // movement multiplier while stiff
 ///|
 let full_assist_charge : Double = 0.7 // auto-charge level under Full assist
 
+///|
+let volley_forecourt : Double = 7.0 // hit a still-airborne ball within this of the net = volley
+
 // ---------------- enums ----------------
 
 ///|
@@ -596,10 +599,14 @@ fn attempt_contact(
     return false // ball not on this player's side
   }
   let e = ent(ms, side)
+  // a still-airborne ball met near the net (Flat/Slice) is a volley
+  let volley = ms.bounces == 0 &&
+    @vec.dabs(b.pz) < volley_forecourt &&
+    (ty == @shots.Flat || ty == @shots.Slice)
   let res = @shots.compute_stroke(
     e.pos_x, e.pos_z, b.px, b.py, b.pz, b.vx, b.vy, b.vz, e.stats, ty, aim_x,
     aim_depth, side, self.rng, power_mul~, perfect_eligible~, overcharge~,
-    charge_cc~,
+    charge_cc~, volley~,
   )
   match res {
     None => false // whiff
