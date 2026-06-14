@@ -66,9 +66,10 @@ with both hands):
   - **Top-right**: `⌨` / `🎮` toggles the on-screen controls on/off (the
     choice is remembered), `✕` quits to the menu.
 
-### Reading the screen (first-person view)
+### Reading the screen
 
-- The camera is your player's eyes; your own body is not drawn.
+- The camera sits just behind your player (third-person), so you see your own
+  player from behind; it stays facing the court and never looks up.
 - **Yellow ring** — where the incoming ball will land.
 - **Trajectory dots** — the incoming ball's predicted path from just before
   the bounce: yellow dots down to the bounce, cyan dots for the arc after
