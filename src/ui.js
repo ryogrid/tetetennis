@@ -256,11 +256,30 @@ export function createUI({ onVirtualKey, onMoveAxis } = {}) {
     return d;
   }
 
+  // Radar chart of the eight 0-100 persona stats, drawn as inline SVG.
   function statBars(stats) {
-    const order = ['POW', 'SPN', 'SLC', 'SRV', 'SPD', 'CTL'];
-    return order.map((k) =>
-      `<div class="statrow"><span>${k}</span><div class="statbar"><i style="width:${stats[k]}%"></i></div></div>`
-    ).join('');
+    const axes = ['POW', 'SPN', 'SLC', 'SRV', 'SPD', 'CTL', 'REA', 'NET'];
+    const n = axes.length;
+    const cx = 90, cy = 80, R = 60;
+    const pt = (i, r) => {
+      const a = -Math.PI / 2 + (i / n) * Math.PI * 2;
+      return [cx + Math.cos(a) * r, cy + Math.sin(a) * r];
+    };
+    // concentric grid rings + axis spokes
+    let grid = '';
+    for (const f of [0.25, 0.5, 0.75, 1]) {
+      grid += `<polygon points="${axes.map((_, i) => pt(i, R * f).map((v) => v.toFixed(1)).join(',')).join(' ')}" fill="none" stroke="rgba(255,255,255,.12)"/>`;
+    }
+    let spokes = '', labels = '';
+    axes.forEach((k, i) => {
+      const [ex, ey] = pt(i, R);
+      spokes += `<line x1="${cx}" y1="${cy}" x2="${ex.toFixed(1)}" y2="${ey.toFixed(1)}" stroke="rgba(255,255,255,.12)"/>`;
+      const [lx, ly] = pt(i, R + 12);
+      labels += `<text x="${lx.toFixed(1)}" y="${ly.toFixed(1)}" fill="#9aa" font-size="9" text-anchor="middle" dominant-baseline="middle">${k}</text>`;
+    });
+    const poly = axes.map((k, i) => pt(i, R * (stats[k] || 0) / 100).map((v) => v.toFixed(1)).join(',')).join(' ');
+    return `<svg class="statradar" viewBox="0 0 180 165" width="180" height="165">${grid}${spokes}` +
+      `<polygon points="${poly}" fill="rgba(80,230,120,.28)" stroke="#50e678" stroke-width="1.5"/>${labels}</svg>`;
   }
 
   // ---------- init ----------

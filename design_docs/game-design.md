@@ -383,7 +383,7 @@ you can't see your own contact point from there, several on-court aids are rende
 DOM-based, drawn by `src/ui.js`:
 
 - **Title flow**: select **Difficulty**, **Surface** (Clay/Grass/Hard), **Persona**
-  (stat-bar cards), and **Assist** level, then start.
+  (radar-chart cards), and **Assist** level, then start.
 - **Scoreboard**: games, points, both player/opponent names, a 2nd-serve indicator, and
   a tiebreak indicator.
 - **In-game HUD**: a permanent compact **control guide** on the screen edge, the serve/
@@ -433,8 +433,7 @@ for reference and possible future work.
 
 ### A.6 Remaining UI
 - **Open-court floor highlight** (an `OPEN_COURT_ENABLED`-style toggle) — not present.
-- **Radar charts** for persona stats (currently bars), a **games-to-win selector**, and a
-  **pause modal** (Resume/Quit with confirm).
+- A **games-to-win selector** and a **pause modal** (Resume/Quit with confirm).
 
 ### A.7 Sampled / richer audio
 - **Recorded hit samples** (loaded via `decodeAudioData`, played with `BufferSource`) with
