@@ -202,6 +202,14 @@ pub extern "js" fn host_gauge(
 pub extern "js" fn host_hide_gauge(h : Host, name : String) -> Unit =
   "(h,n)=>h.ui.hideGauge(n)"
 
+// charge bar: frac in [0,1] of the overcharge ceiling; over = in overcharge zone
+///|
+pub extern "js" fn host_charge(h : Host, frac : Double, over : Bool) -> Unit =
+  "(h,f,o)=>h.ui.charge(f,o)"
+
+///|
+pub extern "js" fn host_hide_charge(h : Host) -> Unit = "(h)=>h.ui.hideCharge()"
+
 ///|
 pub extern "js" fn host_move_hint(h : Host, dx : Double, dz : Double) -> Unit =
   "(h,dx,dz)=>h.ui.moveHint(dx,dz)"
@@ -223,6 +231,14 @@ pub extern "js" fn host_move_z(h : Host) -> Double = "(h)=>h.input.moveZ()"
 // "" | "flat" | "topspin" | "slice"
 ///|
 pub extern "js" fn host_shot_key(h : Host) -> String = "(h)=>h.input.shotKey()"
+
+// currently-held shot key (for hold-to-charge): "" | "flat" | "topspin" | ...
+///|
+pub extern "js" fn host_shot_held(h : Host) -> String = "(h)=>h.input.shotHeld()"
+
+///|
+pub extern "js" fn host_is_down(h : Host, code : String) -> Bool =
+  "(h,c)=>h.input.isDown(c)"
 
 // ---------------- assist persistence ----------------
 

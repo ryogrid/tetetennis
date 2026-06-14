@@ -43,6 +43,35 @@ pub let swing_contact_t : Double = 0.18
 ///|
 pub let swing_dur : Double = 0.45
 
+// ---- charge / Perfect-Hit (Appendix A.2) ----
+
+///|
+let charge_time : Double = 0.8 // seconds of hold to reach full charge
+
+///|
+let charge_max : Double = 1.25 // overcharge ceiling
+
+///|
+let cpu_charge : Double = 0.375 // CPU swings at neutral power (0.85+0.40*0.375=1.0)
+
+///|
+let safety_drop_y : Double = 0.7 // auto-swing once a low ball drops below this
+
+///|
+let safety_approach_rate : Double = 3.0 // ...unless still closing faster than this
+
+///|
+let whiff_cd_dur : Double = 0.25 // cooldown after a release out of reach
+
+///|
+let stiff_dur : Double = 0.35 // post-impact stiffness duration
+
+///|
+let stiff_factor : Double = 0.12 // movement multiplier while stiff
+
+///|
+let full_assist_charge : Double = 0.7 // auto-charge level under Full assist
+
 // ---------------- enums ----------------
 
 ///|
@@ -547,6 +576,9 @@ fn attempt_contact(
   ty : @shots.ShotType,
   aim_x : Double,
   aim_depth : Double,
+  power_mul~ : Double = 1.0,
+  perfect_eligible~ : Bool = false,
+  overcharge~ : Double = 0.0,
 ) -> Bool {
   let b = ms.ball
   if !b.active || ms.rally_phase != Live {
@@ -565,7 +597,7 @@ fn attempt_contact(
   let e = ent(ms, side)
   let res = @shots.compute_stroke(
     e.pos_x, e.pos_z, b.px, b.py, b.pz, b.vx, b.vy, b.vz, e.stats, ty, aim_x,
-    aim_depth, side, self.rng,
+    aim_depth, side, self.rng, power_mul~, perfect_eligible~, overcharge~,
   )
   match res {
     None => false // whiff
@@ -583,9 +615,13 @@ fn attempt_contact(
       ms.bounces = 0
       ms.serve_net_touched = false
       ms.ball_stamp = ms.ball_stamp + 1
+      ent(ms, side).stiff_t = stiff_dur
       @ffi.host_sfx_hit(self.host, @vec.hypot3(r.vx, r.vy, r.vz))
       if side == @rules.P {
         @ffi.host_flash_shot(self.host, shot_type_str(r.shot_type))
+        if r.perfect {
+          @ffi.host_sfx(self.host, "sfxPerfect")
+        }
       }
       match @physics.predict_landing(b, ms.surface) {
         Some(l) => @ffi.host_show_landing(self.host, l.x, l.z)
@@ -755,15 +791,84 @@ fn do_serve(self : Game, ms : MatchState, kind : @shots.ShotType) -> Unit {
   self.execute_serve(ms, ty, q_serve, Body, aim_x, aim_depth)
 }
 
+// Hold-to-charge rally strokes (Appendix A.2). Charge builds while a shot key
+// (or the touch SHOT button) is held; releasing fires the swing, a Safety Hit
+// auto-fires before the ball escapes, and releasing out of reach whiffs.
 ///|
-fn do_stroke(self : Game, ms : MatchState, kind : @shots.ShotType) -> Unit {
-  ms.last_shot_pref = Some(kind)
-  if !@assist.assist_full() {
-    let b = ms.ball
-    let fh = b.px - ms.human.pos_x >= 0.0
-    ms.human.start_swing(kind, fh) |> ignore
-    @ffi.host_start_swing(self.host, 0, shot_type_str(kind), fh)
+fn update_human_charge(self : Game, ms : MatchState, dt : Double) -> Unit {
+  let ph = ms.human
+  let live = ms.point_state == Rally &&
+    ms.rally_phase == Live &&
+    ms.last_hit_by == Some(@rules.C) &&
+    ms.ball.active
+  // Full assist auto-charges/auto-swings via the auto-swing block; no manual hold.
+  if !live || @assist.assist_full() || ph.swinging || ph.whiff_cd > 0.0 {
+    if ph.charging {
+      ph.charging = false
+      @ffi.host_hide_charge(self.host)
+    }
+    return
   }
+  let kb = str_to_shot(@ffi.host_shot_held(self.host))
+  let touch = @ffi.host_is_down(self.host, "TouchShot")
+  let kb_held = match kb {
+    Some(_) => true
+    None => false
+  }
+  let held = kb_held || touch
+  if !ph.charging {
+    if held {
+      ph.charging = true
+      ph.charge = 0.0
+      ph.charge_type = match kb {
+        Some(t) => t
+        None => self.rand_stroke()
+      }
+    } else {
+      @ffi.host_hide_charge(self.host)
+      return
+    }
+  }
+  if held {
+    ph.charge = @vec.dmin(charge_max, ph.charge + dt / charge_time)
+    @ffi.host_charge(self.host, ph.charge / charge_max, ph.charge > 1.0)
+    if self.should_safety_hit(ms) {
+      self.fire_charged_swing(ms, true)
+    }
+  } else {
+    self.fire_charged_swing(ms, false) // released -> swing
+  }
+}
+
+///|
+fn fire_charged_swing(self : Game, ms : MatchState, safety : Bool) -> Unit {
+  let ph = ms.human
+  let b = ms.ball
+  let fh = b.px - ph.pos_x >= 0.0
+  ph.swing_charge = ph.charge
+  ph.swing_no_perfect = safety
+  ph.charging = false
+  ms.last_shot_pref = Some(ph.charge_type)
+  ph.start_swing(ph.charge_type, fh) |> ignore
+  @ffi.host_start_swing(self.host, 0, shot_type_str(ph.charge_type), fh)
+  @ffi.host_hide_charge(self.host)
+}
+
+// Auto-fire while charging if the ball is in reach but about to escape: it has
+// passed the player horizontally, or it has dropped low and is no longer
+// closing fast. Prevents a held charge from sailing past unhit.
+///|
+fn should_safety_hit(self : Game, ms : MatchState) -> Bool {
+  ignore(self)
+  let ph = ms.human
+  let b = ms.ball
+  let d = @vec.hypot2(b.px - ph.pos_x, b.pz - ph.pos_z)
+  if d > ph.reach {
+    return false
+  }
+  let passed = b.pz > ph.pos_z && b.vz > 0.0
+  let low = b.py <= safety_drop_y && b.vy < 0.0 && b.vz < safety_approach_rate
+  passed || low
 }
 
 ///|
@@ -855,12 +960,9 @@ fn handle_match_input(self : Game) -> Unit {
       Some(s) => self.do_serve(ms, s)
       None => if touch_shot { self.do_serve(ms, self.rand_stroke()) }
     }
-  } else if ms.point_state == Rally {
-    match shot {
-      Some(s) => self.do_stroke(ms, s)
-      None => if touch_shot { self.do_stroke(ms, self.rand_stroke()) }
-    }
   }
+  // Rally strokes use the hold-to-charge model handled in fixed_update
+  // (update_human_charge), not an edge-triggered press here.
 }
 
 // ---------------- fixed update ----------------
@@ -951,7 +1053,11 @@ pub fn fixed_update(dt : Double) -> Unit {
     ms.cpu.pos_x = @shots.serve_stance_x(@rules.C, ms.court_side)
   }
 
-  // auto-swing assist (full assist only)
+  // human charge / release (hold to charge, release to swing); Full assist
+  // auto-charges + auto-releases at the sweet spot below.
+  self.update_human_charge(ms, dt)
+
+  // auto-swing assist (full assist only): auto-release at the sweet spot
   if @assist.assist_full() &&
     ms.point_state == Rally &&
     ms.last_hit_by == Some(@rules.C) &&
@@ -966,6 +1072,8 @@ pub fn fixed_update(dt : Double) -> Unit {
           match ty {
             Some(t) => {
               let fh = b.px - ms.human.pos_x >= 0.0
+              ms.human.swing_charge = full_assist_charge
+              ms.human.swing_no_perfect = false
               ms.human.start_swing(t, fh) |> ignore
               @ffi.host_start_swing(self.host, 0, shot_type_str(t), fh)
               ms.last_shot_pref = None
@@ -982,16 +1090,26 @@ pub fn fixed_update(dt : Double) -> Unit {
   if ph.swinging && !ph.contact_done && ph.swing_t >= swing_contact_t - swing_window {
     let aim_x = @ffi.host_move_x(self.host)
     let aim_depth = -@ffi.host_move_z(self.host)
-    if self.attempt_contact(ms, @rules.P, ph.swing_type, aim_x, aim_depth) {
+    let power_mul = 0.85 + 0.40 * @vec.dmin(ph.swing_charge, 1.0)
+    let overcharge = @vec.dmax(0.0, ph.swing_charge - 1.0)
+    if self.attempt_contact(
+        ms, @rules.P, ph.swing_type, aim_x, aim_depth, power_mul~,
+        perfect_eligible=(!ph.swing_no_perfect), overcharge~,
+      ) {
       ph.contact_done = true
     } else if ph.swing_t >= swing_contact_t + swing_window {
       ph.contact_done = true
+      ph.whiff_cd = whiff_cd_dur // released/swung out of reach -> brief cooldown
     }
   }
   let pc = ms.cpu
   if pc.swinging && !pc.contact_done && pc.swing_t >= swing_contact_t {
     pc.contact_done = true
-    self.attempt_contact(ms, @rules.C, pc.pending_type, pc.pending_aim_x, pc.pending_aim_depth)
+    let cpu_power = 0.85 + 0.40 * @vec.dmin(cpu_charge, 1.0)
+    self.attempt_contact(
+      ms, @rules.C, pc.pending_type, pc.pending_aim_x, pc.pending_aim_depth,
+      power_mul=cpu_power,
+    )
     |> ignore
   }
 

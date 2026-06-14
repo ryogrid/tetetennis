@@ -69,6 +69,14 @@ export function createInput(onFirstInput) {
       if (pressed.has('KeyV')) return 'drop';
       return '';
     },
+    // currently-held shot key (hold-to-charge); '' if none
+    shotHeld() {
+      if (down.has('KeyZ')) return 'flat';
+      if (down.has('KeyX')) return 'topspin';
+      if (down.has('KeyC')) return 'slice';
+      if (down.has('KeyV')) return 'drop';
+      return '';
+    },
     // on-screen buttons synthesize the same key codes as the keyboard
     setVirtualKey(code, isDown) {
       firstInput();

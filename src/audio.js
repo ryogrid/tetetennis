@@ -219,9 +219,27 @@ export function createAudio() {
     osc.stop(t + 0.08);
   }
 
+  // Perfect-Hit bell: a clear two-partial chime stacked on top of the hit.
+  function sfxPerfect() {
+    if (!ctx) return;
+    const t = ctx.currentTime;
+    for (const [f, v, d] of [[1568, 0.16, 0.28], [2349, 0.09, 0.22]]) {
+      const osc = ctx.createOscillator();
+      osc.type = 'sine';
+      osc.frequency.value = f;
+      const g = ctx.createGain();
+      g.gain.setValueAtTime(0.0001, t);
+      g.gain.exponentialRampToValueAtTime(v, t + 0.004);
+      g.gain.exponentialRampToValueAtTime(0.0001, t + d);
+      osc.connect(g).connect(master);
+      osc.start(t);
+      osc.stop(t + d + 0.02);
+    }
+  }
+
   return {
     initAudio,
     sfxHit, sfxBounce, sfxCrowd, sfxNet, sfxOut, sfxFault,
-    sfxToss, sfxMenu, sfxConfirm, sfxReachAlert,
+    sfxToss, sfxMenu, sfxConfirm, sfxReachAlert, sfxPerfect,
   };
 }

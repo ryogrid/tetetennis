@@ -100,6 +100,7 @@ pub(all) struct Stroke {
   sz : Double
   q : Double
   mishit : Bool
+  perfect : Bool
   shot_type : ShotType
 }
 
@@ -121,6 +122,9 @@ pub fn compute_stroke(
   aim_depth : Double,
   side : @rules.Side,
   rng : @rng.Gauss,
+  power_mul~ : Double = 1.0,
+  perfect_eligible~ : Bool = false,
+  overcharge~ : Double = 0.0,
 ) -> Stroke? {
   let cq = contact_quality(
     player_x, player_z, ball_x, ball_y, ball_z, vx, vy, vz, stats, side,
@@ -179,10 +183,20 @@ pub fn compute_stroke(
       spin_rpm = -@physics.slice_rpm(stats.slc) * (0.55 + 0.45 * q) * 0.9
     }
   }
+  // charge: power scales the launch speed; a sweet-spot release (Perfect Hit)
+  // adds a modest speed/spin bonus and tightens aim; overcharge sprays the ball.
+  let perfect = perfect_eligible && q >= 0.90
+  speed = speed * power_mul
+  if perfect {
+    speed = speed * 1.08
+    spin_rpm = spin_rpm * 1.12
+  }
+  let aim_acc = if perfect { 0.6 } else { 1.0 }
   // error model
   let err_mul = @physics.err_mul_base(stats.ctl) * (1.0 + 2.2 * (1.0 - q))
-  tx = tx + rng.draw() * 0.30 * err_mul
-  tz = tz + z_sign * rng.draw() * 0.55 * err_mul
+  tx = tx + rng.draw() * 0.30 * err_mul * aim_acc + rng.draw() * overcharge * 2.8
+  tz = tz +
+    z_sign * (rng.draw() * 0.55 * err_mul * aim_acc + rng.draw() * overcharge * 2.8)
   tz = z_sign *
     @vec.clampd(@vec.dabs(tz), 2.0, @physics.court_half_len + 2.5)
   spin_rpm = spin_rpm * (1.0 + rng.draw() * 0.06 * err_mul)
@@ -233,6 +247,7 @@ pub fn compute_stroke(
     sz: solved.sz,
     q,
     mishit,
+    perfect,
     shot_type: typ,
   })
 }

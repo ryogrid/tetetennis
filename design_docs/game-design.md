@@ -126,22 +126,61 @@ use an absolute touch speed (Drop `(12 + 4·slc/100)·eff_pace`, the slowest str
 Lob `(15 + 4·pow/100)·eff_pace`) rather than the flat-speed model, and Drop targets a
 short `~2.2 m` past the net instead of the rally depth floor.
 
-### 6.2 Input & swing timing
+### 6.2 Input & the charge / Perfect-Hit mechanic
 
-Shots are **instant-press**, not charged (`src/input.js`):
+Rally strokes are **hold-to-charge** (`logic/game/game.js.mbt:update_human_charge`,
+`src/input.js`):
 
-- **Keyboard**: move with the Arrow keys; **Z/J = Flat, X/K = Topspin, C/L = Slice,
-  V = Drop**; **Space** tosses/serves.
-- **Touch**: an analog thumbstick (left) to move; a single **SHOT** button (right) that
-  tosses/serves and hits strokes — the shot type is chosen **at random** each swing.
+- **Keyboard**: move with the Arrow keys; **hold** **Z/J = Flat, X/K = Topspin,
+  C/L = Slice, V = Drop** to build charge, and **release** to swing; **Space** tosses/serves.
+- **Touch**: an analog thumbstick (left) to move; **hold** the single **SHOT** button
+  (right) to charge and release to hit — the shot type is chosen **at random** at the
+  start of each charge.
 
-A swing lasts `swing_dur = 0.45 s` and makes contact at `swing_contact_t = 0.18 s` into
-the animation. The **human gets a forgiving timing window** of ±`swing_window = 0.09 s`
-around that contact point: each frame in the window the game tries to meet the ball, and
-connects as soon as the ball is within reach. **The CPU's contact is exact.** There is
-**no charge/hold mechanic and no release-timing bonus** — the on-screen timing/sweet-spot
-aids (§10) only help you *position and time the swing*; they grant no power/spin/accuracy
-multiplier.
+**Charge.** While a shot key is held, charge `c` builds 0→1.0 over
+`charge_time = 0.8 s` and can be pushed into **Overcharge** up to `charge_max = 1.25`. The
+launch speed is multiplied by `power = 0.85 + 0.40·min(c, 1)` — a quick tap is weak
+(0.85×), a full charge is strong (1.25×). Overcharge (`c > 1`) adds aim error
+`∝ (c − 1)·2.8 m` and shrinks the safety margin, so going for maximum power raises out/net
+faults. After contact, movement is nearly halted (`stiff_factor = 0.12`) for
+`stiff_dur = 0.35 s` (post-impact stiffness).
+
+**Release & Perfect Hit.** Releasing fires the swing, which makes contact in the existing
+forgiving window (`swing_contact_t = 0.18 s ± swing_window = 0.09 s`; the CPU is exact).
+If the contact lands in the core (quality `q ≥ 0.90`), it is a **Perfect Hit**: speed
+×1.08, spin ×1.12, and aim error ×0.6, plus a gold cue and a bell (`sfxPerfect`). A
+**Safety Hit** auto-fires if you hold too long and the ball is about to escape (it has
+passed you horizontally, or dropped below `safety_drop_y = 0.7 m` while no longer closing
+faster than `safety_approach_rate = 3 m/s`) — it forgoes the Perfect bonus but keeps the
+rally alive. Releasing with the ball out of reach **whiffs** (a `0.25 s` cooldown).
+
+A **charge bar** (`host_charge`) shows the build-up and turns red in the overcharge zone.
+The CPU swings at neutral power (`cpu_charge` → `power = 1.0`); **Assist=Full** auto-charges
+and auto-releases at the sweet spot.
+
+### 6.3 Contact quality (core mechanic)
+
+Where you meet the ball determines shot quality `q ∈ [0,1]`, the product of three factors
+(`shots.mbt:contact_quality`); `q` also gates the **Perfect Hit** (§6.2, `q ≥ 0.90`). The
+ideal contact is the ball at **waist height (0.85 m)**, an **arm-plus-racket length to the
+side (0.65 m)** (`constants.mbt:ideal_contact_h/_r`):
+
+- **`q_dist`** — distance from that ideal side-offset. A flat "1.0" band runs from
+  0.30 m out to **0.90 m** (0.65 + 0.25), then falls off to the reach limit; jamming the
+  ball against the body (closer than 0.30 m) caps quality below 1.
+- **`q_height`** — penalty for meeting the ball away from waist height (tolerance band
+  ±0.30 m, then a falloff capped at 0.55).
+- **`q_speed`** — fast incoming balls are harder: `clamp(1 − (v_in − 18)/55, 0.65, 1)`.
+  Above ~18 m/s of incoming pace, poor posture starts to bite.
+
+Reach scales with the `rea` stat — `(1.25 + 0.25·rea/100)·1.5`, i.e. **≈ 2.08–2.21 m**
+across the roster (theoretical 1.875–2.25 m); the human gets +0.2 m grace.
+A **whiff** (no contact, ball plays on) occurs when the ball is out of reach
+(`d > reach`) or above the overhead limit (`h > 1.15 + reach`).
+
+Low `q` widens the error model: lateral/depth aim noise and a small speed/spin jitter
+all scale with `(1 + 2.2·(1 − q))`, so "hitting hard from a bad position" sprays the
+ball. This is the central risk/reward dial.
 
 ### 6.3 Contact quality (core mechanic)
 
@@ -306,7 +345,8 @@ you can't see your own contact point from there, several on-court aids are rende
 - **Move-hint arrow** — points toward the sweet spot (turns into a green ◎ when you're on
   it), since it can sit behind the camera.
 - **Gauges** — vertical **toss** and **height** gauges and a **timing** meter during the
-  serve/strike, with coloured sweet-spot bands.
+  serve/strike, with coloured sweet-spot bands, plus a **charge bar** that fills while a
+  stroke is held and turns red in the overcharge zone (§6.2).
 
 ## 11. UI
 
@@ -353,19 +393,11 @@ The original design draft envisioned a richer system. **None of the following is
 current build** — the figures here are *proposed*, not measured from code. They are kept
 for reference and possible future work.
 
-### A.2 Charge / release shot mechanic
-- Hold the shot key to build charge `c` (0→1.0 over 0.8 s, **Overcharge** to 1.25); power
-  `= 0.85 + 0.40·min(c,1)`; release at the right instant to hit.
-- **Perfect Hit / "Just Meet"** — releasing while the ball is in the sweet spot grants a
-  bonus (speed ×1.08, aim-error ×0.6, spin ×1.12), with gold-white ring/sparks and a bell
-  harmonic. **Safety Hit** auto-fires before the ball escapes; releasing out of reach is a
-  **Whiff** with a 0.25 s cooldown.
-- **Topspin/Slice charge enhancements** — charge amplifies each shot's identity:
-  topspin spin/angle gains, a "short-angle attack" pull toward the service line with a
-  low/fast drive solver; slice depth and float gains.
-
-*(In the shipped game, shots are instant-press; the sweet-spot/timing visuals are aids
-only and grant no bonus — see §6.2–6.3.)*
+### A.2 Topspin/Slice charge enhancements
+- Beyond the base charge → power (now implemented, §6.2), charge could further amplify
+  each shot's identity: topspin spin/angle gains, a "short-angle attack" pull toward the
+  service line with a low/fast drive solver; slice depth and float gains. *(The core
+  charge / Perfect-Hit / Overcharge / Safety / Whiff mechanic is implemented — §6.2.)*
 
 ### A.3 Situational shots
 - **Smash** — high point (≥1.7 m) × forecourt × Flat → a downward bomb (base ~42 m/s,

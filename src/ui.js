@@ -181,6 +181,21 @@ const css = `
   position: absolute; top: -20px; left: 50%; transform: translateX(-50%);
   font-size: 11px; color: #aaa; letter-spacing: 1px; white-space: nowrap;
 }
+#chargebar {
+  position: absolute; bottom: 19%; left: 50%; transform: translateX(-50%);
+  width: 210px; height: 12px; display: none;
+  background: rgba(10,10,18,.55); border: 1px solid rgba(255,255,255,.3);
+  border-radius: 7px; overflow: hidden;
+}
+#chargebar .cb-fill {
+  position: absolute; left: 0; top: 0; bottom: 0; width: 0%;
+  background: linear-gradient(90deg, #4ad8ff, #ffe34d);
+}
+#chargebar.over .cb-fill { background: linear-gradient(90deg, #ff8a3d, #ff3b3b); }
+#chargebar .cb-mark {
+  position: absolute; top: -2px; bottom: -2px; left: 80%; width: 2px;
+  background: rgba(255,255,255,.7);
+}
 #tc-bar { position: absolute; top: 12px; right: 12px; display: none; gap: 8px; }
 #tc-bar button {
   pointer-events: auto; width: 44px; height: 38px; border-radius: 8px;
@@ -247,12 +262,18 @@ export function createUI({ onVirtualKey, onMoveAxis } = {}) {
     '<div class="tm-label">HIT</div><div class="tm-band"></div><div class="tm-dot"></div>';
   els.tmBand = els.timingmeter.querySelector('.tm-band');
   els.tmDot = els.timingmeter.querySelector('.tm-dot');
+  els.chargebar = div('chargebar', hud);
+  // the mark sits at 80% = the start of the overcharge zone (full=100% of 1.25)
+  els.chargebar.innerHTML = '<i class="cb-fill"></i><span class="cb-mark"></span>';
+  els.cbFill = els.chargebar.querySelector('.cb-fill');
   els.shotbar.innerHTML =
     '<div id="sb-flat">Z Flat</div><div id="sb-topspin">X Topspin</div>' +
     '<div id="sb-slice">C Slice</div><div id="sb-drop">V Drop</div>';
   els.controls.innerHTML =
-    'Move: Arrow keys<br>Shots: Z flat &middot; X topspin &middot; C slice &middot; V drop<br>' +
-    'Serve: Space toss, then Z/X/C<br>Aim: hold a direction while swinging';
+    'Move: Arrow keys<br>Shots: <b>hold</b> Z/X/C/V to charge, <b>release</b> to hit ' +
+    '(Z flat &middot; X topspin &middot; C slice &middot; V drop)<br>' +
+    'Release in the sweet spot for a Perfect Hit; full charge overcharges (risky)<br>' +
+    'Serve: Space toss, then Z/X/C<br>Aim: hold a direction at the moment you release';
 
   // menu tap support (tap a card to select it, tap again to confirm).
   // Results screen taps pass index 0; menu_tap ignores the value there.
@@ -568,6 +589,21 @@ export function createUI({ onVirtualKey, onMoveAxis } = {}) {
     else if (name === 'timing') els.timingmeter.style.display = 'none';
   }
 
+  // hold-to-charge bar. frac is the charge over the overcharge ceiling [0,1];
+  // over=true tints it red once past full power.
+  let chargeShown = false;
+  function charge(frac, over) {
+    if (!chargeShown) { els.chargebar.style.display = 'block'; chargeShown = true; }
+    els.cbFill.style.width = `${Math.max(0, Math.min(1, frac)) * 100}%`;
+    els.chargebar.classList.toggle('over', !!over);
+  }
+  function hideCharge() {
+    if (!chargeShown) return;
+    chargeShown = false;
+    els.chargebar.style.display = 'none';
+    els.chargebar.classList.remove('over');
+  }
+
   // ---------- move hint (FPV can't see a sweet spot behind the camera) ----------
   // dx/dz: vector from the player to the sweet spot, court coords
   // (+x screen right, +z toward the camera = backward).
@@ -603,7 +639,7 @@ export function createUI({ onVirtualKey, onMoveAxis } = {}) {
     showResults, hideMenu,
     showHUD, hideHUD, updateScore,
     banner, toast, flashShot, serveSpeedToast, setRecommendedShot,
-    gauge, hideGauge,
+    gauge, hideGauge, charge, hideCharge,
     moveHint, hideMoveHint,
   };
 }

@@ -113,6 +113,89 @@ test "drop shot: slower and lands shorter than a slice, and clears into court" {
   assert_true(drop_depth < 5.0) // dies near the front of the court
 }
 
+// Output launch speed of a stroke at a given charge power_mul / perfect flag,
+// from an ideal forecourt contact (q ~ 1) with a fixed seed.
+///|
+fn charged_stroke(
+  power_mul : Double,
+  perfect_eligible : Bool,
+) -> (Double, Bool) {
+  let r = compute_stroke(
+    0.0, 6.0, 0.5, @physics.ideal_contact_h, 6.0, 0.0, 2.0, 6.0, test_stats, Flat,
+    0.0, 0.0, @rules.P, @rng.Gauss::new(3), power_mul~, perfect_eligible~,
+  )
+  match r {
+    Some(s) => (@vec.hypot3(s.vx, s.vy, s.vz), s.perfect)
+    None => (0.0, false)
+  }
+}
+
+///|
+test "charge: full power is much faster than no charge; perfect adds a bonus" {
+  @assist.set_assist_level(Off)
+  let (lo, _) = charged_stroke(0.85, false) // tap, no charge
+  let (hi, _) = charged_stroke(1.25, false) // full + overcharge power
+  assert_true(hi > lo * 1.4) // power 0.85 -> 1.25 is ~+47%
+  // same power, same seed: a Perfect Hit on an ideal contact adds ~8% speed
+  let (plain, plain_pf) = charged_stroke(1.0, false)
+  let (perf, perf_pf) = charged_stroke(1.0, true)
+  assert_true(!plain_pf)
+  assert_true(perf_pf) // ideal contact (q ~ 1) qualifies for Perfect
+  assert_true(perf > plain * 1.05)
+}
+
+// Fraction of topspin shots that land in the opponent court at a given
+// overcharge, hit from the baseline.
+///|
+fn overcharge_in_rate(oc : Double) -> Double {
+  let g = @rng.Gauss::new(555)
+  let mut inn = 0
+  let mut tot = 0
+  for _i = 0; _i < 200; _i = _i + 1 {
+    // aim deep (toward the baseline) so the overcharge spray pushes balls out
+    let r = compute_stroke(
+      0.0, 11.2, 0.5, @physics.ideal_contact_h, 11.0, 0.0, 2.0, 8.0, test_stats,
+      Topspin, 0.0, 1.0, @rules.P, g, power_mul=1.0, overcharge=oc,
+    )
+    match r {
+      Some(s) => {
+        tot = tot + 1
+        let b = @physics.make_ball()
+        b.px = 0.5
+        b.py = @physics.ideal_contact_h
+        b.pz = 11.0
+        b.vx = s.vx
+        b.vy = s.vy
+        b.vz = s.vz
+        b.sx = s.sx
+        b.sy = s.sy
+        b.sz = s.sz
+        b.activate()
+        match @physics.predict_landing(b, @physics.surface_hard) {
+          Some(l) =>
+            if l.z < 0.0 &&
+              -l.z <= @physics.court_half_len + 0.1 &&
+              @vec.dabs(l.x) <= @physics.court_half_width + 0.1 {
+              inn = inn + 1
+            }
+          None => ()
+        }
+      }
+      None => ()
+    }
+  }
+  inn.to_double() / (if tot == 0 { 1 } else { tot }).to_double()
+}
+
+///|
+test "overcharge sprays the ball: fewer land in than a clean hit" {
+  @assist.set_assist_level(Off)
+  let clean = overcharge_in_rate(0.0)
+  let over = overcharge_in_rate(0.25)
+  assert_true(clean > over) // overcharge lowers the in-rate (more faults)
+  assert_true(over < 0.99) // and produces real out/net errors
+}
+
 ///|
 test "contact quality: whiff out of reach, full quality in the band" {
   @assist.set_assist_level(Off)
