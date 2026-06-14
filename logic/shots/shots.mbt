@@ -30,6 +30,26 @@ pub fn shot_def(t : ShotType) -> (Double, Double, Double) {
 ///|
 let reach_grace : Double = 0.2
 
+// Topspin/Slice charge enhancements (Appendix A.2). cc in [0,1] (overcharge caps
+// the enhancement at 1) amplifies each shot's identity.
+///|
+let topspin_charge_spin_gain : Double = 0.6
+
+///|
+let topspin_charge_angle : Double = 0.7
+
+///|
+let topspin_attack_shorten : Double = 5.5 // max pull toward the net (m)
+
+///|
+let topspin_attack_min_depth : Double = 4.0 // never pull closer than this (m)
+
+///|
+let slice_charge_back_gain : Double = 0.6
+
+///|
+let slice_charge_depth : Double = 2.0 // max extra depth toward the baseline (m)
+
 ///|
 pub(all) struct ContactQuality {
   q : Double
@@ -125,6 +145,7 @@ pub fn compute_stroke(
   power_mul~ : Double = 1.0,
   perfect_eligible~ : Bool = false,
   overcharge~ : Double = 0.0,
+  charge_cc~ : Double = 0.0,
 ) -> Stroke? {
   let cq = contact_quality(
     player_x, player_z, ball_x, ball_y, ball_z, vx, vy, vz, stats, side,
@@ -142,7 +163,8 @@ pub fn compute_stroke(
     @rules.P => -1.0
     @rules.C => 1.0
   }
-  let (def_speed_mul, def_theta_min, def_theta_max) = shot_def(typ)
+  let (def_speed_mul, def_theta_min, def_theta_max0) = shot_def(typ)
+  let mut def_theta_max = def_theta_max0
   let type_z = match typ {
     Flat => 6.5
     Topspin => 8.0
@@ -181,6 +203,42 @@ pub fn compute_stroke(
       // checks on the bounce. Speed scales with slice skill, not power.
       speed = (12.0 + 4.0 * stats.slc / 100.0) * @physics.eff_pace()
       spin_rpm = -@physics.slice_rpm(stats.slc) * (0.55 + 0.45 * q) * 0.9
+    }
+  }
+  // Topspin/Slice charge enhancements: charge amplifies each shot's identity.
+  let cc = @vec.clampd(charge_cc, 0.0, 1.0)
+  if cc > 0.0 {
+    match typ {
+      Topspin => {
+        // heavier topspin + wider cross-court angle
+        spin_rpm = spin_rpm * (1.0 + topspin_charge_spin_gain * cc)
+        tx = @vec.clampd(
+          tx * (1.0 + topspin_charge_angle * cc),
+          -(@physics.court_half_width - 0.3),
+          @physics.court_half_width - 0.3,
+        )
+        // short-angle "attack": under a high, controlled, angled hit, pull the
+        // landing toward the service line and drive it lower & faster.
+        let height_cond = if ball_y >= 1.0 { 1.0 } else { 0.0 }
+        let v_in = @vec.hypot3(vx, vy, vz)
+        let pace_ok = if v_in < 22.0 { 1.0 } else { 0.0 }
+        let angle_frac = @vec.clampd(@vec.dabs(aim_x), 0.0, 1.0)
+        let pull = topspin_attack_shorten * cc * height_cond * pace_ok * angle_frac
+        if pull >= 1.0 {
+          let cur = @vec.dabs(tz)
+          tz = z_sign * @vec.dmax(topspin_attack_min_depth, cur - pull)
+          speed = speed * (1.0 + 0.18 * cc) // low/fast drive
+          def_theta_max = @vec.dmax(20.0, def_theta_max - 8.0 * cc) // flatter
+        }
+      }
+      Slice => {
+        // deeper float with more bite (spin_rpm is negative -> grow magnitude)
+        spin_rpm = spin_rpm * (1.0 + slice_charge_back_gain * cc)
+        let cur = @vec.dabs(tz)
+        tz = z_sign *
+          @vec.dmin(@physics.court_half_len, cur + slice_charge_depth * cc)
+      }
+      _ => ()
     }
   }
   // charge: power scales the launch speed; a sweet-spot release (Perfect Hit)

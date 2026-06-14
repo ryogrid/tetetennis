@@ -196,6 +196,59 @@ test "overcharge sprays the ball: fewer land in than a clean hit" {
   assert_true(over < 0.99) // and produces real out/net errors
 }
 
+// Landing point of a single charged stroke from the baseline (fixed seed).
+///|
+fn landing_of(
+  typ : ShotType,
+  ball_y : Double,
+  aim_x : Double,
+  cc : Double,
+) -> (Double, Double) {
+  let r = compute_stroke(
+    0.0, 11.2, 0.5, ball_y, 11.0, 0.0, 2.0, 6.0, test_stats, typ, aim_x, 0.0,
+    @rules.P, @rng.Gauss::new(11), power_mul=1.0, charge_cc=cc,
+  )
+  match r {
+    Some(s) => {
+      let b = @physics.make_ball()
+      b.px = 0.5
+      b.py = ball_y
+      b.pz = 11.0
+      b.vx = s.vx
+      b.vy = s.vy
+      b.vz = s.vz
+      b.sx = s.sx
+      b.sy = s.sy
+      b.sz = s.sz
+      b.activate()
+      match @physics.predict_landing(b, @physics.surface_hard) {
+        Some(l) => (l.x, l.z)
+        None => (0.0, 0.0)
+      }
+    }
+    None => (0.0, 0.0)
+  }
+}
+
+///|
+test "slice charge extends depth toward the baseline" {
+  @assist.set_assist_level(Off)
+  let (_, z0) = landing_of(Slice, @physics.ideal_contact_h, 0.0, 0.0)
+  let (_, z1) = landing_of(Slice, @physics.ideal_contact_h, 0.0, 1.0)
+  // P hits toward -z; deeper landing = larger -z
+  assert_true(-z1 > -z0 + 1.0)
+}
+
+///|
+test "topspin charge short-angle attack: pulls shorter and wider" {
+  @assist.set_assist_level(Off)
+  // high, angled, slow-pace contact -> the attack triggers at full charge
+  let (x0, z0) = landing_of(Topspin, 1.2, 1.0, 0.0)
+  let (x1, z1) = landing_of(Topspin, 1.2, 1.0, 1.0)
+  assert_true(-z1 < -z0 - 2.0) // clearly shorter (toward the service line)
+  assert_true(@vec.dabs(x1) > @vec.dabs(x0)) // and pulled wider cross-court
+}
+
 ///|
 test "contact quality: whiff out of reach, full quality in the band" {
   @assist.set_assist_level(Off)

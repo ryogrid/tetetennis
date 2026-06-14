@@ -158,6 +158,17 @@ A **charge bar** (`host_charge`) shows the build-up and turns red in the overcha
 The CPU swings at neutral power (`cpu_charge` → `power = 1.0`); **Assist=Full** auto-charges
 and auto-releases at the sweet spot.
 
+**Charge enhancements** (scaled by `cc = min(charge, 1)`, so overcharge caps the effect)
+amplify each shot's identity (`shots.mbt`):
+
+- **Topspin** — spin ×`(1 + 0.6·cc)` and the cross-court target widens ×`(1 + 0.7·cc)`
+  (clamped to the sideline). A **short-angle attack** triggers when the contact is high
+  (≥1 m), angled (aiming sideways), and not jammed (incoming `< 22 m/s`): the landing is
+  pulled toward the service line by up to `5.5·cc m` (floored at 4 m from the net) and the
+  ball is driven lower and faster — a sharp dipping winner.
+- **Slice** — backspin ×`(1 + 0.6·cc)` and the target extends up to `2·cc m` deeper toward
+  the baseline, pinning the opponent back.
+
 ### 6.3 Contact quality (core mechanic)
 
 Where you meet the ball determines shot quality `q ∈ [0,1]`, the product of three factors
@@ -392,12 +403,6 @@ files to download (`src/audio.js`).
 The original design draft envisioned a richer system. **None of the following is in the
 current build** — the figures here are *proposed*, not measured from code. They are kept
 for reference and possible future work.
-
-### A.2 Topspin/Slice charge enhancements
-- Beyond the base charge → power (now implemented, §6.2), charge could further amplify
-  each shot's identity: topspin spin/angle gains, a "short-angle attack" pull toward the
-  service line with a low/fast drive solver; slice depth and float gains. *(The core
-  charge / Perfect-Hit / Overcharge / Safety / Whiff mechanic is implemented — §6.2.)*
 
 ### A.3 Situational shots
 - **Smash** — high point (≥1.7 m) × forecourt × Flat → a downward bomb (base ~42 m/s,

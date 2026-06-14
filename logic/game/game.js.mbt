@@ -579,6 +579,7 @@ fn attempt_contact(
   power_mul~ : Double = 1.0,
   perfect_eligible~ : Bool = false,
   overcharge~ : Double = 0.0,
+  charge_cc~ : Double = 0.0,
 ) -> Bool {
   let b = ms.ball
   if !b.active || ms.rally_phase != Live {
@@ -598,6 +599,7 @@ fn attempt_contact(
   let res = @shots.compute_stroke(
     e.pos_x, e.pos_z, b.px, b.py, b.pz, b.vx, b.vy, b.vz, e.stats, ty, aim_x,
     aim_depth, side, self.rng, power_mul~, perfect_eligible~, overcharge~,
+    charge_cc~,
   )
   match res {
     None => false // whiff
@@ -1092,9 +1094,10 @@ pub fn fixed_update(dt : Double) -> Unit {
     let aim_depth = -@ffi.host_move_z(self.host)
     let power_mul = 0.85 + 0.40 * @vec.dmin(ph.swing_charge, 1.0)
     let overcharge = @vec.dmax(0.0, ph.swing_charge - 1.0)
+    let charge_cc = @vec.dmin(ph.swing_charge, 1.0)
     if self.attempt_contact(
         ms, @rules.P, ph.swing_type, aim_x, aim_depth, power_mul~,
-        perfect_eligible=(!ph.swing_no_perfect), overcharge~,
+        perfect_eligible=(!ph.swing_no_perfect), overcharge~, charge_cc~,
       ) {
       ph.contact_done = true
     } else if ph.swing_t >= swing_contact_t + swing_window {
