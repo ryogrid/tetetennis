@@ -79,6 +79,9 @@ let volley_forecourt : Double = 7.0 // hit a still-airborne ball within this of 
 let serve_meter_period : Double = 1.2 // oscillating serve power meter period (s)
 
 ///|
+let open_court_enabled : Bool = true // Appendix A.6 floor highlight
+
+///|
 let serve_sweet_lo : Double = 0.70 // power-meter sweet-spot band
 
 ///|
@@ -1545,6 +1548,17 @@ pub fn frame_update(dt : Double) -> Unit {
     @ffi.host_sfx(h, "sfxReachAlert")
   }
   ms.was_in_reach = in_reach
+
+  // open-court highlight: the side the CPU has vacated, while you're on strike
+  if open_court_enabled &&
+    ms.point_state == Rally &&
+    ms.rally_phase == Live &&
+    ms.last_hit_by == Some(@rules.C) &&
+    @vec.dabs(ms.cpu.pos_x) > 1.0 {
+    @ffi.host_open_court(h, true, -@vec.dsign(ms.cpu.pos_x) * 2.7, -7.5)
+  } else {
+    @ffi.host_open_court(h, false, 0.0, 0.0)
+  }
 
   // serve power meter (replaces the old toss gauge)
   if ms.point_state == Serving && server(ms) == @rules.P && b.active {

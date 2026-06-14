@@ -2,6 +2,7 @@
 // + markers) and implements the render contract the MoonBit logic drives.
 // Also stores the latest per-side player pos/vel and the ball pos/active so the
 // camera rig can read them (createCameraRig(camera, renderHost)).
+import * as THREE from 'three';
 import { buildCourt } from './court.js';
 import { createBallEntity } from './entities/ball.js';
 import { createPlayerRig } from './entities/player.js';
@@ -16,6 +17,18 @@ export function createRenderHost(scene) {
   let ball = null;
   const players = [null, null]; // [human(side 0), cpu(side 1)]
   let surfaceId = 'hard';
+
+  // open-court highlight: a translucent patch on the CPU's vacated side
+  const openCourt = new THREE.Mesh(
+    new THREE.PlaneGeometry(3.4, 4.2),
+    new THREE.MeshBasicMaterial({
+      color: 0x50e678, transparent: true, opacity: 0.16, depthWrite: false,
+    }),
+  );
+  openCourt.rotation.x = -Math.PI / 2;
+  openCourt.position.y = 0.02;
+  openCourt.visible = false;
+  scene.add(openCourt);
 
   function startMatch(sid, pIdx, cIdx) {
     teardownMatch();
@@ -35,6 +48,7 @@ export function createRenderHost(scene) {
   }
 
   function teardownMatch() {
+    openCourt.visible = false;
     if (court) { scene.remove(court); court = null; }
     for (let i = 0; i < players.length; i++) {
       if (players[i]) { players[i].dispose(); players[i] = null; }
@@ -71,6 +85,10 @@ export function createRenderHost(scene) {
     },
     setReachColor(inReach) {
       if (players[0]) players[0].setReachZoneColor(inReach ? REACH_HOT : REACH_IDLE);
+    },
+    setOpenCourt(show, x, z) {
+      openCourt.visible = !!show;
+      if (show) { openCourt.position.x = x; openCourt.position.z = z; }
     },
 
     // advance every rig's cosmetic pose/stride + the ball spin/pulse. main.js

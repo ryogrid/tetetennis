@@ -372,6 +372,8 @@ you can't see your own contact point from there, several on-court aids are rende
   when your timing is right ("hit now").
 - **Reach circle** — a circle on the court that is **blue** normally and turns **pink**
   (with a rising tone) when the ball enters your striking range.
+- **Open-court highlight** (`host_open_court`, `open_court_enabled`) — a translucent green
+  patch on the side the CPU has vacated while you're on strike, marking where a winner is.
 - **Move-hint arrow** — points toward the sweet spot (turns into a green ◎ when you're on
   it), since it can sit behind the camera.
 - **Gauges** — vertical **toss** and **height** gauges and a **timing** meter during the
@@ -432,7 +434,6 @@ current build** — the figures here are *proposed*, not measured from code. The
 for reference and possible future work.
 
 ### A.6 Remaining UI
-- **Open-court floor highlight** (an `OPEN_COURT_ENABLED`-style toggle) — not present.
 - A **pause modal** (Resume/Quit with confirm).
 
 ### A.7 Sampled / richer audio

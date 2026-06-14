@@ -101,6 +101,15 @@ pub extern "js" fn host_serve_anim(h : Host, side : Int, on : Bool) -> Unit =
 pub extern "js" fn host_reach_color(h : Host, in_reach : Bool) -> Unit =
   "(h,r)=>h.render.setReachColor(r)"
 
+///|
+pub extern "js" fn host_open_court(
+  h : Host,
+  show : Bool,
+  x : Double,
+  z : Double,
+) -> Unit =
+  "(h,s,x,z)=>h.render.setOpenCourt(s,x,z)"
+
 // ---------------- camera ----------------
 // The camera reads the latest player/ball positions the logic already pushed.
 
