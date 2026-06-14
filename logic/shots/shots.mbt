@@ -63,6 +63,13 @@ let smash_theta_min : Double = -14.0
 ///|
 let smash_theta_max : Double = 2.0
 
+// Fast-ball jam / counter (Appendix A.3).
+///|
+let jam_threshold : Double = 26.0 // incoming pace (m/s) above which jamming starts
+
+///|
+let jam_scale : Double = 14.0 // m/s of excess pace that saturates the jam term
+
 ///|
 pub(all) struct ContactQuality {
   q : Double
@@ -306,6 +313,45 @@ pub fn compute_stroke(
     yaw_err = (rng.uniform() - 0.5) * 0.5
     speed = speed * 0.55
     spin_rpm = spin_rpm * 0.3
+  }
+  // Fast-ball jam + counter/redirect: incoming pace above ~26 m/s either jams a
+  // weak looping sitter (worst for topspin, best blocked with slice, reduced by
+  // charge prep and good posture) or, when handled cleanly, is redirected faster.
+  let in_pace = @vec.hypot3(vx, vy, vz)
+  let pace_over = @vec.dmax(0.0, in_pace - jam_threshold)
+  if pace_over > 0.0 {
+    let weakness = match typ {
+      Slice => 0.35
+      Flat => 0.60
+      Topspin => 1.00
+      Lob => 1.30
+      Drop => 1.30
+    }
+    let jam = @vec.clampd(
+      pace_over / jam_scale * weakness * (1.0 - 0.7 * cc) * (0.5 + 0.5 * (1.0 - q)),
+      0.0,
+      1.0,
+    )
+    if jam > 0.0 {
+      speed = speed * (1.0 - 0.55 * jam)
+      spin_rpm = spin_rpm * (1.0 - 0.7 * jam)
+      def_theta_min = def_theta_min + 6.0 * jam // loft the sitter up
+      def_theta_max = def_theta_max + 10.0 * jam
+      let cur = @vec.dabs(tz)
+      tz = z_sign * @vec.dmax(2.5, cur - 3.0 * jam) // and shorter
+      if jam > 0.3 {
+        mishit = true
+      }
+    }
+    // counter/redirect: a clean block/drive off pace comes back faster
+    let counter_gain = match typ {
+      Flat => 0.30
+      Slice => 0.30
+      Topspin => 0.12
+      _ => 0.0
+    }
+    speed = speed *
+      (1.0 + counter_gain * @vec.dmin(1.0, pace_over / 18.0) * (1.0 - jam) * q)
   }
   // slice drifts: a touch of vertical-axis spin (sign by court side of contact)
   let y_spin = if typ == Slice {

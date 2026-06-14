@@ -204,12 +204,23 @@ slightly shorter at low `q`) is offset by the movement keys held at contact
 - The target depth is clamped to the court (≈ 4.5–11.2 m from the net before error),
   and aim error can still push a line-seeking ball out — aiming the lines is riskier.
 
-### 6.5 Mishit (jammed return)
+### 6.5 Mishit, fast-ball jam & counter
 
-A **mishit** is triggered by *poor contact quality*, not a fixed pace threshold
-(`shots.mbt`): when `q < 0.3`, with probability **0.35** (0.15 with Assist on), the
-return is **slowed (×0.55), stripped of spin (×0.3), and yaw-skewed** — a weak, looping
-sitter. Setting up early (good posture) is how you avoid it.
+Two effects produce a weak return (`shots.mbt`):
+
+- **Posture mishit** — on *poor contact* (`q < 0.3`), with probability **0.35** (0.15 with
+  Assist on), the return is slowed (×0.55), spin-stripped (×0.3) and yaw-skewed.
+- **Fast-ball jam** — incoming pace above `jam_threshold = 26 m/s` jams the return,
+  scaled by **shot-type weakness** (Slice 0.35 → Flat 0.60 → Topspin 1.00 → touch 1.30),
+  reduced by **charge prep** (`×(1 − 0.7·cc)`) and good **posture** (`×(0.5 + 0.5·(1 − q))`).
+  A high `jam` slows the ball (×`(1 − 0.55·jam)`), kills spin, lofts it up and lands it
+  short — a sitter (flagged a mishit above `jam = 0.3`). So a full topspin swing breaks
+  down against pace while a **slice block** handles it; charging early tames the jam.
+
+**Counter / redirect.** Conversely, a *clean* hit off pace comes back faster: a
+`counter_gain` of **0.30** (Flat/Slice) or **0.12** (Topspin) × the excess pace × `(1 − jam)`
+× `q` is added to the launch speed — you borrow the opponent's pace. Normal rally speeds
+(≤ ~26 m/s) trigger neither effect.
 
 ### 6.6 Smash
 
@@ -399,11 +410,6 @@ files to download (`src/audio.js`).
 The original design draft envisioned a richer system. **None of the following is in the
 current build** — the figures here are *proposed*, not measured from code. They are kept
 for reference and possible future work.
-
-### A.3 Situational shots
-- **Fast-ball jam model** — a pace-threshold (>26 m/s) mishit weighted by shot type
-  (Slice block strongest, Topspin weakest), plus **counter/redirect** speed bonuses
-  (+~30 % Flat/Slice, +~12 % Topspin) for redirecting incoming pace.
 
 ### A.4 Serve power meter
 - An **oscillating power meter** (triangle wave, 0→1→0, ~1.2 s period) with a release

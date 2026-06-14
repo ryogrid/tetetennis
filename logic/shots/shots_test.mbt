@@ -326,6 +326,42 @@ test "volley: restrained power but tighter aim than a groundstroke" {
   assert_true(ax_v < ax_n) // and lands tighter to the aimed line
 }
 
+// Whether a stroke off an incoming ball of the given pace gets jam-mishit, hit
+// from an ideal contact with no charge prep.
+///|
+fn jam_mishit(typ : ShotType, in_pace : Double) -> Bool {
+  let r = compute_stroke(
+    0.0, 11.2, 0.65, @physics.ideal_contact_h, 11.0, 0.0, 0.0, in_pace,
+    test_stats, typ, 0.0, 0.0, @rules.P, @rng.Gauss::new(9),
+  )
+  match r {
+    Some(s) => s.mishit
+    None => false
+  }
+}
+
+///|
+fn flat_jam_speed(cc : Double) -> Double {
+  let r = compute_stroke(
+    0.0, 11.2, 0.65, @physics.ideal_contact_h, 11.0, 0.0, 0.0, 42.0, test_stats,
+    Flat, 0.0, 0.0, @rules.P, @rng.Gauss::new(9), power_mul=1.0, charge_cc=cc,
+  )
+  match r {
+    Some(s) => @vec.hypot3(s.vx, s.vy, s.vz)
+    None => 0.0
+  }
+}
+
+///|
+test "fast-ball jam: topspin jams off pace, a slice blocks it, slow balls are fine" {
+  @assist.set_assist_level(Off)
+  assert_true(jam_mishit(Topspin, 42.0)) // a full topspin swing breaks down
+  assert_true(!jam_mishit(Slice, 42.0)) // a slice block handles the pace
+  assert_true(!jam_mishit(Topspin, 10.0)) // normal rally pace never jams
+  // charging up the same shot against the same fast ball tames the jam
+  assert_true(flat_jam_speed(1.0) > flat_jam_speed(0.0))
+}
+
 ///|
 test "contact quality: whiff out of reach, full quality in the band" {
   @assist.set_assist_level(Off)
