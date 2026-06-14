@@ -2,7 +2,7 @@
 // Canonical assist-off balance; Monte-Carlo means use a fixed seed.
 
 ///|
-let test_stats : Stats = { pow: 70, spn: 70, slc: 60, srv: 60, spd: 60, ctl: 70, rea: 60 }
+let test_stats : Stats = { pow: 70, spn: 70, slc: 60, srv: 60, spd: 60, ctl: 70, rea: 60, net: 45 }
 
 // Mean launch speed + landing depth of a topspin stroke as the ball distance
 // (ball_x) moves from the ideal band out toward the reach limit.
@@ -386,7 +386,7 @@ fn serve_flight_p(
   ctl~ : Double = 95.0,
 ) -> (Double, Bool, Double) {
   @assist.set_assist_level(Off)
-  let stats : Stats = { pow: 74, spn: 70, slc: 60, srv: 85, spd: 60, ctl, rea: 70 }
+  let stats : Stats = { pow: 74, spn: 70, slc: 60, srv: 85, spd: 60, ctl, rea: 70, net: 45 }
   let g = @rng.Gauss::new(seed)
   let s = compute_serve(
     stats, type_, -0.35, 2.95, -11.9, @rules.C, Deuce, Body, 0.0, 0.0, power, g,

@@ -106,6 +106,7 @@ pub(all) struct Ai {
   mut swing_jitter : Double
   mut home_x : Double
   mut home_z : Double
+  mut at_net : Bool // rushing/holding the net this exchange
 }
 
 ///|
@@ -133,7 +134,27 @@ pub fn create_ai(character : @shots.Character, difficulty_id : String) -> Ai {
     swing_jitter: 0.0,
     home_x: 0.0,
     home_z: -12.3,
+    at_net: false,
   }
+}
+
+// Net-rush decision (Appendix A.5): rush on a short ball, scaled by the persona's
+// net tendency; fast incoming pace cancels the chance (a hard ball isn't a sitter).
+///|
+let net_chance_z : Double = 9.0
+
+///|
+let net_rush_required : Double = 1.0
+
+///|
+fn should_rush_net(net_tendency : Double, pred_z : Double, in_pace : Double) -> Bool {
+  let depth = @vec.dabs(pred_z) // strike point's distance from the net
+  if depth > net_chance_z {
+    return false
+  }
+  let chance = (net_chance_z - depth) / net_chance_z -
+    @vec.dmax(0.0, (in_pace - 18.0) / 30.0)
+  chance + net_tendency / 100.0 > net_rush_required
 }
 
 ///|
@@ -356,6 +377,8 @@ pub fn update_ai(ai : Ai, ctx : AiCtx, rng : @rng.Gauss) -> AiMove {
     ai.has_pred = false
     ai.pred_stamp = -1
     ai.home_x = @vec.dmax(-2.0, @vec.dmin(2.0, ctx.human_x * -0.2))
+    // after a net rush the AI holds a forward home position; else the baseline
+    ai.home_z = if ai.at_net { -6.5 } else { -12.3 }
     let (mx, mz) = seek(ctx.cpu_x, ctx.cpu_z, ai.home_x, ai.home_z, 0.25)
     return { ..no_swing, x: mx, z: mz }
   }
@@ -412,6 +435,12 @@ pub fn update_ai(ai : Ai, ctx : AiCtx, rng : @rng.Gauss) -> AiMove {
         ai.pred_z = p.z + ai.err_z * pos_err * 0.3 * shrink
         ai.pred_t_abs = ctx.game_time + p.t
         ai.has_pred = true
+        // decide whether to rush the net on this (short, slow) chance ball
+        ai.at_net = should_rush_net(
+          ai.stats.net,
+          ai.pred_z,
+          @vec.hypot3(ball.vx, ball.vy, ball.vz),
+        )
         if !ai.has_plan {
           let plan = choose_stroke(ai, ctx, p.x, p.z, rng)
           ai.plan_type = plan.type_
@@ -429,14 +458,16 @@ pub fn update_ai(ai : Ai, ctx : AiCtx, rng : @rng.Gauss) -> AiMove {
     return { ..no_swing, x: mx, z: mz }
   }
 
-  // run to a spot a bit behind/forehand of the strike point
+  // run to a spot near the strike point: a bit behind it normally, or a step in
+  // front of it (toward the net) when rushing to volley.
   let stand_x = @vec.dmax(
     @physics.player_x_min,
     @vec.dmin(@physics.player_x_max, ai.pred_x + 0.55),
   )
+  let z_off = if ai.at_net { 0.6 } else { -0.35 }
   let stand_z = @vec.dmax(
     -@physics.player_z_max,
-    @vec.dmin(-@physics.player_z_min, ai.pred_z - 0.35),
+    @vec.dmin(-@physics.player_z_min, ai.pred_z + z_off),
   )
   let (mx, mz) = seek(ctx.cpu_x, ctx.cpu_z, stand_x, stand_z, 0.08)
   let mut swing = false

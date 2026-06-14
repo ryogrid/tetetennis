@@ -311,9 +311,14 @@ The CPU is **never** eased by Assist.
 - **Shot selection** is weighted scoring over candidate targets: it favours the **open
   court** (distance from the human), penalises shots that force it to **run**, and applies
   a **per-persona style bias** (e.g. a grinder leans topspin, a slicer leans slice).
+- **Net rush (`should_rush_net`)**: on a short ball (the predicted strike point within
+  `net_chance_z = 9 m` of the net) that isn't fast, the AI rushes in to volley if its
+  **net-tendency** stat clears the chance threshold (`chance + net/100 > 1`). Incoming
+  serve-pace cancels the chance, so it won't charge a hard ball. When rushing it stands a
+  step **in front** of the strike point and then **holds a forward home position**
+  (`home_z = −6.5`) until a deep ball pushes it back.
 
-The AI does **not** currently model an explicit baseline-vs-net stance, rush the net /
-volley, or run special serve-return positioning (Appendix A).
+Serve-return positioning is still default-baseline (Appendix A.5).
 
 ### 9.2 Difficulty
 
@@ -332,18 +337,19 @@ shot-selection randomness.)
 
 ### 9.3 Characters / personas
 
-Five personas (`logic/shots/characters.mbt`), each with seven 0–100 stats
-**pow / spn / slc / srv / spd / ctl / rea** (power, spin, slice, serve, speed, control,
-reaction). The CPU plays with the same physics and a shot-selection bias from its
-`style`. The JS UI shows these stats as bars on the persona cards.
+Five personas (`logic/shots/characters.mbt`), each with eight 0–100 stats
+**pow / spn / slc / srv / spd / ctl / rea / net** (power, spin, slice, serve, speed,
+control, reaction, net-tendency). The CPU plays with the same physics, a shot-selection
+bias from its `style`, and a net-rush threshold from `net`. The JS UI shows these stats on
+the persona cards.
 
-| Persona | Archetype | pow | spn | slc | srv | spd | ctl | rea |
-|---|---|---|---|---|---|---|---|---|
-| **Boom** | Big Server | 85 | 45 | 50 | 96 | 55 | 58 | 88 |
-| **Rojo** | Spin Grinder | 74 | 96 | 55 | 62 | 82 | 70 | 60 |
-| **Dash** | Counterpuncher | 55 | 65 | 60 | 50 | 96 | 88 | 55 |
-| **Sly** | Slice Specialist | 60 | 38 | 95 | 74 | 72 | 80 | 70 |
-| **Ace** | All-Rounder | 74 | 72 | 70 | 74 | 74 | 74 | 70 |
+| Persona | Archetype | pow | spn | slc | srv | spd | ctl | rea | net |
+|---|---|---|---|---|---|---|---|---|---|
+| **Boom** | Big Server | 85 | 45 | 50 | 96 | 55 | 58 | 88 | 55 |
+| **Rojo** | Spin Grinder | 74 | 96 | 55 | 62 | 82 | 70 | 60 | 22 |
+| **Dash** | Counterpuncher | 55 | 65 | 60 | 50 | 96 | 88 | 55 | 35 |
+| **Sly** | Slice Specialist | 60 | 38 | 95 | 74 | 72 | 80 | 70 | 58 |
+| **Ace** | All-Rounder | 74 | 72 | 70 | 74 | 74 | 74 | 70 | 45 |
 
 ## 10. Camera & Visual Hints
 
@@ -412,8 +418,6 @@ current build** — the figures here are *proposed*, not measured from code. The
 for reference and possible future work.
 
 ### A.5 Smarter AI
-- Explicit **baseline vs. net** tactical stance per incoming ball, tuned by a per-persona
-  **Net Tendency** stat; net rushing and staying forward after the rush.
 - **Serve-return positioning** that bisects the wide/centre-T angle, dynamic at higher
   difficulty.
 - **Probabilistic, difficulty-scaled** out-tolerance (borderline outs occasionally
