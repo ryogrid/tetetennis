@@ -1,223 +1,407 @@
 # GAME_DESIGN — 3D Tennis Game : tetetennis
 
+> **Scope of this document.** Sections 1–13 describe the game **as it is actually
+> implemented** today, with parameters taken from the source of truth (the MoonBit
+> logic layer under `logic/` and the JS render/sound layer under `src/`). A short
+> source pointer (e.g. `logic/physics/constants.mbt`) follows the figures that come
+> from a specific file. **Appendix A** collects design ideas from the original draft
+> that are **not yet implemented**, preserved so the broader vision isn't lost — none
+> of it is in the build.
+
 ## 1. Concept
 
-Focus on real ball behavior and tactics. Not casual game.
+A physically-grounded 3D tennis game played in the browser: one human vs. the CPU,
+with real ball flight (aerodynamic drag + Magnus lift) and surface-dependent bounces.
+The emphasis is on positioning and shot quality rather than twitch reflexes — *where*
+and *how high* you meet the ball matters more than mashing a button.
 
-## 2. Rules & Match Settings
+## 2. Architecture
 
-Adopts a simplified version of real-world tennis.
+The game is split into two layers (see `design_docs/refactor-moonbit-layers.md`):
 
-- **Points**: 0 → 15 → 30 → 40 → Game. 40-40 is Deuce. 
-  After Deuce, it goes to Advantage → Game (No "No-Ad" scoring).
-- **Match**: 1 set match ( including tiebreak)
-- **Serve Right**: Alternates every game. The player serves first.
-- **Serve Position**: Deuce side (right) if the total point count is even, Ad side (left) if odd. 
-  Must land in the diagonally opposite service box. 2 consecutive faults result in a double fault (point lost).
-- **No Court Changes** (The player is always positioned on the near side for simplicity).
-- **No Lets (Net-in Serves)**: If the ball touches the net but lands in the correct box, it remains in play.
-- **In/Out Judgment**: A point is lost if the struck ball does not land inside the opponent's court (within the singles lines; on the line is IN) on its first bounce. A point is also lost if the ball bounces on your own side (fails to cross the net). Allowing the ball to bounce twice results in a point lost for the receiver.
+- **Game-logic layer — MoonBit (`logic/`)**, compiled to a JS ES module via
+  `moon build --target js`. It owns all state and simulation: ball physics, bounce,
+  stroke/serve models, scoring, the CPU AI, and the point/rally/menu state machines.
+- **Render/sound layer — JavaScript + Three.js (`src/`)**, bundled by Vite. It draws
+  the court, plays Web Audio, renders the DOM HUD/menus, reads input, and exposes a
+  flat FFI API the logic layer drives.
 
-## 4. Shot System
+**Determinism.** All randomness flows through a seeded RNG (`logic/rng/`,
+mulberry32 + Box–Muller gauss) rather than `Math.random`, so a given seed and input
+stream reproduce a match exactly. Physics is bit-exact between the native and JS
+backends (`moon test --target js`).
 
-### 4.1 Properties of the 5 Shot Types
+## 3. Rules & Match Settings
 
-| Type | Trajectory | Speed | Spin | After Bounce | Primary Use / Risk |
-|---|---|---|---|---|---|
-| Flat | Low | Fastest | None | Normal | Finishing shot. Highest risk of hitting the net or going out. |
-| Topspin | High | Medium | Topspin (Dips) | High and fast | Reliable staple for rallies. Low risk. |
-| Slice | Low | Slow | Backspin (Floats) | Low and skids | Buys time / disrupts rhythm. If hit too high, it gets crushed. |
-| Lob | Very High | Slow | Light Topspin | Drops deep | Used to pass an opponent rushing the net. |
-| Drop | Low | Slowest | Backspin | Barely bounces | Forces a baseline-hugging opponent to run forward. Easily countered if not placed well. |
+A simplified but faithful subset of real tennis (`logic/rules/rules.mbt`).
 
+- **Points**: 0 → 15 → 30 → 40 → Game. 40–40 is **Deuce**, then **Advantage → Game**
+  (traditional advantage scoring; no No-Ad).
+- **Match**: a single set. First to **6 games with a 2-game lead**; at **6–6** a
+  **tiebreak** is played (first to **7 points, win by 2**). The number of games to win
+  is **fixed** — there is no "games-to-win" selector.
+- **Serve right** alternates every game; the human serves first.
+- **Serve side**: Deuce (right) when the game's point count is even, Ad (left) when
+  odd. The serve must land in the diagonally opposite service box. **Two faults =
+  double fault** (point lost).
+- **Lets**: if a serve clips the net but still lands in the correct box, it is a
+  **let and is replayed** (`game.js.mbt:let_serve`) — i.e. traditional lets, not
+  "play-on".
+- **No court changes**: the human always occupies the near (+z) side; the CPU the
+  far (−z) side.
+- **In/Out**: a point is lost if a struck ball's first bounce is outside the singles
+  court, or if it fails to cross the net (bounces on the hitter's own side). A second
+  bounce on the receiver's side ends the point. On-the-line is **in** — judged with a
+  grace equal to the ball radius (`line_grace = 0.033 m`).
 
-### 4.3 Shot Placement
+## 4. Court & Surfaces
 
-The default landing point is defined per shot type (middle-to-deep opponent court), which is then offset by the movement keys pressed at the time of impact:
+Court geometry (SI units, Y-up, net plane at z = 0; `logic/physics/constants.mbt`):
 
-- A / D: $\pm2.6m$ left/right (towards the singles lines)
-- W: $2.0m$ deeper (towards baseline) / S: $2.0m$ shorter
-- Target points are clamped to a 0.3m inner margin of the court lines, but quality noise can push the ball out (= higher risk when aiming for lines).
+| Quantity | Value |
+|---|---|
+| Court half-length (baseline) | 11.885 m |
+| Singles half-width | 4.115 m |
+| Doubles half-width | 5.485 m |
+| Service line (from net) | 6.40 m |
+| Net height — centre / post | 0.914 m / 1.07 m |
 
-### 4.4 Charge Shot (Release Mechanism)
+Three surfaces set the bounce. `ey` is the vertical restitution at the ITF drop-test
+impact speed; `μ` is the sliding-friction coefficient applied as a Coulomb impulse:
 
-**Hold the shot key to build power, and hit the ball the moment you release it:**
+| Surface | `ey` | `μ` | Feel |
+|---|---|---|---|
+| **Clay** | 0.81 | 0.80 | slow, high bounce; topspin kicks, slices check |
+| **Hard** | 0.75 | 0.56 | medium pace, true bounce |
+| **Grass** | 0.66 | 0.38 | fast, low; slices skid, big serves dominate |
 
-- Charge amount $c$ builds from 0 to 1.0 over 0.8 seconds, and can increase up to a maximum of 1.25 (**Overcharge**). Power is determined by the charge amount **at the moment of release**.
-- **Hit Timing**: The moment you release the charge key, you hit the ball if it is within reach. **If the ball is in the core (sweet spot) when released, it triggers a Perfect Hit** (§4.4.1). If you don't release it, a **Safety Hit** (no perfect bonus) triggers right before the ball escapes your reach so the rally continues. "Right before escaping" is evaluated on 2 axes: **moving away horizontally** (normal passing balls) or **dropping too low** (`SAFETY_DROP_Y` or lower, for lobs/smashes dropping straight down). However, **while the ball is still clearly approaching horizontally** (`closingRate > SAFETY_APPROACH_RATE`), the vertical safety won't trigger, leaving room to aim for a perfect hit (prevents premature safety hits at the edge of your reach when rushing in to take a low ball early).
-  Releasing outside of reach results in a **Whiff** (0.25s charge cooldown).
-- **Power**: Ball initial velocity is multiplied by `0.85 + 0.40 × min(c, 1)` (Stacks with the quality power coefficient).
-- **Overcharge Risk**: If $c > 1$, an aim error of `(c − 1) × 2.8m` is added, and the net clearance margin shrinks. Going for maximum power increases out/net faults.
-- **Post-Impact Stiffness**: Movement is nearly halted (12%) for 0.35 seconds immediately after hitting. You cannot unnaturally sprint smoothly through a hit.
+Restitution falls with impact speed
+(`eyEff = ey · clamp(1 − 0.012·(|vy_in| − 7.1), 0.65, 1)`), so hard-hit balls rebound
+proportionally lower — a non-rigid-ball effect anchored to the ITF test.
 
-→ Strategy: In addition to deciding between "setting up early to hit hard" and "moving till the last second for a safe return", you must read the **release timing** to catch the sweet spot. Holding it too long (Overcharge) leads to self-destruction.
+## 5. Ball Physics
 
-#### 4.4.1 Perfect Hit / "Just Meet" (Release Timing Bonus)
+Per-frame flight integrates gravity, aerodynamic drag, and Magnus lift at a fixed
+`dt = 1/240 s` (`logic/physics/`):
 
-**If the ball is in the core (sweet spot = hit point distance `JUST_SWEET_DIST` $\le 1.0m$) at the exact moment of release, it triggers a "Perfect Hit"**, granting a modest bonus (IMPROVEMENTS §6.1.1). Missing the sweet spot simply results in a normal hit with **no penalty** (an optional mechanic to raise the skill ceiling).
+| Quantity | Value |
+|---|---|
+| Gravity `g` | 9.81 m/s² |
+| Ball mass / radius | 0.057 kg / 0.033 m |
+| Air density `ρ` | 1.21 kg/m³ |
+| Drag coefficient `Cd` | 0.55 |
+| Max lift coefficient `Cl_max` | 0.40 |
+| Spin-decay time constant `τ` | 7.0 s |
 
-- **Input**: Charge (Hold) → **Release** the moment the ball enters the sweet spot. You can aim for it as long as the ball is in the core, but **faster balls pass through the sweet spot quicker**, naturally making it harder (aligns with §4.6 difficulty of handling fast balls). If held too long, it triggers a safety hit once it leaves the sweet spot.
-- **Bonus** (Modest): Initial Speed $\times1.08$ / Aim Error $\times0.6$ (more accurate) / Spin $\times1.12$.
-- **Visual/Audio**: A glowing gold-white ring and sparks appear at the contact point, the ball gets a gold halo/trail during flight, and the hit sound includes a clear bell harmonic (Audio §10 `just`). Determinism is maintained (timing-dependent only, no RNG).
-- **Timing Hint**: A **Convergence Ring** is displayed at the player's feet. As the ball approaches, the outer ring shrinks, **turning gold and pulsating when in the sweet spot to indicate "Release Now"**. Time to impact is calculated via forward simulation (`BallSim.predictReach`), appearing approx. 0.6 seconds before contact.
+**Global pace.** Every shot's base launch speed is scaled by `pace = 0.64` (slower balls
+leave more time to read and position). A runtime `pace_factor` multiplies
+this; it is **0.85 while the Assist axis is On/Full** (§8) and 1.0 otherwise, so the
+effective pace is `eff_pace = 0.64 × pace_factor`.
 
-#### 4.4.2 Topspin/Slice Charge Enhancements (Amplifying Traits)
+## 6. Shot System
 
-In proportion to the normalized charge amount `cc = min(charge/CHARGE_MAX, 1)`, the defining characteristics of Topspin and Slice are amplified (effect maxes out at full charge; overcharge caps at cc=1. Flat only boosts speed). This replicates how "heavy topspin" or "deep slice" works in real tennis.
+### 6.1 Shot types
 
-**Topspin (Charge boosts "Dipping, Sharp Angles, and Short-Angle Attacks")**
-- **Spin ↑**: `spinScalar = 260 × (1 + TOPSPIN_CHARGE_SPIN_GAIN·cc)` (Gain=0.6, $\times1.6$ at full charge). Stronger Magnus effect causes extreme dipping, landing shorter for the same net clearance.
-- **Lateral Angle ↑**: Lateral offset of landing target expands by `×(1 + TOPSPIN_CHARGE_ANGLE·cc)` (Gain=0.7), clamped at sidelines. Depth (z) is unchanged. More charge allows for extreme cross-court angles.
-- **"Short-Angle Attack" pulling the target to the center (only under good conditions)**:
-  - Pull amount `pull = TOPSPIN_ATTACK_SHORTEN(5.5m) × cc × heightCond × paceOk × angleFrac`.
-    - `heightCond`: 1 if hit point is high enough.
-    - `paceOk`: 1 if not jammed by incoming pace.
-    - `angleFrac`: 1 if aiming laterally.
-  - Pulls `target.z` closer to the net by `pull` (landing near the service line). Clamped by `TOPSPIN_ATTACK_MIN_DEPTH` (4.0m from net) to avoid netting.
-  - If conditions are bad (low point/jammed), hitting center, or uncharged, pull $\approx 0$, keeping the default deep target.
-- **Triggers Low & Fast Drive only when Short-Angle Attack succeeds** (`pull >= 1.0m`):
-  - Switches to the speed-prioritized drive solver (like Flat shots). Initial speed is scaled but not quite as fast as Flat.
-  - Shaves net margin by `×(1 − TOPSPIN_CHARGE_NETLOW·cc)` (Gain=0.7) to keep the ball low.
-  - If pull < 1.0m, uses standard converging solver for stable rally arcs, merely flattening the apex slightly.
-- **Bounce ↑**: Spin component in the forward direction adds to vertical velocity upon bounce. Heavy balls kick up high, forcing high hit points for opponents (Real tennis "kick"). Does not affect slices.
+Four shot types exist (`logic/shots/shots.mbt`, `ShotType`). Each defines a speed
+multiplier and a launch-angle band `(speed_mul, θ_min°, θ_max°)`:
 
-**Slice (Charge boosts "Deep floating and Low skidding")**
-- **Backspin ↑**: `spinScalar = -180 × (1 + 0.6·cc)` ($\times1.6$ at full charge). Hang time increases, flying deeper, then stalling and skidding low upon bouncing.
-- **Depth ↑**: Extends target towards baseline by `2.0m × cc` (clamped inside court). Keeps the opponent pinned to the baseline to buy time for repositioning.
+| Type | speed_mul | θ band | Role |
+|---|---|---|---|
+| **Flat** | 1.00 | 0°–16° | fastest, lowest line; finishing shot, highest net/out risk |
+| **Topspin** | 0.85 | 10°–32° | arcs over the net and dips; reliable rally staple |
+| **Slice** | 0.76 | 1°–16° | slow floater, stays low and skids; buys time |
+| **Lob** | 1.00 | 28°–55° | high, deep defensive ball |
 
-→ Strategic Breadth: No charge or light charge yields neutral balls (connecting/repositioning), while full charge maximizes each shot's strengths for high-quality plays.
+The human selects **Flat / Topspin / Slice** directly. **Lob is not directly
+selectable**: it is auto-substituted as a forced defensive ball when the player is
+*stretched* (reaching at the edge of range) and not already slicing
+(`shots.mbt`, `cq.stretched && typ != Slice → Lob`). The CPU may also produce lobs.
 
-### 4.5 Impact of Hit Point, Court Position, and Ball Pace (Core Strategy)
+Spin RPM is stat- and quality-scaled: Flat `300 + 400·q`; Topspin
+`(2200 + 2600·spn/100)·(0.5 + 0.5·q)`; Slice `−(1500 + 1800·slc/100)·(0.5 + 0.5·q)`;
+Lob a light `500`. Slice also gets a touch of vertical-axis spin so it drifts toward
+the contact side.
 
-"Where, how high, and with what pace you hit" drastically alters the shot. Contextual modifiers apply to the base shots (§4.1), meaning **just hitting the ball back won't be stable; contextual decision-making is required**.
+### 6.2 Input & swing timing
 
-Leverage `lev = clamp((h−0.9)/0.9, −1, +1)` is derived from hit point height `h` (Low=negative, Normal=0, High=positive). Position is depth from net `depth = |hitPos.z|`, "Forecourt" is `< service line (6.4m)`. Incoming ball pace is `vIn`.
+Shots are **instant-press**, not charged (`src/input.js`):
 
-- **Smash (High Point × Forecourt × Flat)**: Hitting Flat at a high point ($\ge 1.7m$) in the forecourt (within 8.5m of net) becomes a **Smash**. Massive speed boost (Base 42 m/s, up to +45% via charge) to slam it downward. Less affected by low quality. → A finisher for high bounces or short lobs. Deep at the baseline, it's just a high flat shot.
-- **Power at Low Hit Points risks Out/Net**: Strongly hitting a low ball (lev < 0) means you must lift it, but the added power pushes it **too deep, highly risking an Out**, or if Flat, catching the Net. Amplified in the forecourt (less court behind). → Safe returns with Topspin/Slice are correct for low balls.
-- **Topspin at High Hit Points can create Sharp Angles**: Topspin on high balls (lev > 0) widens lateral aim by up to +85% and adds spin to dip it, enabling **sharp cross-court angle shots**.
-- **Forecourt Flat Depth Risk**: Smashing a Flat shot from low-mid heights while rushed forward easily goes Out due to the short court length left. Requires hitting high (smashing), angling, or easing pace to attack safely.
-- **Incoming Ball Pace**:
-  - **Counter/Redirect**: Meeting fast balls with Flat/Slice uses the opponent's pace, returning faster than your own effort (approx +30% speed boost. Topspin gets ~12%).
-  - **Fast Ball Control Difficulty**: If `vIn` exceeds 17 m/s, poor posture (low quality) severely disrupts aiming. Running and swinging hard at fast balls causes self-destruction.
-  - **Pace Absorption Difficulty**: Touch shots (Drop/Lob) are hard to execute from fast balls (higher error) and succeed best against slow balls.
+- **Keyboard**: move with the Arrow keys; **Z/J = Flat, X/K = Topspin, C/L = Slice**;
+  **Space** tosses/serves.
+- **Touch**: an analog thumbstick (left) to move; a single **SHOT** button (right) that
+  tosses/serves and hits strokes — the shot type is chosen **at random** each swing.
 
-→ Design Intent: These stack smoothly, so normal baseline rallies (mid height, mid pace) remain stable, but **extreme situations (near net, high/low points, fast pace, on the run) yield drastically different results**. You must constantly judge "when to rush the net," "how to use high balls," and "whether to counter or absorb fast balls."
+A swing lasts `swing_dur = 0.45 s` and makes contact at `swing_contact_t = 0.18 s` into
+the animation. The **human gets a forgiving timing window** of ±`swing_window = 0.09 s`
+around that contact point: each frame in the window the game tries to meet the ball, and
+connects as soon as the ball is within reach. **The CPU's contact is exact.** There is
+**no charge/hold mechanic and no release-timing bonus** — the on-screen timing/sweet-spot
+aids (§10) only help you *position and time the swing*; they grant no power/spin/accuracy
+multiplier.
 
-### 4.6 Returning Fast Balls (Jammed / Mishit)
+### 6.3 Contact quality (core mechanic)
 
-Fast balls, such as smashes, are **hard to catch in the core and hit cleanly**, even if you reach them. If preparation (charge) is low, you get **jammed**, resulting in a **weak, looping return (a sitter or chance ball)**. This gives tactical value to smashes (hitting harder forces weaker returns).
+Where you meet the ball determines shot quality `q ∈ [0,1]`, the product of three factors
+(`shots.mbt:contact_quality`). The ideal contact is the ball at **waist height
+(0.85 m)**, an **arm-plus-racket length to the side (0.65 m)**
+(`constants.mbt:ideal_contact_h/_r`):
 
-Based on real tennis theory, shot types handle fast pace differently:
+- **`q_dist`** — distance from that ideal side-offset. A flat "1.0" band runs from
+  0.30 m out to **0.90 m** (0.65 + 0.25), then falls off to the reach limit; jamming the
+  ball against the body (closer than 0.30 m) caps quality below 1.
+- **`q_height`** — penalty for meeting the ball away from waist height (tolerance band
+  ±0.30 m, then a falloff capped at 0.55).
+- **`q_speed`** — fast incoming balls are harder: `clamp(1 − (v_in − 18)/55, 0.65, 1)`.
+  Above ~18 m/s of incoming pace, poor posture starts to bite.
 
-- **Slice (Block) is the strongest**: Short backswing uses the incoming pace. Pro staple for fast serve returns. Skids low on return.
-- **Flat is intermediate**: Can counter the pace but requires strict timing.
-- **Topspin is the weakest**: Requires a full swing and precise timing, making it the most prone to breaking down against fast balls (unless **adequately prepared via charging**, allowing for fierce returns).
-- Touch shots (Lob/Drop) are the hardest against fast balls.
+Reach scales with the `rea` stat — `(1.25 + 0.25·rea/100)·1.5`, i.e. **≈ 2.08–2.21 m**
+across the roster (theoretical 1.875–2.25 m); the human gets +0.2 m grace.
+A **whiff** (no contact, ball plays on) occurs when the ball is out of reach
+(`d > reach`) or above the overhead limit (`h > 1.15 + reach`).
 
-The Jammed/Mishit degree `mishit` (0 to 1) is determined by "how much the ball exceeds the threshold (26 m/s) × Shot type weakness × (1 − preparation from charging) × Posture (Quality)". Higher `mishit` means the return is **slower, higher, and shorter** (a sitter) with lost spin. Charging and blocking with Slice handles pace, while lazily tapping Topspin results in a floating perfect setup for the opponent.
+Low `q` widens the error model: lateral/depth aim noise and a small speed/spin jitter
+all scale with `(1 + 2.2·(1 − q))`, so "hitting hard from a bad position" sprays the
+ball. This is the central risk/reward dial.
 
-→ Tactics: Hitting smashes from the front will likely jam the opponent into a weak return, setting up a winning shot. Conversely, when facing hard shots, **charging early and blocking with Slice** is safe. Normal rally speeds (up to ~25 m/s) do not trigger mishits.
+### 6.4 Shot placement & aim
 
-### 4.7 Net Play (Volley)
+A per-type default landing depth (Flat 6.5 m, Topspin 8.0 m, Slice/Lob 5.5 m, pulled
+slightly shorter at low `q`) is offset by the movement keys held at contact
+(`shots.mbt`):
 
-Hitting the ball before it bounces near the net (forecourt) with Flat/Slice results in a **Volley**. 
-It is a **block/punch** without a full follow-through, meaning power is restrained but **aim is highly accurate**, and charging has little effect. It is a means to **accurately finish** weak balls by rushing forward, separate from baseline power shots.
-- High hit point ($\ge 1.7m$) forecourt Flats prioritize **Smashes** (§4.5).
-- Against a volleyer, **Lobs** (over the head) or **Passing Shots** (down the line/sharp cross) are effective — it becomes a mind game of risk vs reward for rushing the net. AI Personas also dictate net rushing (§7.1).
+- **Left/Right** (A/D, or aim direction): up to **±2.8 m** laterally.
+- **Deep/Short** (W/S): up to **±2.4 m** in depth.
+- The target depth is clamped to the court (≈ 4.5–11.2 m from the net before error),
+  and aim error can still push a line-seeking ball out — aiming the lines is riskier.
 
-## 5. Serve
+### 6.5 Mishit (jammed return)
 
-### 5.1 Serve Types
+A **mishit** is triggered by *poor contact quality*, not a fixed pace threshold
+(`shots.mbt`): when `q < 0.3`, with probability **0.35** (0.15 with Assist on), the
+return is **slowed (×0.55), stripped of spin (×0.3), and yaw-skewed** — a weak, looping
+sitter. Setting up early (good posture) is how you avoid it.
 
-Besides direction (A/D), you can **select the serve type** (J/K/L before serving. Default: Flat). Replicates the 3 major serves in tennis:
+## 7. Serve
 
-| Type     | Speed   | Spin             | Bounce                     | Characteristics & Tactics                                                                 |
-| -------- | ------- | ---------------- | -------------------------- | ----------------------------------------------------------------------------------------- |
-| Flat     | Fastest | Almost None      | Low, Straight              | Fastest but minimal margin of error. Primary 1st serve weapon.                            |
-| Slice    | Medium  | Sidespin         | Skids low, curves sideways | Forces opponent wide to open the court. Safer.                                            |
-| Top Spon | Slow    | Heavy Top + Side | High, kicking up           | High net clearance, very safe. Kicks high to push opponent back/up. Staple for 2nd serve. |
+### 7.1 Serve types
 
-→ Tactics: Go aggressive on the 1st serve (Flat/Slice), and if faulted, play it safe on the 2nd serve (Kick). Because Kick serves bounce high, opponents are forced to hit at a high point, potentially jamming them or ruining their posture.
+Three serves (`logic/shots/serve.mbt`, `ServeType`), each `(speed_mul, θ_min°, θ_max°)`:
 
-### 5.2 Serve Controls & Power
+| Type | speed_mul | θ band | Tactics |
+|---|---|---|---|
+| **Flat** | 1.00 | −6°–4° | fastest, lowest margin; primary 1st-serve weapon |
+| **Slice** | 0.84 | −4°–6° | curves the receiver wide to open the court |
+| **Kick** | 0.64 | 2°–14° | high net clearance, high bounce; the safe 2nd serve |
 
-1. After being placed at the default serve position, **you can move laterally within the serve side's boundaries** ($x$: $\pm0.25m$ from center mark to singles line, $z$: 0.2 to 2.5m behind baseline). Allows mind games like shifting wide for angles. Pressing `Space` starts the oscillating power meter (0→1→0, 1.2s period triangle wave). Cannot move while meter is active.
-2. The value $p$ exactly at the moment of release determines power. A/D selects left/right within the service box.
-3. Judgment:
-   - `p ∈ [0.70, 0.88]` — Sweet spot. Fast and accurate.
-   - `p > 0.88` — Overpower. Fast but highly inaccurate, high fault rate.
-   - `p < 0.70` — Speed and error scale proportionally (safe but slow).
-4. Controls are identical for the 2nd serve after a fault. Double fault loses the point.
+Serve type is chosen before the toss (the human can pick; the CPU plans Flat/Slice on
+1st serve, Kick on 2nd). The launch speed is
+`serve_flat_speed(srv) · (0.68 + 0.32·q_serve) · type_mul`, where
+`serve_flat_speed = (40 + 16·srv/100) · eff_pace` (`constants.mbt`, `serve.mbt`), `q_serve`
+is the toss-timing quality (§7.2), and `type_mul` is the table value above. In practice
+serves land around **~15–35 m/s** — a well-tossed Boom flat (`srv = 96`, classic pace) tops
+out at ≈ 35 m/s, while kick second serves and weaker servers sit much lower.
 
-**Ball Speed**: Initial speed maps `SERVE_SPEED_MIN (30)` to `MAX (56)` based on power, multiplied by shot type modifier (Flat=1.0 / Slice=0.9 / Kick=0.8) and Persona's `serveSpeedMul` (max ~1.12). A Big Server's top serve hits ~62 m/s ($\approx 226$ km/h), **making returns extremely difficult if the direction isn't read**.
+### 7.2 Serve control — the toss gauge
 
-**Post-Serve Stiffness (Risk)**: Immediately after serving, movement drops drastically (`SWING_LOCK_MOVE_FACTOR`) for a duration based on power (`SERVE_RECOVERY_MIN + SERVE_RECOVERY_GAIN·power`). **Harder serves entail longer stiffness** (~0.75s for top serve). Hitting the fastest serve from the absolute edge means **you cannot recover position, making good returns an easy Return Ace**.
+Serving is **toss-timing**, not a power meter (`game.js.mbt`, `host_gauge "toss"`):
 
-→ Strategy: Risk/reward between 1st and 2nd serves, plus the risk that **serving "faster and wider" leaves you wide open**. Balance speed, placement, and recovery rather than always spamming top-speed wide serves.
+1. After being placed, the server may shift laterally within the serve side for angle.
+2. Press **Space** to toss. As the ball rises and falls, a **vertical toss gauge** shows
+   its height; a **green band** marks the ideal contact height. You hit by timing the
+   strike near the top of the toss.
+3. Serve quality is `q_serve = 0.4 + 0.6·max(0, 1 − |y − contact_h| / 0.7)` — best when
+   the ball is struck within **±0.15 m** of the ideal contact height (the green band),
+   scaling smoothly to a 0.4 floor otherwise. (`contact_h ≈ 2.55–3.1 m`, stat-scaled.)
+4. After serving, movement is briefly locked (post-serve recovery), longer for harder
+   serves — fast wide serves leave you out of position.
 
-### 6.3 Open Court
+### 7.3 Faults
 
-Making the AI run left and right out of the center works because the AI moves honestly to the predicted landing point. Hitting to the vacated side will score a winner. Total running distance is tracked in the post-match stats.
-*Note: The floor highlight visual for open courts has been **disabled** for being too visually noisy (`OPEN_COURT_ENABLED` ).*
+A serve missing the box is a **fault**; the first fault drops you to a 2nd serve, a
+second fault is a **double fault** and loses the point.
 
-## 7. AI
+## 8. Assist System
 
-### 7.1 Behavior Model
+A player-side **Assist axis**, decoupled from CPU difficulty and chosen at the title
+(`logic/assist/`, default **On**):
 
-- During rallies, the AI moves to the ball's **predicted landing point** (after a reaction delay). When not hitting, it returns to a home position (near the center of the baseline).
-- **Tactical Stance (Baseline / Net)**: Evaluates per incoming shot whether to "stay back (baseline)" or "rush the net (net)". **Defaults to baseline rallies. Only rushes forward on short (chance) balls.** The decision compares the **Chance Amount** (+ if landing near net, - if fast pace) against a **required threshold based on the Persona's Net Tendency**. Net-players rush on slight chances; Grinders stay back almost entirely.
-  - **Baseline**: AI positions itself **deeper (further from the net) than the landing point**, hitting the ball as it rises or at its apex after bouncing. Prevents AI from standing exactly at the landing spot and hitting weak low-bounce returns.
-  - **Net**: AI steps **forward (closer to the net) of the landing point**, attempting to hit it before it bounces (Volley). Taking the ball high in the front court leads to finishers (Smash/Power shot). After rushing, the AI stays forward rather than resetting to the baseline.
-  - Net tendency is **tuned by Persona archetype** (Serve & Volley / All-Court rush often; Grinder / Counter hold the baseline). Matches feel entirely different based on persona, even on the same difficulty.
-- **Letting Outs Pass**: If the predicted landing point is outside its own court, the AI lets it pass. Obvious outs (>0.6m outside line) are highly likely to be ignored; borderline outs are ignored based on probability. Higher difficulties judge outs more accurately (Hard will almost always ignore obvious outs). Balls landing inside are always played. The AI returns to the home position immediately upon deciding to let it pass.
-- **Serve Return Positioning**: When receiving, the AI reads the player's serving stance and shifts to an optimal return spot (bisecting the angle between a Wide and Center-T serve). Higher difficulties shift dynamically and accurately; lower difficulties stay in a static default spot.
-- Shot selection is evaluated via weighted scoring:
-  - **Open Court**: Aim for the side furthest from the player (Core logic).
-  - **Posture**: Play safe (Topspin/Slice/Lob) if forced on the run.
-  - **Player rushes net**: Hit Lobs or Passing shots.
-  - **Player drops deep**: Hit Drop shots.
-- Quality systems also is also applied to AI
+- **Off** — classic balance.
+- **On** (default) — slows the ball (`pace_factor = 0.85`, a "slow-mo approach" feel),
+  and widens the human's forgiving bands: the `q_dist` outer band grows to 0.65 + 0.40 m,
+  the height tolerance to ±0.45 m, the `q_speed` floor rises to 0.80, and the mishit
+  chance halves (0.35 → 0.15).
+- **Full** — On, plus auto-swing and gentle positioning magnetism toward the ideal
+  contact spot.
 
-#### Timing Hint (Convergence Ring) Display
+The CPU is **never** eased by Assist.
 
-The Timing Hint (Convergence Ring) for Perfect Hits is **permanently displayed only on Easy / Normal**.
+## 9. AI
 
-## 9. UI
+### 9.1 Behaviour (`logic/ai/ai.mbt`)
 
-- **Title Screen**: Difficulty select, Games-to-win select, Player/Opponent Persona select (Radar charts), Start Button. Controls are not shown here, but permanently displayed on the screen edge during play.
-- **Pause Screen**: Press Esc during play to trigger physical pause. Two buttons: "Resume" (or Esc) / "Quit Game" (Return to title). Includes a mouse-click confirmation to prevent accidental quitting.
-- **Scoreboard**: Shows current games, points, both players' Persona names, and Difficulty.
-- **HUD** (During Gameplay) — Uses large fonts for readability:
-  - Top Center: Scoreboard (Games + Points, Serve indicator).
-  - **Permanent Control Guide on Screen Edge** (Compact key list on a translucent panel that doesn't obstruct play).
-  - Charge Bar (Only visible while charging. Overcharge zone is colored red for danger).
-  - Serve Meter: Power meter with colored sweet spots.
-  - Point Resolution Banner (Includes reason: "Winner!", "Out", "Net", "Double Fault").
-- **Match End Screen**: Win/Loss result, expanded stats (Winners, Unforced Errors, Double Faults, Avg Rally Length, 1st Serve %, Net Point Win %, Running Distance), Rematch / Return to Title buttons.
+- The AI moves to the ball's **predicted landing point** after a reaction delay, then
+  returns to a home position near the centre of its baseline when not hitting.
+- It **re-reads** the prediction periodically with an error that **shrinks as the ball
+  nears**, so it converges on the real landing spot.
+- **Letting outs pass**: if the predicted landing is outside its own court, the AI lets
+  the ball go (a hard filter on the prediction) and resets to home. *(The probabilistic,
+  difficulty-scaled out-tolerance described in the original draft is not implemented — see
+  Appendix A.)*
+- **Shot selection** is weighted scoring over candidate targets: it favours the **open
+  court** (distance from the human), penalises shots that force it to **run**, and applies
+  a **per-persona style bias** (e.g. a grinder leans topspin, a slicer leans slice).
 
-## 10. Audio
+The AI does **not** currently model an explicit baseline-vs-net stance, rush the net /
+volley, or run special serve-return positioning (Appendix A).
 
-Bounce sounds, net sounds, point-resolution crowd cheers (filtered noise), and UI clicks are synthesized via WebAudio (no external files). **Only the ball hit sound uses actual recorded audio samples.** The first user interaction resumes the AudioContext.
+### 9.2 Difficulty
 
-**Hit Sounds**:
-- **Uses actual recorded audio samples** (Sound Effect Lab "Hitting with a Tennis Racket"). Sound files bundled with the build are loaded via `decodeAudioData` and played via `BufferSource`. Synthesized sounds couldn't capture the realistic "feel" of hitting, hence the switch to real samples (Sources/Licenses in `README.md` / `src/audio/samples/CREDITS.md`).
-- Differentiates shot types using **playbackRate (pitch), volume, stereo panning, and filters** (Constants `HIT_SAMPLE_*`): Flat = Baseline, Slice = Higher pitch, Lob/Drop = Lower pitch, Serve = Heavy/low, Jammed (Mishit) = Rate drop + low-pass filter for a dull "thud". Harder hits are slightly higher and sharper. Panning based on hit coordinate `x`. Slight random pitch variation every hit to remove repetitiveness. Uses round-robin for multiple samples.
-- **Falls back to WebAudio synthesis (`playHitSynth`) if samples fail to load or are missing** (5-layer synth below). The game remains fully playable without the audio assets.
+Difficulty changes **only the CPU brain**, never the character's stats
+(`ai.mbt:difficulties`):
 
-**(Fallback) Synthesized Hit Sound Design** (Constants `HIT_SOUND_PARAMS`/`SFX_*`).
-Replicates the acoustic properties of a real tennis hit (Research: Fundamental/Body at 100~1800Hz, Harmonics at 1800~2800Hz, extremely short/sharp impact. Depth = Lows / Crispness = Highs + Sharp attack = "POCK!") using 5-layer synthesis:
-- **① Body (Pock)**: Triangle wave rapidly dropping from a high frequency down to `bodyHz`. Provides the tonal core/punch of the hit.
-- **② Crack (Attack)**: Sharp bright high-pass noise for the initial crisp "pop".
-- **③ Shimmer**: Bandpass noise in the 1.8~2.8kHz range for high-end sparkle (crispness).
-- **④ String Ring**: High-Q bandpass noise at `bodyHz` for a short tail. Center frequency sweeps up for Topspin (brushing up) or down for Slice (cutting down).
-- **⑤ Brush/Scrape Noise**: Adds a scraping feel for spin shots.
-- Tonal changes per shot: Flat = Sharp "Thwack", Topspin = Brushed pop, Slice = Thin skidding sound, Lob = Soft, Drop = Barely touching.
-- Shared satisfying elements: **Scales with intensity** (Brightens/sharpens Body/Shimmer/Crack frequencies), **Stereo Panning** via `x` pos, slight **Pitch Jitter** every hit, and **Procedural IR reverb** (ConvolverNode). Serves boost the Flat profile, Perfect Hits add a clear bell harmonic, and Jammed hits get a dull, noise-heavy "thud".
+| | `pos_err` | `jitter` | `react` (s) | `speed_mul` | `serve_q` | `choice_noise` |
+|---|---|---|---|---|---|---|
+| **Easy** | 2.0 | 2.0 | 0.55 | 0.70 | −0.10 | 0.45 |
+| **Normal** | 1.0 | 1.0 | 0.22 | 1.0 | 0.0 | 0.25 |
+| **Hard** | 0.35 | 0.5 | 0.06 | 1.10 | 0.08 | 0.12 |
 
-## 11. Strategic Design Intent (Summary)
+(`pos_err` = read accuracy, `jitter` = swing-timing variance, `react` = reaction delay,
+`speed_mul` = foot speed, `serve_q` = serve-toss quality offset, `choice_noise` =
+shot-selection randomness.)
 
-1. **Shot Placement**: Combining 5 shot types with left/right/deep/short placement to move the opponent and open the court.
-2. **Risk Management**: Due to the Quality system, "hitting hard from a bad posture" results in self-destruction. Players constantly weigh the risk of aiming for the lines versus returning safely.
-3. **AI Vulnerabilities**: Because the AI honestly runs to the predicted landing point, real tennis theories—like running them side-to-side, catching them wrong-footed, or utilizing drop/lob combinations—function directly as winning strategies.
-4. **Hitting Point** ( player position and shot button release timing ):shot quality depend on almost this!
+### 9.3 Characters / personas
+
+Five personas (`logic/shots/characters.mbt`), each with seven 0–100 stats
+**pow / spn / slc / srv / spd / ctl / rea** (power, spin, slice, serve, speed, control,
+reaction). The CPU plays with the same physics and a shot-selection bias from its
+`style`. The JS UI shows these stats as bars on the persona cards.
+
+| Persona | Archetype | pow | spn | slc | srv | spd | ctl | rea |
+|---|---|---|---|---|---|---|---|---|
+| **Boom** | Big Server | 85 | 45 | 50 | 96 | 55 | 58 | 88 |
+| **Rojo** | Spin Grinder | 74 | 96 | 55 | 62 | 82 | 70 | 60 |
+| **Dash** | Counterpuncher | 55 | 65 | 60 | 50 | 96 | 88 | 55 |
+| **Sly** | Slice Specialist | 60 | 38 | 95 | 74 | 72 | 80 | 70 |
+| **Ace** | All-Rounder | 74 | 72 | 70 | 74 | 74 | 74 | 70 |
+
+## 10. Camera & Visual Hints
+
+The camera sits just behind the human player (third-person), facing the court. Because
+you can't see your own contact point from there, several on-court aids are rendered
+(`src/entities/ball.js`, `src/render-host.js`, `src/ui.js`):
+
+- **Yellow landing ring** — where the incoming ball will first bounce.
+- **Trajectory dots** — the incoming path: **yellow** down to the bounce, **cyan** for
+  the arc after it, with a **big orange dot** at the waist-height point of the arc (the
+  ideal place to meet the ball).
+- **Cyan sweet-spot ring** — the spot to stand for a clean contact.
+- **Convergence / countdown ring** — shrinks as the ball approaches and turns **green**
+  when your timing is right ("hit now").
+- **Reach circle** — a circle on the court that is **blue** normally and turns **pink**
+  (with a rising tone) when the ball enters your striking range.
+- **Move-hint arrow** — points toward the sweet spot (turns into a green ◎ when you're on
+  it), since it can sit behind the camera.
+- **Gauges** — vertical **toss** and **height** gauges and a **timing** meter during the
+  serve/strike, with coloured sweet-spot bands.
+
+## 11. UI
+
+DOM-based, drawn by `src/ui.js`:
+
+- **Title flow**: select **Difficulty**, **Surface** (Clay/Grass/Hard), **Persona**
+  (stat-bar cards), and **Assist** level, then start.
+- **Scoreboard**: games, points, both player/opponent names, a 2nd-serve indicator, and
+  a tiebreak indicator.
+- **In-game HUD**: a permanent compact **control guide** on the screen edge, the serve/
+  strike **gauges**, and a **point-resolution banner** (e.g. "FAULT", "DOUBLE FAULT",
+  "LET").
+- **Match end**: Win/Loss result with the final games score, and a prompt back to the
+  menu.
+
+## 12. Audio
+
+All sound is **synthesized at runtime with the Web Audio API** — there are no audio
+files to download (`src/audio.js`).
+
+- **Hit sound**: a compact **two-layer** synth — band-pass-filtered white noise (the
+  "crack") plus a short sine "body" — scaled by impact speed and panned by the contact's
+  `x` position.
+- **Other SFX**: bounce, net, crowd cheer (filtered noise), out, fault, toss, and a
+  reach-alert tone, all procedurally generated. The first user interaction resumes the
+  AudioContext.
+
+## 13. Strategic Design Intent (summary)
+
+1. **Placement** — combine the shot types with left/right/deep/short aim to move the
+   opponent and open the court.
+2. **Risk management** — the quality system means "hitting hard from bad posture"
+   self-destructs; constantly weigh aiming the lines vs. returning safely.
+3. **AI vulnerability** — because the CPU honestly runs to the predicted landing point,
+   moving it side-to-side and wrong-footing it work as winning tactics.
+4. **Hitting point** — player position + swing timing is what governs shot quality; it is
+   the heart of the game.
+
+---
+
+## Appendix A — Future / Not-Yet-Implemented Ideas
+
+The original design draft envisioned a richer system. **None of the following is in the
+current build** — the figures here are *proposed*, not measured from code. They are kept
+for reference and possible future work.
+
+### A.1 Extra shot types
+- **Drop shot** — backspin touch shot that barely bounces, to pull a baseline-hugger
+  forward.
+
+### A.2 Charge / release shot mechanic
+- Hold the shot key to build charge `c` (0→1.0 over 0.8 s, **Overcharge** to 1.25); power
+  `= 0.85 + 0.40·min(c,1)`; release at the right instant to hit.
+- **Perfect Hit / "Just Meet"** — releasing while the ball is in the sweet spot grants a
+  bonus (speed ×1.08, aim-error ×0.6, spin ×1.12), with gold-white ring/sparks and a bell
+  harmonic. **Safety Hit** auto-fires before the ball escapes; releasing out of reach is a
+  **Whiff** with a 0.25 s cooldown.
+- **Topspin/Slice charge enhancements** — charge amplifies each shot's identity:
+  topspin spin/angle gains, a "short-angle attack" pull toward the service line with a
+  low/fast drive solver; slice depth and float gains.
+
+*(In the shipped game, shots are instant-press; the sweet-spot/timing visuals are aids
+only and grant no bonus — see §6.2–6.3.)*
+
+### A.3 Situational shots
+- **Smash** — high point (≥1.7 m) × forecourt × Flat → a downward bomb (base ~42 m/s,
+  +charge).
+- **Volley / net play** — pre-bounce block/punch near the net: restrained power, high
+  accuracy, little charge effect; lobs and passing shots as counters.
+- **Fast-ball jam model** — a pace-threshold (>26 m/s) mishit weighted by shot type
+  (Slice block strongest, Topspin weakest), plus **counter/redirect** speed bonuses
+  (+~30 % Flat/Slice, +~12 % Topspin) for redirecting incoming pace.
+
+### A.4 Serve power meter
+- An **oscillating power meter** (triangle wave, 0→1→0, ~1.2 s period) with a release
+  sweet spot `p ∈ [0.70, 0.88]` and an overpower zone, replacing the current toss gauge.
+- A higher serve-speed ceiling (proposed `SERVE_SPEED_MIN 30 → MAX 56`, big-server
+  ~62 m/s) and a persona `serveSpeedMul`. *(Actual serves are ~20–36 m/s — §7.1.)*
+
+### A.5 Smarter AI
+- Explicit **baseline vs. net** tactical stance per incoming ball, tuned by a per-persona
+  **Net Tendency** stat; net rushing and staying forward after the rush.
+- **Serve-return positioning** that bisects the wide/centre-T angle, dynamic at higher
+  difficulty.
+- **Probabilistic, difficulty-scaled** out-tolerance (borderline outs occasionally
+  played) instead of the current hard filter.
+- Explicit "player rushes net → lob/passing" and "player drops deep → drop shot" rules.
+
+### A.6 Stats, open court & richer UI
+- **Match stats** — Winners, Unforced Errors, Double Faults, average rally length,
+  1st-serve %, net-point win %, and running distance, shown on an expanded match-end
+  screen, plus a **Rematch** button.
+- **Open-court floor highlight** (an `OPEN_COURT_ENABLED`-style toggle) — not present.
+- **Radar charts** for persona stats (currently bars), a **games-to-win selector**, a
+  **pause modal** (Resume/Quit with confirm), a **charge bar**, and a difficulty readout
+  on the scoreboard.
+
+### A.7 Sampled / richer audio
+- **Recorded hit samples** (loaded via `decodeAudioData`, played with `BufferSource`) with
+  a **5-layer synth fallback** (Body/Pock, Crack, Shimmer, String Ring, Brush), per-shot
+  pitch/pan/filtering, procedural **IR reverb** (`ConvolverNode`), and a perfect-hit bell.
+  *(The shipped game uses a 2-layer synth and no reverb — §12.)*
