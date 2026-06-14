@@ -40,6 +40,16 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 - Zero context switching required from the user
 - Go fix failing CI tests without being told how
 
+## Code Navigation (MCP)
+
+Use the right semantic tool per layer — prefer these over grep/Read:
+
+- **`src/` (JavaScript / Three.js):** use the **Serena** MCP server's symbol
+  tools (`find_symbol`, `find_referencing_symbols`, `replace_symbol_body`).
+  Configured project-locally in `.mcp.json`; confirm with `/mcp`.
+- **`logic/` (MoonBit):** use `moon ide` / `moon doc` — Serena cannot parse
+  `.mbt`. See `AGENT.md` for the commands.
+
 ## Task Management
 
 1. **Plan First**: Write plan to `tasks/todo.md` with checkable items

@@ -9,3 +9,8 @@ target/
 # editor backups
 *.bak
 *~
+# Serena MCP local artifacts (keep .serena/project.yml tracked)
+.serena/cache/
+.serena/logs/
+.serena/memories/
+.serena/project.local.yml

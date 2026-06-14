@@ -1,3 +1,16 @@
+## Code Navigation — which tool for which layer (IMPORTANT)
+
+This repo has two layers, each with its own navigation tool:
+
+- **MoonBit logic layer (`logic/`, `.mbt`):** use `moon ide` / `moon doc`
+  (see below). Serena does **not** support MoonBit, so do not point its symbol
+  tools at `.mbt` files.
+- **JavaScript render/sound layer (`src/`, `.js`):** use the **Serena** MCP
+  server's symbol tools (`find_symbol`, `find_referencing_symbols`,
+  `replace_symbol_body`, etc.) instead of grep/Read. Serena is configured
+  project-locally via `.mcp.json` (`language: typescript` in
+  `.serena/project.yml`). Run `/mcp` to confirm it is connected.
+
 ## Coding Convention of MoonBit
 
 - Each block is separated by `///|`
