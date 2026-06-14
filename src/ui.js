@@ -248,9 +248,10 @@ export function createUI({ onVirtualKey, onMoveAxis } = {}) {
   els.tmBand = els.timingmeter.querySelector('.tm-band');
   els.tmDot = els.timingmeter.querySelector('.tm-dot');
   els.shotbar.innerHTML =
-    '<div id="sb-flat">Z Flat</div><div id="sb-topspin">X Topspin</div><div id="sb-slice">C Slice</div>';
+    '<div id="sb-flat">Z Flat</div><div id="sb-topspin">X Topspin</div>' +
+    '<div id="sb-slice">C Slice</div><div id="sb-drop">V Drop</div>';
   els.controls.innerHTML =
-    'Move: Arrow keys<br>Shots: Z flat &middot; X topspin &middot; C slice<br>' +
+    'Move: Arrow keys<br>Shots: Z flat &middot; X topspin &middot; C slice &middot; V drop<br>' +
     'Serve: Space toss, then Z/X/C<br>Aim: hold a direction while swinging';
 
   // menu tap support (tap a card to select it, tap again to confirm).
@@ -514,6 +515,7 @@ export function createUI({ onVirtualKey, onMoveAxis } = {}) {
     flat: ['sb-flat'],
     topspin: ['sb-topspin'],
     slice: ['sb-slice'],
+    drop: ['sb-drop'],
   };
   function setRecommendedShot(type) {
     if (type === recommendedShot) return;

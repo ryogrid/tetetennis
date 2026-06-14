@@ -154,6 +154,7 @@ fn shot_type_str(t : @shots.ShotType) -> String {
     Topspin => "topspin"
     Slice => "slice"
     Lob => "topspin"
+    Drop => "drop"
   }
 }
 
@@ -181,6 +182,7 @@ fn str_to_shot(s : String) -> @shots.ShotType? {
     "flat" => Some(Flat)
     "topspin" => Some(Topspin)
     "slice" => Some(Slice)
+    "drop" => Some(Drop)
     _ => None
   }
 }

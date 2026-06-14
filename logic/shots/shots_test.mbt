@@ -56,6 +56,63 @@ test "contact quality sensitivity: stretched contact is slower and shorter" {
   assert_true(str_depth < clean_depth - 0.5)
 }
 
+// Mean launch speed + landing depth (past the net) of a stroke type hit from a
+// given contact depth; n counts samples that cleared into the opponent court.
+///|
+fn mean_stroke_typ(typ : ShotType, contact_z : Double) -> (Double, Double, Int) {
+  let g = @rng.Gauss::new(999)
+  let mut speed_sum = 0.0
+  let mut depth_sum = 0.0
+  let mut n = 0
+  for _i = 0; _i < 300; _i = _i + 1 {
+    let res = compute_stroke(
+      0.0, contact_z, 0.5, @physics.ideal_contact_h, contact_z, 0.0, 2.0, 8.0,
+      test_stats, typ, 0.0, 0.0, @rules.P, g,
+    )
+    match res {
+      Some(r) =>
+        if r.shot_type == typ {
+          let b = @physics.make_ball()
+          b.px = 0.5
+          b.py = @physics.ideal_contact_h
+          b.pz = contact_z
+          b.vx = r.vx
+          b.vy = r.vy
+          b.vz = r.vz
+          b.sx = r.sx
+          b.sy = r.sy
+          b.sz = r.sz
+          b.activate()
+          match @physics.predict_landing(b, @physics.surface_hard) {
+            Some(l) =>
+              if l.z < 0.0 {
+                speed_sum = speed_sum + @vec.hypot3(r.vx, r.vy, r.vz)
+                depth_sum = depth_sum + -l.z
+                n = n + 1
+              }
+            None => ()
+          }
+        }
+      None => ()
+    }
+  }
+  let nn = if n == 0 { 1 } else { n }
+  (speed_sum / nn.to_double(), depth_sum / nn.to_double(), n)
+}
+
+///|
+test "drop shot: slower and lands shorter than a slice, and clears into court" {
+  @assist.set_assist_level(Off)
+  // hit from a forecourt contact (z=6), where a drop is realistically played
+  let (drop_speed, drop_depth, drop_n) = mean_stroke_typ(Drop, 6.0)
+  let (slice_speed, slice_depth, slice_n) = mean_stroke_typ(Slice, 6.0)
+  assert_true(drop_n > 250) // the drop reliably clears the net into the court
+  assert_true(slice_n > 250)
+  assert_true(drop_speed < slice_speed) // drop is the slowest stroke
+  assert_true(drop_depth < slice_depth - 1.0) // and lands clearly shorter
+  assert_true(drop_depth < 5.0) // dies near the front of the court
+}
+
 ///|
 test "contact quality: whiff out of reach, full quality in the band" {
   @assist.set_assist_level(Off)

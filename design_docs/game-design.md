@@ -102,7 +102,7 @@ effective pace is `eff_pace = 0.64 × pace_factor`.
 
 ### 6.1 Shot types
 
-Four shot types exist (`logic/shots/shots.mbt`, `ShotType`). Each defines a speed
+Five shot types exist (`logic/shots/shots.mbt`, `ShotType`). Each defines a speed
 multiplier and a launch-angle band `(speed_mul, θ_min°, θ_max°)`:
 
 | Type | speed_mul | θ band | Role |
@@ -111,23 +111,27 @@ multiplier and a launch-angle band `(speed_mul, θ_min°, θ_max°)`:
 | **Topspin** | 0.85 | 10°–32° | arcs over the net and dips; reliable rally staple |
 | **Slice** | 0.76 | 1°–16° | slow floater, stays low and skids; buys time |
 | **Lob** | 1.00 | 28°–55° | high, deep defensive ball |
+| **Drop** | — | 26°–50° | slowest; a backspin touch that floats just over the net and dies short, to pull a baseline-hugger forward |
 
-The human selects **Flat / Topspin / Slice** directly. **Lob is not directly
+The human selects **Flat / Topspin / Slice / Drop** directly. **Lob is not directly
 selectable**: it is auto-substituted as a forced defensive ball when the player is
 *stretched* (reaching at the edge of range) and not already slicing
 (`shots.mbt`, `cq.stretched && typ != Slice → Lob`). The CPU may also produce lobs.
 
 Spin RPM is stat- and quality-scaled: Flat `300 + 400·q`; Topspin
 `(2200 + 2600·spn/100)·(0.5 + 0.5·q)`; Slice `−(1500 + 1800·slc/100)·(0.5 + 0.5·q)`;
-Lob a light `500`. Slice also gets a touch of vertical-axis spin so it drifts toward
-the contact side.
+Lob a light `500`; Drop a heavy backspin `−slice_rpm·(0.55 + 0.45·q)·0.9`. Slice also
+gets a touch of vertical-axis spin so it drifts toward the contact side. Drop and Lob
+use an absolute touch speed (Drop `(12 + 4·slc/100)·eff_pace`, the slowest stroke;
+Lob `(15 + 4·pow/100)·eff_pace`) rather than the flat-speed model, and Drop targets a
+short `~2.2 m` past the net instead of the rally depth floor.
 
 ### 6.2 Input & swing timing
 
 Shots are **instant-press**, not charged (`src/input.js`):
 
-- **Keyboard**: move with the Arrow keys; **Z/J = Flat, X/K = Topspin, C/L = Slice**;
-  **Space** tosses/serves.
+- **Keyboard**: move with the Arrow keys; **Z/J = Flat, X/K = Topspin, C/L = Slice,
+  V = Drop**; **Space** tosses/serves.
 - **Touch**: an analog thumbstick (left) to move; a single **SHOT** button (right) that
   tosses/serves and hits strokes — the shot type is chosen **at random** each swing.
 
@@ -348,10 +352,6 @@ files to download (`src/audio.js`).
 The original design draft envisioned a richer system. **None of the following is in the
 current build** — the figures here are *proposed*, not measured from code. They are kept
 for reference and possible future work.
-
-### A.1 Extra shot types
-- **Drop shot** — backspin touch shot that barely bounces, to pull a baseline-hugger
-  forward.
 
 ### A.2 Charge / release shot mechanic
 - Hold the shot key to build charge `c` (0→1.0 over 0.8 s, **Overcharge** to 1.25); power

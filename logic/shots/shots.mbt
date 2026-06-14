@@ -8,9 +8,12 @@ pub(all) enum ShotType {
   Topspin
   Slice
   Lob
+  Drop
 } derive(Eq, Show)
 
 // (speed_mul, theta_min_deg, theta_max_deg) per shot type.
+// Drop's speed_mul is unused (the Drop branch sets an absolute touch speed,
+// like Lob); its high theta band lets a slow ball loft just over the net.
 ///|
 pub fn shot_def(t : ShotType) -> (Double, Double, Double) {
   match t {
@@ -18,6 +21,7 @@ pub fn shot_def(t : ShotType) -> (Double, Double, Double) {
     Topspin => (0.85, 10.0, 32.0)
     Slice => (0.76, 1.0, 16.0)
     Lob => (1.00, 28.0, 55.0)
+    Drop => (0.50, 26.0, 50.0)
   }
 }
 
@@ -140,11 +144,14 @@ pub fn compute_stroke(
     Topspin => 8.0
     Slice => 5.5
     Lob => 5.5
+    Drop => 2.2 // dies just past the net
   }
   let base_z = type_z - (1.0 - q) * 1.5
+  // Drop is allowed to target much shorter than the rally floor of 4.5 m.
+  let min_depth = if typ == Drop { 1.5 } else { 4.5 }
   let mut tx = @vec.clampd(aim_x, -1.0, 1.0) * 2.8
   let mut tz = z_sign *
-    @vec.clampd(base_z + @vec.clampd(aim_depth, -1.0, 1.0) * 2.4, 4.5, 11.2)
+    @vec.clampd(base_z + @vec.clampd(aim_depth, -1.0, 1.0) * 2.4, min_depth, 11.2)
   let flat_speed = @physics.max_flat_speed(stats.pow) * (0.52 + 0.48 * q)
   let mut speed = 0.0
   let mut spin_rpm = 0.0
@@ -164,6 +171,12 @@ pub fn compute_stroke(
     Lob => {
       speed = (15.0 + 4.0 * stats.pow / 100.0) * @physics.eff_pace()
       spin_rpm = 500.0
+    }
+    Drop => {
+      // slowest stroke: a backspin touch that floats just over the net and
+      // checks on the bounce. Speed scales with slice skill, not power.
+      speed = (12.0 + 4.0 * stats.slc / 100.0) * @physics.eff_pace()
+      spin_rpm = -@physics.slice_rpm(stats.slc) * (0.55 + 0.45 * q) * 0.9
     }
   }
   // error model
