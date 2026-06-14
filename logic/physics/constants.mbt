@@ -167,7 +167,8 @@ pub fn serve_flat_speed(srv : Double) -> Double {
 
 // Serve power meter (Appendix A.4): meter value p in [0,1] maps to launch speed
 // between serve_speed_min and serve_speed_max (raw), scaled by serve strength and
-// the global pace. A big server's sweet-spot first serve tops ~55 m/s.
+// the global pace. The shot solver caps a flat serve that still lands in the box
+// at ~47 m/s, so the requested speed is an upper bound, not the launch speed.
 ///|
 pub let serve_speed_min : Double = 42.0
 

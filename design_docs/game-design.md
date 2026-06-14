@@ -4,9 +4,8 @@
 > implemented** today, with parameters taken from the source of truth (the MoonBit
 > logic layer under `logic/` and the JS render/sound layer under `src/`). A short
 > source pointer (e.g. `logic/physics/constants.mbt`) follows the figures that come
-> from a specific file. **Appendix A** collects design ideas from the original draft
-> that are **not yet implemented**, preserved so the broader vision isn't lost — none
-> of it is in the build.
+> from a specific file. **Appendix A** is now just a short history note: the richer
+> design it once listed as "future" has all been implemented and folded into the body.
 
 ## 1. Concept
 
