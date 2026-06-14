@@ -165,6 +165,21 @@ pub fn serve_flat_speed(srv : Double) -> Double {
   (40.0 + 16.0 * srv / 100.0) * eff_pace()
 }
 
+// Serve power meter (Appendix A.4): meter value p in [0,1] maps to launch speed
+// between serve_speed_min and serve_speed_max (raw), scaled by serve strength and
+// the global pace. A big server's sweet-spot first serve tops ~55 m/s.
+///|
+pub let serve_speed_min : Double = 42.0
+
+///|
+pub let serve_speed_max : Double = 78.0
+
+///|
+pub fn serve_power_speed(srv : Double, p : Double) -> Double {
+  let base = serve_speed_min + (serve_speed_max - serve_speed_min) * p
+  base * (0.82 + 0.36 * srv / 100.0) * eff_pace()
+}
+
 // Overhead smash: a high forecourt flat slammed down. Much faster than a
 // groundstroke and only lightly quality-dependent.
 ///|

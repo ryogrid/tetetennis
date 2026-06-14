@@ -181,6 +181,28 @@ const css = `
   position: absolute; top: -20px; left: 50%; transform: translateX(-50%);
   font-size: 11px; color: #aaa; letter-spacing: 1px; white-space: nowrap;
 }
+#powermeter {
+  position: absolute; bottom: 26%; left: 50%; transform: translateX(-50%);
+  width: 230px; height: 18px; display: none;
+  background: rgba(10,10,18,.55); border: 1px solid rgba(255,255,255,.3);
+  border-radius: 9px;
+}
+#powermeter .pm-band {
+  position: absolute; top: 0; bottom: 0;
+  background: rgba(80,230,120,.30);
+  border-left: 1px solid rgba(80,230,120,.9);
+  border-right: 1px solid rgba(80,230,120,.9);
+}
+#powermeter .pm-dot {
+  position: absolute; top: 50%; width: 16px; height: 16px;
+  margin-top: -8px; margin-left: -8px; border-radius: 50%;
+  background: #d8f24b; box-shadow: 0 0 6px rgba(0,0,0,.5);
+}
+#powermeter .pm-dot.good { background: #50e678; box-shadow: 0 0 12px #50e678; }
+#powermeter .pm-label {
+  position: absolute; top: -20px; left: 50%; transform: translateX(-50%);
+  font-size: 11px; color: #aaa; letter-spacing: 1px; white-space: nowrap;
+}
 #chargebar {
   position: absolute; bottom: 19%; left: 50%; transform: translateX(-50%);
   width: 210px; height: 12px; display: none;
@@ -262,6 +284,11 @@ export function createUI({ onVirtualKey, onMoveAxis } = {}) {
     '<div class="tm-label">HIT</div><div class="tm-band"></div><div class="tm-dot"></div>';
   els.tmBand = els.timingmeter.querySelector('.tm-band');
   els.tmDot = els.timingmeter.querySelector('.tm-dot');
+  els.powermeter = div('powermeter', hud);
+  els.powermeter.innerHTML =
+    '<span class="pm-label">SERVE POWER</span><div class="pm-band"></div><div class="pm-dot"></div>';
+  els.pmBand = els.powermeter.querySelector('.pm-band');
+  els.pmDot = els.powermeter.querySelector('.pm-dot');
   els.chargebar = div('chargebar', hud);
   // the mark sits at 80% = the start of the overcharge zone (full=100% of 1.25)
   els.chargebar.innerHTML = '<i class="cb-fill"></i><span class="cb-mark"></span>';
@@ -273,7 +300,8 @@ export function createUI({ onVirtualKey, onMoveAxis } = {}) {
     'Move: Arrow keys<br>Shots: <b>hold</b> Z/X/C/V to charge, <b>release</b> to hit ' +
     '(Z flat &middot; X topspin &middot; C slice &middot; V drop)<br>' +
     'Release in the sweet spot for a Perfect Hit; full charge overcharges (risky)<br>' +
-    'Serve: Space toss, then Z/X/C<br>Aim: hold a direction at the moment you release';
+    'Serve: Space toss, then Z/X/C when the power meter is in the green band<br>' +
+    'Aim: hold a direction at the moment you release';
 
   // menu tap support (tap a card to select it, tap again to confirm).
   // Results screen taps pass index 0; menu_tap ignores the value there.
@@ -578,6 +606,12 @@ export function createUI({ onVirtualKey, onMoveAxis } = {}) {
       els.tmBand.style.width = `${((hi - lo) * 100).toFixed(1)}%`;
       els.tmDot.style.left = `${(f * 100).toFixed(1)}%`;
       els.tmDot.classList.toggle('good', !!good);
+    } else if (name === 'power') {
+      if (!gaugeShown.power) { els.powermeter.style.display = 'block'; gaugeShown.power = true; }
+      els.pmBand.style.left = `${(lo * 100).toFixed(1)}%`;
+      els.pmBand.style.width = `${((hi - lo) * 100).toFixed(1)}%`;
+      els.pmDot.style.left = `${(f * 100).toFixed(1)}%`;
+      els.pmDot.classList.toggle('good', !!good);
     }
   }
 
@@ -587,6 +621,7 @@ export function createUI({ onVirtualKey, onMoveAxis } = {}) {
     if (name === 'toss') els.tossgauge.style.display = 'none';
     else if (name === 'height') els.heightbar.style.display = 'none';
     else if (name === 'timing') els.timingmeter.style.display = 'none';
+    else if (name === 'power') els.powermeter.style.display = 'none';
   }
 
   // hold-to-charge bar. frac is the charge over the overcharge ceiling [0,1];

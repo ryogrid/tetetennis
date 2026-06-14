@@ -376,16 +376,22 @@ test "contact quality: whiff out of reach, full quality in the band" {
   assert_true(!ideal.whiff && ideal.q > 0.95)
 }
 
-// Serve: simulate compute_serve from C's side, return (net clearance, in-box).
+// Serve: simulate compute_serve from C's side, return (net clearance, in-box,
+// launch speed). power is the meter value; seed varies the error draw.
 ///|
-fn serve_flight(type_ : ServeType) -> (Double, Bool) {
+fn serve_flight_p(
+  type_ : ServeType,
+  power : Double,
+  seed : Int,
+  ctl~ : Double = 95.0,
+) -> (Double, Bool, Double) {
   @assist.set_assist_level(Off)
-  // high-control server to keep the error term tiny for a deterministic check
-  let stats : Stats = { pow: 74, spn: 70, slc: 60, srv: 85, spd: 60, ctl: 95, rea: 70 }
-  let g = @rng.Gauss::new(7)
+  let stats : Stats = { pow: 74, spn: 70, slc: 60, srv: 85, spd: 60, ctl, rea: 70 }
+  let g = @rng.Gauss::new(seed)
   let s = compute_serve(
-    stats, type_, -0.35, 2.95, -11.9, @rules.C, Deuce, Body, 0.0, 0.0, 1.0, g,
+    stats, type_, -0.35, 2.95, -11.9, @rules.C, Deuce, Body, 0.0, 0.0, power, g,
   )
+  let launch = @vec.hypot3(s.vx, s.vy, s.vz)
   let b = @physics.make_ball()
   b.px = -0.35
   b.py = 2.95
@@ -424,10 +430,39 @@ fn serve_flight(type_ : ServeType) -> (Double, Bool) {
     }
     if bounced {
       let in_box = is_serve_box_in(bx, bz, @rules.C, Deuce)
-      return (clearance, in_box)
+      return (clearance, in_box, launch)
     }
   }
-  (clearance, false)
+  (clearance, false, launch)
+}
+
+///|
+fn serve_flight(type_ : ServeType) -> (Double, Bool) {
+  let r = serve_flight_p(type_, 0.8, 7)
+  (r.0, r.1)
+}
+
+///|
+fn serve_in_rate(power : Double) -> Double {
+  let mut inn = 0
+  for s = 1; s < 41; s = s + 1 {
+    // a mid-control server so the band's accuracy actually matters
+    let r = serve_flight_p(ServeFlat, power, s, ctl=58.0)
+    if r.1 {
+      inn = inn + 1
+    }
+  }
+  inn.to_double() / 40.0
+}
+
+///|
+test "serve power meter: more power is faster; overpower sprays out of the box" {
+  @assist.set_assist_level(Off)
+  let slow = serve_flight_p(ServeFlat, 0.5, 7).2
+  let fast = serve_flight_p(ServeFlat, 0.88, 7).2
+  // more meter power = faster (the box geometry caps the top end ~47 m/s)
+  assert_true(fast > slow * 1.05)
+  assert_true(serve_in_rate(0.80) > serve_in_rate(1.0)) // sweet > overpower accuracy
 }
 
 ///|

@@ -255,24 +255,24 @@ Three serves (`logic/shots/serve.mbt`, `ServeType`), each `(speed_mul, θ_min°,
 | **Kick** | 0.64 | 2°–14° | high net clearance, high bounce; the safe 2nd serve |
 
 Serve type is chosen before the toss (the human can pick; the CPU plans Flat/Slice on
-1st serve, Kick on 2nd). The launch speed is
-`serve_flat_speed(srv) · (0.68 + 0.32·q_serve) · type_mul`, where
-`serve_flat_speed = (40 + 16·srv/100) · eff_pace` (`constants.mbt`, `serve.mbt`), `q_serve`
-is the toss-timing quality (§7.2), and `type_mul` is the table value above. In practice
-serves land around **~15–35 m/s** — a well-tossed Boom flat (`srv = 96`, classic pace) tops
-out at ≈ 35 m/s, while kick second serves and weaker servers sit much lower.
+1st serve, Kick on 2nd). The launch speed comes from the **power meter** value `p`:
+`serve_power_speed(srv, p) · type_mul`, with
+`serve_power_speed = (42 + 36·p)·(0.82 + 0.36·srv/100)·eff_pace` (`constants.mbt`). The shot
+solver caps a flat serve at roughly **~47–50 m/s** so it still lands in the box — a clear
+jump over the old toss model and, with the new jam (§6.5), very hard to return cold.
 
-### 7.2 Serve control — the toss gauge
+### 7.2 Serve control — the power meter
 
-Serving is **toss-timing**, not a power meter (`game.js.mbt`, `host_gauge "toss"`):
+Serving uses an **oscillating power meter** (`game.js.mbt`, `host_gauge "power"`):
 
 1. After being placed, the server may shift laterally within the serve side for angle.
-2. Press **Space** to toss. As the ball rises and falls, a **vertical toss gauge** shows
-   its height; a **green band** marks the ideal contact height. You hit by timing the
-   strike near the top of the toss.
-3. Serve quality is `q_serve = 0.4 + 0.6·max(0, 1 − |y − contact_h| / 0.7)` — best when
-   the ball is struck within **±0.15 m** of the ideal contact height (the green band),
-   scaling smoothly to a 0.4 floor otherwise. (`contact_h ≈ 2.55–3.1 m`, stat-scaled.)
+2. Press **Space** to toss. A horizontal meter then **oscillates 0 → 1 → 0** with period
+   `serve_meter_period = 1.2 s`.
+3. Press a serve key (**Z/X/C** = flat/kick/slice) to **lock** the meter value `p` and hit.
+   - **Sweet spot** `p ∈ [0.70, 0.88]` — fast *and* accurate (full `acc = 1`).
+   - **Below** 0.70 — speed and accuracy scale down together (safe but slow).
+   - **Overpower** `p > 0.88` — still fast but accuracy collapses
+     (`acc → 0.35`), so faults spike.
 4. After serving, movement is briefly locked (post-serve recovery), longer for harder
    serves — fast wide serves leave you out of position.
 
@@ -410,12 +410,6 @@ files to download (`src/audio.js`).
 The original design draft envisioned a richer system. **None of the following is in the
 current build** — the figures here are *proposed*, not measured from code. They are kept
 for reference and possible future work.
-
-### A.4 Serve power meter
-- An **oscillating power meter** (triangle wave, 0→1→0, ~1.2 s period) with a release
-  sweet spot `p ∈ [0.70, 0.88]` and an overpower zone, replacing the current toss gauge.
-- A higher serve-speed ceiling (proposed `SERVE_SPEED_MIN 30 → MAX 56`, big-server
-  ~62 m/s) and a persona `serveSpeedMul`. *(Actual serves are ~20–36 m/s — §7.1.)*
 
 ### A.5 Smarter AI
 - Explicit **baseline vs. net** tactical stance per incoming ball, tuned by a per-persona

@@ -242,7 +242,7 @@ fn choose_stroke(ai : Ai, ctx : AiCtx, pred_x : Double, pred_z : Double, rng : @
 pub(all) struct ServePlan {
   type_ : @shots.ServeType
   preset : @shots.Preset
-  q_serve : Double
+  power : Double // serve power-meter value [0,1]
 }
 
 ///|
@@ -276,12 +276,13 @@ pub fn choose_serve(ai : Ai, is_second : Bool, rng : @rng.Gauss) -> ServePlan {
       Body
     }
   }
-  let base = (if is_second { 0.78 } else { 0.7 }) + diff.serve_q
-  let q_serve = @vec.dmax(
+  // aggressive (higher power) first serve; safer (lower power) second serve
+  let base = (if is_second { 0.58 } else { 0.74 }) + diff.serve_q
+  let power = @vec.dmax(
     0.4,
-    @vec.dmin(1.0, base + 0.3 * rng.uniform() * (0.5 + stats.ctl / 200.0)),
+    @vec.dmin(0.98, base + 0.18 * rng.uniform() * (0.5 + stats.ctl / 200.0)),
   )
-  { type_, preset, q_serve }
+  { type_, preset, power }
 }
 
 // Time to cover `dist` from rest with limited accel, then top speed.

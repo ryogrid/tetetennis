@@ -75,6 +75,15 @@ let full_assist_charge : Double = 0.7 // auto-charge level under Full assist
 ///|
 let volley_forecourt : Double = 7.0 // hit a still-airborne ball within this of the net = volley
 
+///|
+let serve_meter_period : Double = 1.2 // oscillating serve power meter period (s)
+
+///|
+let serve_sweet_lo : Double = 0.70 // power-meter sweet-spot band
+
+///|
+let serve_sweet_hi : Double = 0.88
+
 // ---------------- enums ----------------
 
 ///|
@@ -133,6 +142,8 @@ struct MatchState {
   mut sweet_hit_clock : Double
   mut time : Double
   mut state_timer : Double
+  mut serve_meter : Double // current oscillating power-meter value [0,1]
+  mut serve_meter_t : Double // meter phase clock (s)
   mut cpu_serve_plan : @ai.ServePlan?
   mut last_shot_pref : @shots.ShotType?
   mut was_in_reach : Bool
@@ -379,6 +390,8 @@ fn start_match(self : Game) -> Unit {
     sweet_hit_clock: 0.0,
     time: 0.0,
     state_timer: 0.0,
+    serve_meter: 0.0,
+    serve_meter_t: 0.0,
     cpu_serve_plan: None,
     last_shot_pref: None,
     was_in_reach: false,
@@ -523,7 +536,20 @@ fn start_toss(self : Game, ms : MatchState) -> Unit {
   e.start_serve_anim()
   @ffi.host_serve_anim(self.host, side_int(sv), true)
   ms.point_state = Serving
+  ms.serve_meter = 0.0
+  ms.serve_meter_t = 0.0
   @ffi.host_sfx(self.host, "sfxToss")
+}
+
+// Triangle-wave power meter: 0 -> 1 -> 0 over serve_meter_period seconds.
+///|
+fn serve_meter_value(t : Double) -> Double {
+  let phase = (t % serve_meter_period) / serve_meter_period
+  if phase < 0.5 {
+    phase * 2.0
+  } else {
+    2.0 - phase * 2.0
+  }
 }
 
 ///|
@@ -531,7 +557,7 @@ fn execute_serve(
   self : Game,
   ms : MatchState,
   ty : @shots.ServeType,
-  q_serve : Double,
+  power : Double,
   preset : @shots.Preset,
   aim_adjust : Double,
   aim_depth : Double,
@@ -543,7 +569,7 @@ fn execute_serve(
   let from_y = @vec.dmax(1.6, @vec.dmin(b.py, contact_h))
   let res = @shots.compute_serve(
     e.stats, ty, b.px, from_y, b.pz, sv, ms.court_side, preset, aim_adjust, aim_depth,
-    q_serve, self.rng,
+    power, self.rng,
   )
   b.py = from_y
   b.vx = res.vx
@@ -794,13 +820,12 @@ fn rand_stroke(self : Game) -> @shots.ShotType {
 
 ///|
 fn do_serve(self : Game, ms : MatchState, kind : @shots.ShotType) -> Unit {
-  let b = ms.ball
-  let contact_h = @physics.serve_contact_h(ms.human.stats.rea)
-  let q_serve = 0.4 + 0.6 * @vec.dmax(0.0, 1.0 - @vec.dabs(b.py - contact_h) / 0.7)
+  // power is locked from the oscillating meter at the moment the serve key fires
+  let power = ms.serve_meter
   let ty = stroke_to_serve(kind)
   let aim_x = @ffi.host_move_x(self.host)
   let aim_depth = -@ffi.host_move_z(self.host)
-  self.execute_serve(ms, ty, q_serve, Body, aim_x, aim_depth)
+  self.execute_serve(ms, ty, power, Body, aim_x, aim_depth)
 }
 
 // Hold-to-charge rally strokes (Appendix A.2). Charge builds while a shot key
@@ -992,6 +1017,12 @@ pub fn fixed_update(dt : Double) -> Unit {
   ms.time = ms.time + dt
   let b = ms.ball
 
+  // oscillating serve power meter (human's serve only)
+  if ms.point_state == Serving && server(ms) == @rules.P {
+    ms.serve_meter_t = ms.serve_meter_t + dt
+    ms.serve_meter = serve_meter_value(ms.serve_meter_t)
+  }
+
   // human movement (+ optional positioning magnetism)
   let mut hx = @ffi.host_move_x(self.host)
   let mut hz = @ffi.host_move_z(self.host)
@@ -1144,7 +1175,7 @@ pub fn fixed_update(dt : Double) -> Unit {
         Some(plan) =>
           if sv == @rules.C && b.vy < 0.0 && b.py <= contact_h {
             ms.cpu_serve_plan = None
-            self.execute_serve(ms, plan.type_, plan.q_serve, plan.preset, 0.0, 0.0)
+            self.execute_serve(ms, plan.type_, plan.power, plan.preset, 0.0, 0.0)
             return
           }
         None => ()
@@ -1316,18 +1347,15 @@ pub fn frame_update(dt : Double) -> Unit {
   }
   ms.was_in_reach = in_reach
 
-  // toss gauge
+  // serve power meter (replaces the old toss gauge)
   if ms.point_state == Serving && server(ms) == @rules.P && b.active {
-    let contact_h = @physics.serve_contact_h(ms.human.stats.rea)
-    let lo = 1.2
-    let hi = contact_h + 0.5
-    let y = b.py
+    let p = ms.serve_meter
     @ffi.host_gauge(
-      h, "toss", (y - lo) / (hi - lo), (contact_h - 0.15 - lo) / (hi - lo),
-      (contact_h + 0.15 - lo) / (hi - lo), @vec.dabs(y - contact_h) <= 0.15,
+      h, "power", p, serve_sweet_lo, serve_sweet_hi, p >= serve_sweet_lo && p <=
+      serve_sweet_hi,
     )
   } else {
-    @ffi.host_hide_gauge(h, "toss")
+    @ffi.host_hide_gauge(h, "power")
   }
 
   // where-to-stand hint
