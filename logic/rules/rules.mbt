@@ -34,10 +34,11 @@ pub(all) struct Match {
   mut tb_points_c : Int
   mut server : Side
   mut winner : Side?
+  target_games : Int // games to win the set (win by 2, tiebreak at target-target)
 }
 
 ///|
-pub fn create_match(first_server : Side) -> Match {
+pub fn create_match(first_server : Side, target_games~ : Int = 6) -> Match {
   {
     points_p: 0,
     points_c: 0,
@@ -48,6 +49,7 @@ pub fn create_match(first_server : Side) -> Match {
     tb_points_c: 0,
     server: first_server,
     winner: None,
+    target_games,
   }
 }
 
@@ -106,11 +108,11 @@ fn win_game(m : Match, who : Side) -> PointEvent {
   m.points_c = 0
   m.server = other(m.server)
   let lead = get_games(m, who) - get_games(m, other(who))
-  if get_games(m, who) >= 6 && lead >= 2 {
+  if get_games(m, who) >= m.target_games && lead >= 2 {
     m.winner = Some(who)
     return SetWon
   }
-  if m.games_p == 6 && m.games_c == 6 {
+  if m.games_p == m.target_games && m.games_c == m.target_games {
     m.tiebreak = true
     return TiebreakStart
   }

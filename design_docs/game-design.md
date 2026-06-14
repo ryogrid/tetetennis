@@ -37,9 +37,9 @@ A simplified but faithful subset of real tennis (`logic/rules/rules.mbt`).
 
 - **Points**: 0 → 15 → 30 → 40 → Game. 40–40 is **Deuce**, then **Advantage → Game**
   (traditional advantage scoring; no No-Ad).
-- **Match**: a single set. First to **6 games with a 2-game lead**; at **6–6** a
-  **tiebreak** is played (first to **7 points, win by 2**). The number of games to win
-  is **fixed** — there is no "games-to-win" selector.
+- **Match**: a single set of selectable length (**2 / 4 / 6 games**, default 6;
+  `Match.target_games`). First to *target* games with a 2-game lead; at *target–target* a
+  **tiebreak** is played (first to **7 points, win by 2**).
 - **Serve right** alternates every game; the human serves first.
 - **Serve side**: Deuce (right) when the game's point count is even, Ad (left) when
   odd. The serve must land in the diagonally opposite service box. **Two faults =
@@ -383,7 +383,7 @@ you can't see your own contact point from there, several on-court aids are rende
 DOM-based, drawn by `src/ui.js`:
 
 - **Title flow**: select **Difficulty**, **Surface** (Clay/Grass/Hard), **Persona**
-  (radar-chart cards), and **Assist** level, then start.
+  (radar-chart cards), **Set length** (2/4/6 games), and **Assist** level, then start.
 - **Scoreboard**: games, points, both player/opponent names, a 2nd-serve indicator, and
   a tiebreak indicator.
 - **In-game HUD**: a permanent compact **control guide** on the screen edge, the serve/
@@ -433,7 +433,7 @@ for reference and possible future work.
 
 ### A.6 Remaining UI
 - **Open-court floor highlight** (an `OPEN_COURT_ENABLED`-style toggle) — not present.
-- A **games-to-win selector** and a **pause modal** (Resume/Quit with confirm).
+- A **pause modal** (Resume/Quit with confirm).
 
 ### A.7 Sampled / richer audio
 - **Recorded hit samples** (loaded via `decodeAudioData`, played with `BufferSource`) with

@@ -92,10 +92,25 @@ enum AppState {
   MenuOpp
   MenuSurface
   MenuDifficulty
+  MenuGames
   MenuAssist
   Match
   Results
 } derive(Eq)
+
+// Games-to-win options for the set length selector (Appendix A.6).
+///|
+let games_options : Array[Int] = [2, 4, 6]
+
+///|
+fn games_idx_of(n : Int) -> Int {
+  for i = 0; i < games_options.length(); i = i + 1 {
+    if games_options[i] == n {
+      return i
+    }
+  }
+  games_options.length() - 1
+}
 
 ///|
 enum PointState {
@@ -215,6 +230,7 @@ struct Game {
   mut sel_opp : Int
   mut sel_surface : Int
   mut sel_difficulty : Int
+  mut sel_games : Int // games to win the set
   mut time_scale : Double
   mut ms : MatchState?
 }
@@ -372,6 +388,15 @@ fn confirm_surface(self : Game) -> Unit {
 fn confirm_difficulty(self : Game) -> Unit {
   @ffi.host_sfx(self.host, "sfxConfirm")
   self.sel_difficulty = self.menu_idx
+  self.state = MenuGames
+  self.menu_idx = games_idx_of(self.sel_games)
+  @ffi.host_show_games_select(self.host, self.menu_idx)
+}
+
+///|
+fn confirm_games(self : Game) -> Unit {
+  @ffi.host_sfx(self.host, "sfxConfirm")
+  self.sel_games = games_options[self.menu_idx]
   self.state = MenuAssist
   self.menu_idx = assist_idx()
   @ffi.host_show_assist_select(self.host, self.menu_idx)
@@ -443,7 +468,7 @@ fn start_match(self : Game) -> Unit {
     cpu,
     ai,
     ball: @physics.make_ball(),
-    m: @rules.create_match(@rules.P),
+    m: @rules.create_match(@rules.P, target_games=self.sel_games),
     surface,
     surface_id,
     point_state: PreServe,
@@ -1106,14 +1131,26 @@ pub fn handle_input() -> Unit {
         self.confirm_difficulty()
       }
     }
-    MenuAssist => {
+    MenuGames => {
       if self.handle_menu_nav(3) {
-        @ffi.host_show_assist_select(h, self.menu_idx)
+        @ffi.host_show_games_select(h, self.menu_idx)
       }
       if @ffi.host_was_pressed(h, "Escape") {
         self.state = MenuDifficulty
         self.menu_idx = self.sel_difficulty
         @ffi.host_show_difficulty_select(h, self.menu_idx)
+      } else if self.confirm_pressed() {
+        self.confirm_games()
+      }
+    }
+    MenuAssist => {
+      if self.handle_menu_nav(3) {
+        @ffi.host_show_assist_select(h, self.menu_idx)
+      }
+      if @ffi.host_was_pressed(h, "Escape") {
+        self.state = MenuGames
+        self.menu_idx = games_idx_of(self.sel_games)
+        @ffi.host_show_games_select(h, self.menu_idx)
       } else if self.confirm_pressed() {
         self.confirm_assist()
       }
@@ -1624,7 +1661,7 @@ pub fn menu_tap(idx : Int) -> Unit {
     return
   }
   let count = match self.state {
-    MenuSurface | MenuDifficulty | MenuAssist => 3
+    MenuSurface | MenuDifficulty | MenuGames | MenuAssist => 3
     MenuChar | MenuOpp => @shots.characters.length()
     _ => return
   }
@@ -1637,6 +1674,7 @@ pub fn menu_tap(idx : Int) -> Unit {
       MenuOpp => self.confirm_opp()
       MenuSurface => self.confirm_surface()
       MenuDifficulty => self.confirm_difficulty()
+      MenuGames => self.confirm_games()
       MenuAssist => self.confirm_assist()
       _ => ()
     }
@@ -1667,6 +1705,7 @@ pub fn game_init(host : @ffi.Host, seed : Int) -> Unit {
     sel_opp: 0,
     sel_surface: 2,
     sel_difficulty: 1,
+    sel_games: 6,
     time_scale: 1.0,
     ms: None,
   }

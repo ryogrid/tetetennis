@@ -137,6 +137,10 @@ pub extern "js" fn host_show_assist_select(h : Host, idx : Int) -> Unit =
   "(h,i)=>h.ui.showAssistSelect(i)"
 
 ///|
+pub extern "js" fn host_show_games_select(h : Host, idx : Int) -> Unit =
+  "(h,i)=>h.ui.showGamesSelect(i)"
+
+///|
 pub extern "js" fn host_hide_menu(h : Host) -> Unit = "(h)=>h.ui.hideMenu()"
 
 ///|

@@ -56,6 +56,23 @@ test "set won at 6 games with 2 clear" {
 }
 
 ///|
+test "configurable set length: a 2-game set is won at 2-0" {
+  let m = create_match(P, target_games=2)
+  win_points(m, P, 4) |> ignore // 1-0
+  assert_eq(m.winner, None)
+  assert_eq(win_points(m, P, 4), SetWon) // 2-0
+  assert_eq(m.winner, Some(P))
+}
+
+///|
+test "configurable set length: a 6-game set is not won at 2-0" {
+  let m = create_match(P, target_games=6)
+  win_points(m, P, 4) |> ignore
+  win_points(m, P, 4) |> ignore // 2-0
+  assert_eq(m.winner, None)
+}
+
+///|
 test "no set win at 6-5; tiebreak starts at 6-6" {
   let m = create_match(P)
   for _i = 0; _i < 5; _i = _i + 1 {

@@ -22,6 +22,12 @@ const ASSIST_OPTIONS = [
   { id: 'on',   name: 'On',   desc: 'Slow-motion approach, easier pace, forgiving contact.' },
   { id: 'full', name: 'Full', desc: 'Everything in On, plus auto-swing and auto-positioning.' },
 ];
+// must match games_options in logic/game/game.js.mbt
+const GAMES_OPTIONS = [
+  { name: '2 Games', desc: 'Quick set: first to 2 games (win by 2, tiebreak at 2-2).' },
+  { name: '4 Games', desc: 'Short set: first to 4 games (win by 2, tiebreak at 4-4).' },
+  { name: '6 Games', desc: 'Full set: first to 6 games (win by 2, tiebreak at 6-6).' },
+];
 
 // Surface display order: clay, grass, hard.
 const SURFACE_IDS = ['clay', 'grass', 'hard'];
@@ -487,6 +493,19 @@ export function createUI({ onVirtualKey, onMoveAxis } = {}) {
       `</div><div class="hint">&larr; &rarr; select &middot; Enter confirm &middot; Esc back &middot; or tap (tap again to confirm)</div>`;
   }
 
+  function showGamesSelect(idx) {
+    els.menu.style.display = 'flex';
+    els.menu.dataset.screen = 'select';
+    els.menu.innerHTML =
+      `<div class="title">SET LENGTH</div><div class="cards">` +
+      GAMES_OPTIONS.map((o, i) =>
+        `<div class="card${i === idx ? ' sel' : ''}" data-idx="${i}">
+          <h3>${o.name.toUpperCase()}</h3>
+          <div class="desc">${o.desc}</div>
+        </div>`).join('') +
+      `</div><div class="hint">&larr; &rarr; select &middot; Enter confirm &middot; Esc back &middot; or tap (tap again to confirm)</div>`;
+  }
+
   function showAssistSelect(idx) {
     els.menu.style.display = 'flex';
     els.menu.dataset.screen = 'select';
@@ -717,7 +736,7 @@ export function createUI({ onVirtualKey, onMoveAxis } = {}) {
 
   return {
     setMenuTapHandler(fn) { menuTapHandler = fn; },
-    showCharSelect, showSurfaceSelect, showDifficultySelect, showAssistSelect,
+    showCharSelect, showSurfaceSelect, showDifficultySelect, showGamesSelect, showAssistSelect,
     showResults, hideMenu,
     showHUD, hideHUD, updateScore,
     banner, toast, flashShot, serveSpeedToast, setRecommendedShot,
