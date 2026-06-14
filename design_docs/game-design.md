@@ -304,10 +304,14 @@ The CPU is **never** eased by Assist.
   returns to a home position near the centre of its baseline when not hitting.
 - It **re-reads** the prediction periodically with an error that **shrinks as the ball
   nears**, so it converges on the real landing spot.
-- **Letting outs pass**: if the predicted landing is outside its own court, the AI lets
-  the ball go (a hard filter on the prediction) and resets to home. *(The probabilistic,
-  difficulty-scaled out-tolerance described in the original draft is not implemented — see
-  Appendix A.)*
+- **Letting outs pass** (`out_letgo_prob`): if the predicted landing is past a line, the AI
+  lets it go with a probability that depends on how far out it is and on difficulty — a
+  **clear out** (>0.6 m past the line) is let go ~95 % of the time, a **borderline** out is
+  judged better at higher difficulty (Hard 0.92 vs Easy 0.35), and an in ball is always
+  played. So a strong CPU wins the point on your out balls; a weak one chases them.
+- **Serve-return positioning** (`return_shift_factor`): the CPU receiver shifts toward the
+  served box, more sharply at higher difficulty (Hard 1.7× vs Easy 1.05× the box-centre
+  offset).
 - **Shot selection** is weighted scoring over candidate targets: it favours the **open
   court** (distance from the human), penalises shots that force it to **run**, and applies
   a **per-persona style bias** (e.g. a grinder leans topspin, a slicer leans slice).
@@ -318,7 +322,6 @@ The CPU is **never** eased by Assist.
   step **in front** of the strike point and then **holds a forward home position**
   (`home_z = −6.5`) until a deep ball pushes it back.
 
-Serve-return positioning is still default-baseline (Appendix A.5).
 
 ### 9.2 Difficulty
 
@@ -418,10 +421,6 @@ current build** — the figures here are *proposed*, not measured from code. The
 for reference and possible future work.
 
 ### A.5 Smarter AI
-- **Serve-return positioning** that bisects the wide/centre-T angle, dynamic at higher
-  difficulty.
-- **Probabilistic, difficulty-scaled** out-tolerance (borderline outs occasionally
-  played) instead of the current hard filter.
 - Explicit "player rushes net → lob/passing" and "player drops deep → drop shot" rules.
 
 ### A.6 Stats, open court & richer UI

@@ -9,3 +9,11 @@ test "net rush: short slow balls draw a net-lover in; deep or fast ones don't" {
   assert_true(!should_rush_net(58.0, 4.0, 45.0)) // a fast (serve-pace) ball is no chance
   assert_true(!should_rush_net(58.0, 11.0, 12.0)) // a deep ball is never a rush
 }
+
+///|
+test "AI out tolerance: in balls always played; hard judges borderline outs best" {
+  assert_true(out_letgo_prob("normal", -0.5) == 0.0) // an in ball is always played
+  assert_true(out_letgo_prob("hard", 1.0) > 0.9) // a clear out is let go
+  // on a borderline out, hard lets it go more often (better judgement) than easy
+  assert_true(out_letgo_prob("hard", 0.3) > out_letgo_prob("easy", 0.3))
+}

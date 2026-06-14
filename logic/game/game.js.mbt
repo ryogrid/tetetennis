@@ -495,7 +495,10 @@ fn position_for_serve(self : Game, ms : MatchState) -> Unit {
   ent(ms, sv).place(stance_x, sv_sign * (@physics.court_half_len + 0.4))
   let box = @shots.serve_box(sv, ms.court_side)
   let box_cx = (box.x_min + box.x_max) / 2.0
-  ent(ms, rc).place(box_cx * 1.4, -sv_sign * (@physics.court_half_len + 0.7))
+  // the CPU receiver reads the serve angle (sharper at higher difficulty); the
+  // human receiver uses the neutral bisector and then moves themselves
+  let shift = if rc == @rules.C { @ai.return_shift_factor(ms.ai) } else { 1.4 }
+  ent(ms, rc).place(box_cx * shift, -sv_sign * (@physics.court_half_len + 0.7))
   if sv == @rules.P {
     @ffi.host_serve_look_x(self.host, box_cx)
   }

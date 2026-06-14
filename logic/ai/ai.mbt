@@ -157,6 +157,35 @@ fn should_rush_net(net_tendency : Double, pred_z : Double, in_pace : Double) -> 
   chance + net_tendency / 100.0 > net_rush_required
 }
 
+// Probability the AI lets a predicted-out ball go (Appendix A.5). An in ball is
+// always played; a clear out is almost always let go; a borderline out is judged
+// better at higher difficulty (so hard play the point, easy chase the out).
+///|
+pub fn out_letgo_prob(diff_id : String, margin : Double) -> Double {
+  if margin <= 0.0 {
+    return 0.0
+  }
+  if margin > 0.6 {
+    return 0.95
+  }
+  match diff_id {
+    "hard" => 0.92
+    "easy" => 0.35
+    _ => 0.65
+  }
+}
+
+// How far the receiver shifts toward the served box (Appendix A.5): sharper read
+// at higher difficulty.
+///|
+pub fn return_shift_factor(ai : Ai) -> Double {
+  match ai.diff.id {
+    "hard" => 1.7
+    "easy" => 1.05
+    _ => 1.4
+  }
+}
+
 ///|
 pub(all) struct AiCtx {
   ball : @physics.Ball
@@ -408,10 +437,17 @@ pub fn update_ai(ai : Ai, ctx : AiCtx, rng : @rng.Gauss) -> AiMove {
       ai.landing_out = false
     } else {
       match @physics.predict_landing(ball, ctx.surface) {
-        Some(l) =>
-          ai.landing_out = @vec.dsign(l.z) < 0.0 &&
-            (@vec.dabs(l.x) > @physics.court_half_width + @physics.line_grace ||
-            @vec.dabs(l.z) > @physics.court_half_len + @physics.line_grace)
+        Some(l) => {
+          let on_side = @vec.dsign(l.z) < 0.0
+          let mx = @vec.dabs(l.x) - (@physics.court_half_width + @physics.line_grace)
+          let mz = @vec.dabs(l.z) - (@physics.court_half_len + @physics.line_grace)
+          let margin = @vec.dmax(mx, mz) // > 0 means past a line
+          // only roll for genuinely-out balls (keeps the rng stream stable for
+          // the common in-bounds case)
+          ai.landing_out = on_side &&
+            margin > 0.0 &&
+            rng.uniform() < out_letgo_prob(ai.diff.id, margin)
+        }
         None => ai.landing_out = false
       }
     }
