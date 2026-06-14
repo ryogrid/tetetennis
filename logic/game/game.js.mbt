@@ -234,6 +234,7 @@ struct Game {
   mut sel_surface : Int
   mut sel_difficulty : Int
   mut sel_games : Int // games to win the set
+  mut paused : Bool
   mut time_scale : Double
   mut ms : MatchState?
 }
@@ -502,6 +503,7 @@ fn start_match(self : Game) -> Unit {
   }
   self.ms = Some(ms)
   self.state = Match
+  self.paused = false
   @ffi.host_start_match(self.host, surface_id, self.sel_player, self.sel_opp)
   @ffi.host_hide_menu(self.host)
   @ffi.host_show_hud(self.host)
@@ -1175,9 +1177,22 @@ fn handle_match_input(self : Game) -> Unit {
     Some(ms) => ms
     None => return
   }
+  // pause menu (physical pause): Esc toggles it; while paused, only Resume/Quit
+  if self.paused {
+    if @ffi.host_was_pressed(h, "Escape") || @ffi.host_was_pressed(h, "KeyP") {
+      self.paused = false
+      @ffi.host_hide_pause(self.host)
+    } else if @ffi.host_was_pressed(h, "KeyQ") {
+      self.paused = false
+      @ffi.host_hide_pause(self.host)
+      self.teardown_match()
+      self.back_to_char_menu()
+    }
+    return
+  }
   if @ffi.host_was_pressed(h, "Escape") {
-    self.teardown_match()
-    self.back_to_char_menu()
+    self.paused = true
+    @ffi.host_show_pause(self.host)
     return
   }
   let shot = str_to_shot(@ffi.host_shot_key(h))
@@ -1201,8 +1216,8 @@ fn handle_match_input(self : Game) -> Unit {
 ///|
 pub fn fixed_update(dt : Double) -> Unit {
   let self = g()
-  if self.state != Match {
-    return
+  if self.state != Match || self.paused {
+    return // physical pause: no simulation advance
   }
   let ms = match self.ms {
     Some(ms) => ms
@@ -1720,6 +1735,7 @@ pub fn game_init(host : @ffi.Host, seed : Int) -> Unit {
     sel_surface: 2,
     sel_difficulty: 1,
     sel_games: 6,
+    paused: false,
     time_scale: 1.0,
     ms: None,
   }

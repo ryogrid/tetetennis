@@ -150,6 +150,12 @@ pub extern "js" fn host_show_games_select(h : Host, idx : Int) -> Unit =
   "(h,i)=>h.ui.showGamesSelect(i)"
 
 ///|
+pub extern "js" fn host_show_pause(h : Host) -> Unit = "(h)=>h.ui.showPause()"
+
+///|
+pub extern "js" fn host_hide_pause(h : Host) -> Unit = "(h)=>h.ui.hidePause()"
+
+///|
 pub extern "js" fn host_hide_menu(h : Host) -> Unit = "(h)=>h.ui.hideMenu()"
 
 ///|

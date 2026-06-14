@@ -391,6 +391,9 @@ DOM-based, drawn by `src/ui.js`:
 - **In-game HUD**: a permanent compact **control guide** on the screen edge, the serve/
   strike **gauges**, and a **point-resolution banner** (e.g. "FAULT", "DOUBLE FAULT",
   "LET").
+- **Pause** (`host_show_pause`): **Esc** during a match opens a Resume/Quit modal and
+  **physically pauses** the simulation (`fixed_update` early-returns while `paused`).
+  Resume (Esc/P) returns to play; Quit needs a confirming second click (Q).
 - **Match end**: Win/Loss, the final games score and the **difficulty**, a **stats table**
   (Winners, Unforced errors, Double faults, 1st-serve %, Net points won, Avg rally length,
   Distance run — both players; `game.js.mbt:stats_string` → `host_show_results`), a
@@ -432,9 +435,6 @@ files to download (`src/audio.js`).
 The original design draft envisioned a richer system. **None of the following is in the
 current build** — the figures here are *proposed*, not measured from code. They are kept
 for reference and possible future work.
-
-### A.6 Remaining UI
-- A **pause modal** (Resume/Quit with confirm).
 
 ### A.7 Sampled / richer audio
 - **Recorded hit samples** (loaded via `decodeAudioData`, played with `BufferSource`) with

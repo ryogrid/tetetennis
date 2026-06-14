@@ -67,6 +67,7 @@ const css = `
   background: rgba(80,230,120,.18); border: 1px solid rgba(80,230,120,.7);
   color: #e8ffe8; font-size: 15px; letter-spacing: 1px; cursor: pointer;
 }
+.menubtn.quit { background: rgba(230,90,90,.16); border-color: rgba(230,90,90,.7); color: #ffecec; }
 #scoreboard {
   position: absolute; top: 14px; left: 14px; background: rgba(10,10,18,.78);
   border-radius: 8px; padding: 10px 14px; font-size: 15px; min-width: 170px;
@@ -553,6 +554,33 @@ export function createUI({ onVirtualKey, onMoveAxis } = {}) {
     els.menu.style.display = 'none';
   }
 
+  function fireKey(code) {
+    if (onVirtualKey) { onVirtualKey(code, true); onVirtualKey(code, false); }
+  }
+
+  function showPause() {
+    els.menu.style.display = 'flex';
+    els.menu.dataset.screen = 'pause';
+    els.menu.innerHTML =
+      `<div class="title">PAUSED</div>` +
+      `<button id="resume-btn" class="menubtn">Resume (Esc)</button>` +
+      `<button id="quit-btn" class="menubtn quit">Quit match (Q)</button>` +
+      `<div class="hint">Esc or P to resume &middot; Q to quit</div>`;
+    const rb = document.getElementById('resume-btn');
+    if (rb) rb.addEventListener('pointerdown', (e) => { e.stopPropagation(); fireKey('Escape'); });
+    const qb = document.getElementById('quit-btn');
+    let armed = false; // require a confirming second click to avoid mis-quits
+    if (qb) qb.addEventListener('pointerdown', (e) => {
+      e.stopPropagation();
+      if (!armed) { armed = true; qb.textContent = 'Click again to quit'; return; }
+      fireKey('KeyQ');
+    });
+  }
+
+  function hidePause() {
+    els.menu.style.display = 'none';
+  }
+
   // ---------- hud ----------
 
   function showHUD() {
@@ -737,6 +765,7 @@ export function createUI({ onVirtualKey, onMoveAxis } = {}) {
   return {
     setMenuTapHandler(fn) { menuTapHandler = fn; },
     showCharSelect, showSurfaceSelect, showDifficultySelect, showGamesSelect, showAssistSelect,
+    showPause, hidePause,
     showResults, hideMenu,
     showHUD, hideHUD, updateScore,
     banner, toast, flashShot, serveSpeedToast, setRecommendedShot,
