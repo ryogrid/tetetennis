@@ -140,14 +140,17 @@ pub extern "js" fn host_show_assist_select(h : Host, idx : Int) -> Unit =
 pub extern "js" fn host_hide_menu(h : Host) -> Unit = "(h)=>h.ui.hideMenu()"
 
 ///|
+// stats is a ';'-separated list of "Label\tYou\tOpp" rows for the end screen.
 pub extern "js" fn host_show_results(
   h : Host,
   win : String,
   lose : String,
   games : String,
   player_won : Bool,
+  difficulty : String,
+  stats : String,
 ) -> Unit =
-  "(h,w,l,g,pw)=>h.ui.showResults(w,l,g,pw)"
+  "(h,w,l,g,pw,d,s)=>h.ui.showResults(w,l,g,pw,d,s)"
 
 // ---------------- ui: hud ----------------
 

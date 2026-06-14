@@ -389,8 +389,16 @@ DOM-based, drawn by `src/ui.js`:
 - **In-game HUD**: a permanent compact **control guide** on the screen edge, the serve/
   strike **gauges**, and a **point-resolution banner** (e.g. "FAULT", "DOUBLE FAULT",
   "LET").
-- **Match end**: Win/Loss result with the final games score, and a prompt back to the
-  menu.
+- **Match end**: Win/Loss, the final games score and the **difficulty**, a **stats table**
+  (Winners, Unforced errors, Double faults, 1st-serve %, Net points won, Avg rally length,
+  Distance run — both players; `game.js.mbt:stats_string` → `host_show_results`), a
+  **Rematch** button (or **R**) that restarts with the same settings, and a prompt back to
+  the menu.
+
+The stats are accumulated through the match in a `MatchStats` record on `MatchState`,
+instrumented at the point-ending sites (`record_winner`/`record_error`, double faults,
+first-serve in/out, per-frame running distance, per-point net-point outcomes and rally
+length).
 
 ## 12. Audio
 
@@ -423,14 +431,10 @@ The original design draft envisioned a richer system. **None of the following is
 current build** — the figures here are *proposed*, not measured from code. They are kept
 for reference and possible future work.
 
-### A.6 Stats, open court & richer UI
-- **Match stats** — Winners, Unforced Errors, Double Faults, average rally length,
-  1st-serve %, net-point win %, and running distance, shown on an expanded match-end
-  screen, plus a **Rematch** button.
+### A.6 Remaining UI
 - **Open-court floor highlight** (an `OPEN_COURT_ENABLED`-style toggle) — not present.
-- **Radar charts** for persona stats (currently bars), a **games-to-win selector**, a
-  **pause modal** (Resume/Quit with confirm), a **charge bar**, and a difficulty readout
-  on the scoreboard.
+- **Radar charts** for persona stats (currently bars), a **games-to-win selector**, and a
+  **pause modal** (Resume/Quit with confirm).
 
 ### A.7 Sampled / richer audio
 - **Recorded hit samples** (loaded via `decodeAudioData`, played with `BufferSource`) with

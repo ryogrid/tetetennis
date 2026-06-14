@@ -105,6 +105,60 @@ enum PointState {
   PointOver
 } derive(Eq)
 
+// Match statistics (Appendix A.6), accumulated through the match and shown on
+// the end screen. p = human, c = CPU.
+///|
+struct MatchStats {
+  mut p_winners : Int
+  mut c_winners : Int
+  mut p_unforced : Int
+  mut c_unforced : Int
+  mut p_double_faults : Int
+  mut c_double_faults : Int
+  mut points_played : Int
+  mut total_rally_shots : Int
+  mut rally_shots : Int // shots in the current point
+  mut p_first_serves : Int
+  mut p_first_in : Int
+  mut c_first_serves : Int
+  mut c_first_in : Int
+  mut p_run : Double // running distance (m)
+  mut c_run : Double
+  mut p_net_pts : Int
+  mut p_net_won : Int
+  mut c_net_pts : Int
+  mut c_net_won : Int
+  mut p_came_net : Bool // came to net during the current point
+  mut c_came_net : Bool
+}
+
+///|
+fn new_match_stats() -> MatchStats {
+  {
+    p_winners: 0,
+    c_winners: 0,
+    p_unforced: 0,
+    c_unforced: 0,
+    p_double_faults: 0,
+    c_double_faults: 0,
+    points_played: 0,
+    total_rally_shots: 0,
+    rally_shots: 0,
+    p_first_serves: 0,
+    p_first_in: 0,
+    c_first_serves: 0,
+    c_first_in: 0,
+    p_run: 0.0,
+    c_run: 0.0,
+    p_net_pts: 0,
+    p_net_won: 0,
+    c_net_pts: 0,
+    c_net_won: 0,
+    p_came_net: false,
+    c_came_net: false,
+  }
+}
+
 ///|
 enum RallyPhase {
   Idle
@@ -144,6 +198,7 @@ struct MatchState {
   mut state_timer : Double
   mut serve_meter : Double // current oscillating power-meter value [0,1]
   mut serve_meter_t : Double // meter phase clock (s)
+  stats : MatchStats
   mut cpu_serve_plan : @ai.ServePlan?
   mut last_shot_pref : @shots.ShotType?
   mut was_in_reach : Bool
@@ -348,6 +403,25 @@ fn names_for(ms : MatchState, side : @rules.Side) -> String {
   }
 }
 
+// End-screen stats payload: ';'-separated "Label\tYou\tOpp" rows (Appendix A.6).
+///|
+fn stats_string(ms : MatchState) -> String {
+  let s = ms.stats
+  let pts = if s.points_played == 0 { 1 } else { s.points_played }
+  let avg10 = (s.total_rally_shots.to_double() / pts.to_double() * 10.0).to_int()
+  let p_fs = if s.p_first_serves == 0 { 1 } else { s.p_first_serves }
+  let c_fs = if s.c_first_serves == 0 { 1 } else { s.c_first_serves }
+  let p1 = (s.p_first_in.to_double() / p_fs.to_double() * 100.0).to_int()
+  let c1 = (s.c_first_in.to_double() / c_fs.to_double() * 100.0).to_int()
+  "Winners\t\{s.p_winners}\t\{s.c_winners};" +
+  "Unforced errors\t\{s.p_unforced}\t\{s.c_unforced};" +
+  "Double faults\t\{s.p_double_faults}\t\{s.c_double_faults};" +
+  "1st serve in\t\{p1}%\t\{c1}%;" +
+  "Net pts won\t\{s.p_net_won}/\{s.p_net_pts}\t\{s.c_net_won}/\{s.c_net_pts};" +
+  "Avg rally\t\{avg10 / 10}.\{avg10 % 10}\t-;" +
+  "Distance run\t\{s.p_run.to_int()}m\t\{s.c_run.to_int()}m"
+}
+
 ///|
 fn refresh_score(self : Game, ms : MatchState) -> Unit {
   let ss = @rules.score_strings(ms.m)
@@ -392,6 +466,7 @@ fn start_match(self : Game) -> Unit {
     state_timer: 0.0,
     serve_meter: 0.0,
     serve_meter_t: 0.0,
+    stats: new_match_stats(),
     cpu_serve_plan: None,
     last_shot_pref: None,
     was_in_reach: false,
@@ -567,6 +642,12 @@ fn execute_serve(
 ) -> Unit {
   let sv = server(ms)
   let e = ent(ms, sv)
+  if ms.serve_number == 1 {
+    match sv {
+      @rules.P => ms.stats.p_first_serves = ms.stats.p_first_serves + 1
+      @rules.C => ms.stats.c_first_serves = ms.stats.c_first_serves + 1
+    }
+  }
   let b = ms.ball
   let contact_h = @physics.serve_contact_h(e.stats.rea)
   let from_y = @vec.dmax(1.6, @vec.dmin(b.py, contact_h))
@@ -654,6 +735,13 @@ fn attempt_contact(
       ms.serve_net_touched = false
       ms.ball_stamp = ms.ball_stamp + 1
       ent(ms, side).stiff_t = stiff_dur
+      ms.stats.rally_shots = ms.stats.rally_shots + 1
+      if r.volley {
+        match side {
+          @rules.P => ms.stats.p_came_net = true
+          @rules.C => ms.stats.c_came_net = true
+        }
+      }
       @ffi.host_sfx_hit(self.host, @vec.hypot3(r.vx, r.vy, r.vz))
       if side == @rules.P {
         @ffi.host_flash_shot(self.host, shot_type_str(r.shot_type))
@@ -685,7 +773,32 @@ fn fault(self : Game, ms : MatchState) -> Unit {
   } else {
     @ffi.host_banner(self.host, "DOUBLE FAULT")
     @ffi.host_sfx(self.host, "sfxFault")
+    match server(ms) {
+      @rules.P => ms.stats.p_double_faults = ms.stats.p_double_faults + 1
+      @rules.C => ms.stats.c_double_faults = ms.stats.c_double_faults + 1
+    }
+    self.record_error(ms, server(ms))
     self.point_end(ms, receiver(ms), "")
+  }
+}
+
+// ---- match-stats helpers (Appendix A.6) ----
+
+///|
+fn record_winner(self : Game, ms : MatchState, side : @rules.Side) -> Unit {
+  ignore(self)
+  match side {
+    @rules.P => ms.stats.p_winners = ms.stats.p_winners + 1
+    @rules.C => ms.stats.c_winners = ms.stats.c_winners + 1
+  }
+}
+
+///|
+fn record_error(self : Game, ms : MatchState, side : @rules.Side) -> Unit {
+  ignore(self)
+  match side {
+    @rules.P => ms.stats.p_unforced = ms.stats.p_unforced + 1
+    @rules.C => ms.stats.c_unforced = ms.stats.c_unforced + 1
   }
 }
 
@@ -704,6 +817,25 @@ fn point_end(self : Game, ms : MatchState, winner : @rules.Side, call_text : Str
   ms.state_timer = 0.0
   @ffi.host_hide_landing(self.host)
   self.hide_sweet(ms)
+  // accumulate per-point stats (rally length, net-point outcomes)
+  let st = ms.stats
+  st.points_played = st.points_played + 1
+  st.total_rally_shots = st.total_rally_shots + st.rally_shots
+  st.rally_shots = 0
+  if st.p_came_net {
+    st.p_net_pts = st.p_net_pts + 1
+    if winner == @rules.P {
+      st.p_net_won = st.p_net_won + 1
+    }
+  }
+  if st.c_came_net {
+    st.c_net_pts = st.c_net_pts + 1
+    if winner == @rules.C {
+      st.c_net_won = st.c_net_won + 1
+    }
+  }
+  st.p_came_net = false
+  st.c_came_net = false
   let ev = @rules.add_point(ms.m, winner)
   let win_name = names_for(ms, winner)
   @ffi.host_sfx_crowd(self.host, if winner == @rules.P { 1.0 } else { 0.55 })
@@ -740,6 +872,12 @@ fn process_bounce(self : Game, ms : MatchState, px : Double, pz : Double, speed 
         self.let_serve(ms)
         return
       }
+      if ms.serve_number == 1 {
+        match server(ms) {
+          @rules.P => ms.stats.p_first_in = ms.stats.p_first_in + 1
+          @rules.C => ms.stats.c_first_in = ms.stats.c_first_in + 1
+        }
+      }
       ms.rally_phase = Live
       ms.bounces = 1
     } else {
@@ -753,6 +891,7 @@ fn process_bounce(self : Game, ms : MatchState, px : Double, pz : Double, speed 
   if ms.bounces == 0 {
     if ms.last_hit_by == Some(side) {
       // ball never made it across (net dribble / mishit straight down)
+      self.record_error(ms, side) // unforced error by the hitter
       self.point_end(ms, @rules.other(side), "")
       return
     }
@@ -766,12 +905,19 @@ fn process_bounce(self : Game, ms : MatchState, px : Double, pz : Double, speed 
         Some(@rules.P) => @rules.C
         _ => @rules.P
       }
+      match last {
+        Some(s) => self.record_error(ms, s) // hit out = unforced error
+        None => ()
+      }
       self.point_end(ms, w, "OUT")
     }
   } else {
-    // double bounce: opponent of last hitter failed to return
+    // double bounce: opponent of last hitter failed to return = a winner
     match last {
-      Some(s) => self.point_end(ms, s, "")
+      Some(s) => {
+        self.record_winner(ms, s)
+        self.point_end(ms, s, "")
+      }
       None => ()
     }
   }
@@ -972,7 +1118,12 @@ pub fn handle_input() -> Unit {
         self.confirm_assist()
       }
     }
-    Results => if self.confirm_pressed() { self.back_to_char_menu() }
+    Results =>
+      if @ffi.host_was_pressed(self.host, "KeyR") {
+        self.start_match() // rematch with the same settings
+      } else if self.confirm_pressed() {
+        self.back_to_char_menu()
+      }
     Match => self.handle_match_input()
   }
 }
@@ -1052,6 +1203,10 @@ pub fn fixed_update(dt : Double) -> Unit {
     }
   }
   ms.human.update(dt, hx, hz)
+  ms.stats.p_run = ms.stats.p_run +
+    @vec.hypot2(ms.human.vel_x, ms.human.vel_z) * dt
+  ms.stats.c_run = ms.stats.c_run +
+    @vec.hypot2(ms.cpu.vel_x, ms.cpu.vel_z) * dt
   if (ms.point_state == PreServe || ms.point_state == Serving) && server(ms) == @rules.P {
     let sx = @shots.serve_stance_x(@rules.P, ms.court_side)
     if sx > 0.0 {
@@ -1289,8 +1444,12 @@ fn point_over_step(self : Game, ms : MatchState, dt : Double) -> Unit {
         } else {
           "\{ms.m.games_c}-\{ms.m.games_p}"
         }
+        let diff_name = @ai.difficulties[self.sel_difficulty].name
+        let stats_str = stats_string(ms)
         self.teardown_match()
-        @ffi.host_show_results(self.host, win_name, lose_name, g_str, w == @rules.P)
+        @ffi.host_show_results(
+          self.host, win_name, lose_name, g_str, w == @rules.P, diff_name, stats_str,
+        )
       }
       None => self.next_point(ms)
     }

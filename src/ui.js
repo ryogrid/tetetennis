@@ -52,6 +52,15 @@ const css = `
 .swatch { width: 150px; height: 100px; border-radius: 10px; border: 3px solid #333; }
 .swatch-label { text-align: center; margin-top: 8px; font-size: 16px; }
 .hint { font-size: 13px; color: #777; }
+.matchstats { border-collapse: collapse; margin: 6px 0; font-size: 14px; color: #cdd; }
+.matchstats th, .matchstats td { padding: 3px 14px; text-align: center; }
+.matchstats th { color: #888; font-weight: 600; font-size: 12px; }
+.matchstats td:first-child { text-align: left; color: #9aa; }
+.menubtn {
+  pointer-events: auto; margin: 8px 0 4px; padding: 8px 22px; border-radius: 8px;
+  background: rgba(80,230,120,.18); border: 1px solid rgba(80,230,120,.7);
+  color: #e8ffe8; font-size: 15px; letter-spacing: 1px; cursor: pointer;
+}
 #scoreboard {
   position: absolute; top: 14px; left: 14px; background: rgba(10,10,18,.78);
   border-radius: 8px; padding: 10px 14px; font-size: 15px; min-width: 170px;
@@ -474,13 +483,32 @@ export function createUI({ onVirtualKey, onMoveAxis } = {}) {
       `</div><div class="hint">&larr; &rarr; select &middot; Enter confirm &middot; Esc back &middot; or tap (tap again to confirm)</div>`;
   }
 
-  function showResults(win, lose, games, playerWon) {
+  function showResults(win, lose, games, playerWon, difficulty, stats) {
     els.menu.style.display = 'flex';
     els.menu.dataset.screen = 'results';
+    // stats: ';'-separated "Label\tYou\tOpp" rows
+    const rows = (stats || '').split(';').filter(Boolean).map((r) => {
+      const [label, you, opp] = r.split('\t');
+      return `<tr><td>${label}</td><td>${you}</td><td>${opp}</td></tr>`;
+    }).join('');
+    const table = rows
+      ? `<table class="matchstats"><tr><th></th><th>You</th><th>${lose}</th></tr>${rows}</table>`
+      : '';
     els.menu.innerHTML =
       `<div class="title">${playerWon ? 'YOU WIN!' : 'YOU LOSE'}</div>` +
-      `<div class="subtitle">${win} d. ${lose} &nbsp; ${games}</div>` +
+      `<div class="subtitle">${win} d. ${lose} &nbsp; ${games}` +
+      `${difficulty ? ` &middot; ${difficulty}` : ''}</div>` +
+      table +
+      `<button id="rematch-btn" class="menubtn">Rematch (R)</button>` +
       `<div class="hint">Enter or tap: back to menu</div>`;
+    const rb = document.getElementById('rematch-btn');
+    if (rb) {
+      const fire = (e) => {
+        e.stopPropagation();
+        if (onVirtualKey) { onVirtualKey('KeyR', true); onVirtualKey('KeyR', false); }
+      };
+      rb.addEventListener('pointerdown', fire);
+    }
   }
 
   function hideMenu() {
