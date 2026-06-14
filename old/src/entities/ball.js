@@ -1,12 +1,6 @@
-// Ball visuals: mesh, ground shadow blob (depth cue), landing ring decal,
-// "stand here" sweet-spot marker + countdown ring, and the predicted-path
-// trail. Adapted from old/src/entities/ball.js.
-//
-// The physics state object is gone: the MoonBit logic drives the visuals via
-// explicit args. setBall(active, px,py,pz, sx,sy,sz) positions the mesh/shadow
-// and stores the spin for the per-frame tumble; tick(dt) advances the spin
-// rotation and the ring/sweet pulse (formerly the tail of updateVisual()).
+// Ball visuals: mesh, ground shadow blob (depth cue), landing ring decal.
 import * as THREE from 'three';
+import { makeBall } from '../physics/ball.js';
 
 const VISUAL_R = 0.05; // slightly exaggerated for readability (physics uses 0.033)
 
@@ -81,12 +75,7 @@ function ballTexture() {
 }
 
 export function createBallEntity(scene) {
-  // latest state pushed by setBall(); the camera reads .active/.pos
-  const state = {
-    active: false,
-    pos: { x: 0, y: 0, z: 0 },
-    spin: { x: 0, y: 0, z: 0 },
-  };
+  const state = makeBall();
 
   const mesh = new THREE.Mesh(
     new THREE.SphereGeometry(VISUAL_R, 24, 18),
@@ -161,39 +150,35 @@ export function createBallEntity(scene) {
   sweet.visible = false;
   scene.add(sweet);
 
-  const _spinAxis = new THREE.Vector3();
   let ringT = 0;
 
   return {
     state,
     mesh,
-    // active + position + spin (rad/s) of the ball this frame.
-    setBall(active, px, py, pz, sx, sy, sz) {
-      state.active = active;
-      state.pos.x = px; state.pos.y = py; state.pos.z = pz;
-      state.spin.x = sx; state.spin.y = sy; state.spin.z = sz;
-      mesh.visible = active;
-      blob.visible = active && py < 12;
-      mesh.position.set(px, Math.max(py, VISUAL_R), pz);
-      blob.position.x = px;
-      blob.position.z = pz;
-      // Always-readable shadow: darkens and tightens as the ball nears the
-      // ground so the landing spot reads clearly.
-      const h = Math.min(py / 8, 1);
-      blob.material.opacity = 0.30 + 0.25 * (1 - h);
-      blob.scale.setScalar(1 + h * 0.9);
-    },
-    // per-frame cosmetic advance: spin tumble + ring/sweet pulse
-    tick(dt) {
+    sweetMarker: sweet,
+    updateVisual(dt) {
+      mesh.visible = state.active;
+      blob.visible = state.active && state.pos.y < 12;
+      mesh.position.set(state.pos.x, Math.max(state.pos.y, VISUAL_R), state.pos.z);
       // Spin-based rotation: the white seam lines tumble with the spin so
       // the player can read topspin (rolls forward), slice (spins back), etc.
       const s = state.spin;
       const mag = Math.hypot(s.x, s.y, s.z);
-      if (state.active && mag > 0.1) {
+      if (mag > 0.1) {
         const vis = Math.min(mag * 0.5, 50); // cap for readability
-        _spinAxis.set(s.x, s.y, s.z).normalize();
-        mesh.rotateOnWorldAxis(_spinAxis, vis * dt);
+        mesh.rotateOnWorldAxis(
+          new THREE.Vector3(s.x, s.y, s.z).normalize(),
+          vis * dt,
+        );
       }
+      blob.position.x = state.pos.x;
+      blob.position.z = state.pos.z;
+      // Always-readable shadow: stays visible at height (the old version faded
+      // out exactly when the ball was hardest to read), darkening and tightening
+      // as the ball nears the ground so the landing spot reads clearly.
+      const h = Math.min(state.pos.y / 8, 1);
+      blob.material.opacity = 0.30 + 0.25 * (1 - h);
+      blob.scale.setScalar(1 + h * 0.9);
       ringT += dt;
       if (ring.visible) {
         ring.scale.setScalar(1 + 0.12 * Math.sin(ringT * 9));
@@ -202,42 +187,38 @@ export function createBallEntity(scene) {
         sweet.scale.setScalar(1 + 0.07 * Math.sin(ringT * 5));
       }
     },
-    showLanding(x, z) {
+    showLanding(pos) {
       ring.visible = true;
-      ring.position.x = x;
-      ring.position.z = z;
+      ring.position.x = pos.x;
+      ring.position.z = pos.z;
     },
     hideLanding() { ring.visible = false; },
-    // show/position the sweet marker and drive the countdown ring.
-    setSweet(show, x, y, z, cdShow, cdFrac, cdGood) {
-      sweet.visible = show;
-      if (show) {
-        sweet.position.x = x;
-        sweet.position.z = z;
-      }
-      if (show && cdShow) {
-        const f = Math.max(0, Math.min(1, cdFrac));
-        sweetCount.visible = true;
-        sweetCount.scale.setScalar(1 + f * 1.6);
-        sweetCount.material.color.setHex(cdGood ? 0x50e678 : 0x39d7ff);
-        sweetCount.material.opacity = 0.5 + 0.4 * (1 - f);
-      } else {
-        sweetCount.visible = false;
-      }
+    showSweetSpot(pos) {
+      sweet.visible = true;
+      sweet.position.x = pos.x;
+      sweet.position.z = pos.z;
     },
-    // arr: flat [x,y,z,afterBounce, ...]; idealIdx (optional) marks the
+    hideSweetSpot() { sweet.visible = false; sweetCount.visible = false; },
+    // frac in [0,1]: 1 = contact far off, 0 = contact now. good => snap green.
+    setSweetCountdown(frac, good) {
+      const f = Math.max(0, Math.min(1, frac));
+      sweetCount.visible = true;
+      sweetCount.scale.setScalar(1 + f * 1.6);
+      sweetCount.material.color.setHex(good ? 0x50e678 : 0x39d7ff);
+      sweetCount.material.opacity = 0.5 + 0.4 * (1 - f);
+    },
+    hideSweetCountdown() { sweetCount.visible = false; },
+    // points: [{x, y, z, afterBounce}]; idealIdx (optional) marks the
     // waist-height point of the arc — drawn bigger and orange
-    showTrail(arr, idealIdx = -1) {
-      const n = Math.min((arr.length / 4) | 0, TRAIL_CAP);
+    showTrail(points, idealIdx = -1) {
+      const n = Math.min(points.length, TRAIL_CAP);
       for (let i = 0; i < n; i++) {
-        const o = i * 4;
-        const x = arr[o], y = arr[o + 1], z = arr[o + 2];
-        const afterBounce = arr[o + 3];
-        const sc = i === idealIdx ? 2.2 : 1;
-        _m.makeScale(sc, sc, sc);
-        _m.setPosition(x, Math.max(y, 0.04), z);
+        const p = points[i];
+        const s = i === idealIdx ? 2.2 : 1;
+        _m.makeScale(s, s, s);
+        _m.setPosition(p.x, Math.max(p.y, 0.04), p.z);
         trail.setMatrixAt(i, _m);
-        trail.setColorAt(i, i === idealIdx ? _cIdeal : (afterBounce ? _cPost : _cPre));
+        trail.setColorAt(i, i === idealIdx ? _cIdeal : (p.afterBounce ? _cPost : _cPre));
       }
       trail.count = n;
       trail.instanceMatrix.needsUpdate = true;
@@ -248,22 +229,9 @@ export function createBallEntity(scene) {
       trail.visible = false;
       trail.count = 0;
     },
+    trailMarker: trail,
     dispose() {
       scene.remove(mesh, blob, ring, sweet, trail);
-      mesh.geometry.dispose();
-      mesh.material.dispose();
-      blob.geometry.dispose();
-      blob.material.dispose();
-      ring.geometry.dispose();
-      ring.material.dispose();
-      trail.geometry.dispose();
-      trail.material.dispose();
-      sweetRing.geometry.dispose();
-      sweetRing.material.dispose();
-      sweetDot.geometry.dispose();
-      sweetDot.material.dispose();
-      sweetCount.geometry.dispose();
-      sweetCount.material.dispose();
     },
   };
 }

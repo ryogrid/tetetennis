@@ -1,0 +1,10 @@
+{
+  "import": [
+    "tetetetennis/logic/vec",
+    "tetetetennis/logic/physics",
+    "tetetetennis/logic/rng",
+    "tetetetennis/logic/rules",
+    "tetetetennis/logic/assist",
+    "moonbitlang/core/math"
+  ]
+}

@@ -1,0 +1,92 @@
+// host.render: owns the Three.js scene contents (court, two player rigs, ball
+// + markers) and implements the render contract the MoonBit logic drives.
+// Also stores the latest per-side player pos/vel and the ball pos/active so the
+// camera rig can read them (createCameraRig(camera, renderHost)).
+import { buildCourt } from './court.js';
+import { createBallEntity } from './entities/ball.js';
+import { createPlayerRig } from './entities/player.js';
+import { CHARACTERS, reachRadius } from './characters.js';
+
+const SURFACE_IDS = ['clay', 'grass', 'hard'];
+const REACH_IDLE = 0x3988ff; // blue
+const REACH_HOT = 0xff50a0;  // pink (ball in range)
+
+export function createRenderHost(scene) {
+  let court = null;
+  let ball = null;
+  const players = [null, null]; // [human(side 0), cpu(side 1)]
+  let surfaceId = 'hard';
+
+  function startMatch(sid, pIdx, cIdx) {
+    teardownMatch();
+    surfaceId = SURFACE_IDS.includes(sid) ? sid : 'hard';
+    court = buildCourt(surfaceId);
+    scene.add(court);
+
+    const pChar = CHARACTERS[pIdx] || CHARACTERS[0];
+    const cChar = CHARACTERS[cIdx] || CHARACTERS[0];
+    players[0] = createPlayerRig({
+      side: 0, color: pChar.color, reach: reachRadius(pChar.stats.REA), scene,
+    });
+    players[1] = createPlayerRig({
+      side: 1, color: cChar.color, reach: 0, scene,
+    });
+    ball = createBallEntity(scene);
+  }
+
+  function teardownMatch() {
+    if (court) { scene.remove(court); court = null; }
+    for (let i = 0; i < players.length; i++) {
+      if (players[i]) { players[i].dispose(); players[i] = null; }
+    }
+    if (ball) { ball.dispose(); ball = null; }
+  }
+
+  return {
+    startMatch,
+    teardownMatch,
+
+    setBall(active, px, py, pz, sx, sy, sz) {
+      if (ball) ball.setBall(active, px, py, pz, sx, sy, sz);
+    },
+    showLanding(x, z) { if (ball) ball.showLanding(x, z); },
+    hideLanding() { if (ball) ball.hideLanding(); },
+    setSweet(show, x, y, z, cdShow, cdFrac, cdGood) {
+      if (ball) ball.setSweet(show, x, y, z, cdShow, cdFrac, cdGood);
+    },
+    showTrail(arr, idealIdx) { if (ball) ball.showTrail(arr, idealIdx); },
+    hideTrail() { if (ball) ball.hideTrail(); },
+
+    setPlayer(side, x, z, vx, vz) {
+      const p = players[side];
+      if (p) p.setPlayer(x, z, vx, vz);
+    },
+    startSwing(side, type, fh) {
+      const p = players[side];
+      if (p) p.startSwing(type, fh);
+    },
+    serveAnim(side, on) {
+      const p = players[side];
+      if (p) p.serveAnim(on);
+    },
+    setReachColor(inReach) {
+      if (players[0]) players[0].setReachZoneColor(inReach ? REACH_HOT : REACH_IDLE);
+    },
+
+    // advance every rig's cosmetic pose/stride + the ball spin/pulse. main.js
+    // calls this once per render frame, right before renderer.render.
+    tick(dt) {
+      if (players[0]) players[0].tick(dt);
+      if (players[1]) players[1].tick(dt);
+      if (ball) ball.tick(dt);
+    },
+
+    // --- read access for the camera rig ---
+    getPlayer(side) {
+      return players[side] || { pos: { x: 0, z: side === 0 ? 12.5 : -12.5 } };
+    },
+    getBall() {
+      return ball ? ball.state : { active: false, pos: { x: 0, y: 0, z: 0 } };
+    },
+  };
+}

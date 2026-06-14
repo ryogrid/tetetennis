@@ -1,0 +1,13 @@
+{
+  "import": [
+    "tetetetennis/logic/vec",
+    "tetetetennis/logic/physics",
+    "tetetetennis/logic/rng",
+    "tetetetennis/logic/shots",
+    "moonbitlang/core/math"
+  ],
+  "test-import": [
+    "tetetetennis/logic/rules",
+    "tetetetennis/logic/assist"
+  ]
+}

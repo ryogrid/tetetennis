@@ -1,13 +1,11 @@
-// Stick-figure player: primitive rig + procedural pose animation. Built facing
-// -z (human default); CPU (side 1) is rotated 180 degrees.
-//
-// Adapted from old/src/entities/player.js. Movement physics is gone — the
-// MoonBit logic owns position/velocity and pushes them via setPlayer(); the rig
-// only renders a cosmetic pose. It runs its OWN swing/serve clocks (advanced in
-// tick(dt)) for the pose keyframes; the logic just triggers them.
+// Stick-figure player: primitive rig, movement, swing/serve state, and
+// procedural pose animation. Built facing -z (human default); CPU is
+// rotated 180 degrees.
 import * as THREE from 'three';
+import { STATS_MAP, PLAYER_BOUNDS } from '../physics/constants.js';
 
 const SWING_DUR = 0.45;
+export const SWING_CONTACT_T = 0.18;
 
 const SKIN = 0xe8c39e;
 const SHORTS = 0x2b2b35;
@@ -118,73 +116,97 @@ function kf(t, times, values) {
   return values[values.length - 1];
 }
 
-// side: 0 = human (+z, faces -z), 1 = cpu (-z, rotated PI).
-// reach: horizontal reach radius for the human zone circle (ignored for cpu).
-export function createPlayerRig({ side, color, reach, scene }) {
-  const { root, joints } = buildRig(color);
-  const isHuman = side === 0;
-  if (!isHuman) root.rotation.y = Math.PI;
+export function createPlayer({ side, character, scene, speedMul = 1 }) {
+  const { root, joints } = buildRig(character.color);
+  if (side === 'C') root.rotation.y = Math.PI;
   scene.add(root);
 
-  // velocity magnitude is normalised against an assumed top foot speed only for
-  // the cosmetic stride/lean amplitude (was maxSpeed in the old physics rig).
-  const SPEED_REF = 11.7; // ~ (5.2 + 2.6) * 1.5, the fastest runSpeed
+  const stats = character.stats;
+  const maxSpeed = STATS_MAP.runSpeed(stats.SPD) * speedMul;
+  const accel = STATS_MAP.runAccel(stats.SPD) * speedMul;
 
   const p = {
-    side, root, joints,
-    isHuman,
-    pos: { x: 0, z: isHuman ? 12.5 : -12.5 },
+    side, character, stats, root, joints,
+    isHuman: side === 'P',
+    pos: { x: 0, z: side === 'P' ? 12.5 : -12.5 },
     vel: { x: 0, z: 0 },
-    swing: null,      // {t, type, fh}
-    serveAnimSt: null, // {t}
+    swing: null,      // {t, type, fh, contactDone}
+    serveAnim: null,  // {t, hit}
     runPhase: 0,
-    _sm: null,
-    _smY: undefined,
-
-    setPlayer(x, z, vx, vz) {
-      this.pos.x = x; this.pos.z = z;
-      this.vel.x = vx; this.vel.z = vz;
-      root.position.set(x, 0, z);
-    },
+    maxSpeed,
+    reach: STATS_MAP.reach(stats.REA),
 
     startSwing(type, fh) {
-      this.serveAnimSt = null; // a lingering follow-through must not block a hit
-      this.swing = { t: 0, type, fh };
+      if (this.swing) return false;
+      this.serveAnim = null; // a lingering follow-through must not block a hit
+      this.swing = { t: 0, type, fh, contactDone: false };
+      return true;
     },
 
-    serveAnim(on) {
-      this.serveAnimSt = on ? { t: 0 } : null;
+    startServeAnim() {
+      this.serveAnim = { t: 0, hit: false };
     },
 
-    // per-frame cosmetic advance: swing/serve clocks, run phase, then pose.
-    tick(dt) {
+    endServeAnim() {
+      this.serveAnim = null;
+    },
+
+    place(x, z) {
+      this.pos.x = x; this.pos.z = z;
+      this.vel.x = 0; this.vel.z = 0;
+    },
+
+    // fixed-step movement; move = {x, z} in [-1,1].
+    // Constant-force model: accelerate toward the desired velocity with a
+    // limited force; braking (reversing/stopping) is 1.8x stronger, like
+    // real footwork. Gives build-up, momentum and overshoot on reversals.
+    update(dt, move) {
+      const slow = this.swing ? 0.45 : 1;
+      const tx = move.x * maxSpeed * slow;
+      const tz = move.z * maxSpeed * slow;
+      const dvx = tx - this.vel.x, dvz = tz - this.vel.z;
+      const dv = Math.hypot(dvx, dvz);
+      if (dv > 1e-6) {
+        const braking = this.vel.x * dvx + this.vel.z * dvz < 0;
+        const step = Math.min(dv, (braking ? accel * 1.8 : accel) * dt);
+        this.vel.x += dvx / dv * step;
+        this.vel.z += dvz / dv * step;
+      }
+      this.pos.x += this.vel.x * dt;
+      this.pos.z += this.vel.z * dt;
+
+      const b = PLAYER_BOUNDS;
+      this.pos.x = Math.max(b.xMin, Math.min(b.xMax, this.pos.x));
+      if (side === 'P') this.pos.z = Math.max(b.zMin, Math.min(b.zMax, this.pos.z));
+      else this.pos.z = Math.max(-b.zMax, Math.min(-b.zMin, this.pos.z));
+
       if (this.swing) {
         this.swing.t += dt;
         if (this.swing.t >= SWING_DUR) this.swing = null;
       }
-      if (this.serveAnimSt) {
-        this.serveAnimSt.t += dt;
-        if (this.serveAnimSt.t > 1.4) this.serveAnimSt = null;
+      if (this.serveAnim) {
+        this.serveAnim.t += dt;
+        if (this.serveAnim.t > 1.4) this.serveAnim = null;
       }
+
       const sp = Math.hypot(this.vel.x, this.vel.z);
       this.runPhase += dt * (4 + sp * 2.2);
-      this.updateVisual(dt);
     },
 
     updateVisual(dt) {
       root.position.set(this.pos.x, 0, this.pos.z);
       const J = joints;
       const sp = Math.hypot(this.vel.x, this.vel.z);
-      const spN = Math.min(sp / SPEED_REF, 1);
+      const spN = Math.min(sp / maxSpeed, 1);
       // local-frame lateral velocity (for lean)
-      const dirSign = isHuman ? 1 : -1;
+      const dirSign = side === 'P' ? 1 : -1;
       const lvx = this.vel.x * dirSign;
 
       // base targets: athletic ready stance (knees bent, racket in front),
       // leaning into the run. The stride oscillation is NOT in here — it is
       // added after the smoothing so the low-pass can't flatten it.
       const t = {};
-      t.hips = [0.10 + 0.22 * spN, 0, -lvx / SPEED_REF * 0.25];
+      t.hips = [0.10 + 0.22 * spN, 0, -lvx / maxSpeed * 0.25];
       t.hipR = [0, 0, 0];
       t.hipL = [0, 0, 0];
       t.kneeR = [0.22, 0, 0];
@@ -214,8 +236,8 @@ export function createPlayerRig({ side, color, reach, scene }) {
         baseY = 0.83 - kf(n, [0, 0.3, 0.4, 0.8, 1], [0.02, 0.09, 0.03, 0, 0.01]);
       }
 
-      if (this.serveAnimSt) {
-        const n = Math.min(this.serveAnimSt.t / 1.1, 1);
+      if (this.serveAnim) {
+        const n = Math.min(this.serveAnim.t / 1.1, 1);
         // toss arm (left) rises, hitting arm trophy -> overhead extension
         t.shoulderL = [kf(n, [0, 0.3, 0.55, 1], [0.3, 2.3, 2.6, 0.6]), 0, -0.1];
         t.elbowL = [kf(n, [0, 0.3, 1], [0.3, 0.05, 0.3]), 0, 0];
@@ -257,26 +279,21 @@ export function createPlayerRig({ side, color, reach, scene }) {
       J.kneeR.rotation.x += Math.max(0, -sw) * 1.0;
       J.kneeL.rotation.x += Math.max(0, sw) * 1.0;
       // arms pump counter to the legs (unless they are busy)
-      if (!this.swing && !this.serveAnimSt) J.shoulderR.rotation.x -= sw * 0.8;
-      if (!this.serveAnimSt) J.shoulderL.rotation.x += sw * 0.8;
-    },
-
-    setReachZoneColor(hex) {
-      if (this._reachMat) this._reachMat.color.setHex(hex);
+      if (!this.swing && !this.serveAnim) J.shoulderR.rotation.x -= sw * 0.8;
+      if (!this.serveAnim) J.shoulderL.rotation.x += sw * 0.8;
     },
 
     dispose() {
       scene.remove(root);
-      root.traverse((o) => {
-        if (o.geometry) o.geometry.dispose();
-        if (o.material) o.material.dispose();
-      });
     },
   };
 
   // Reach zone — filled ground circle showing the horizontal reach area.
   // Only for the human player.
-  if (isHuman) {
+  if (p.isHuman) {
+    const reach = p.reach;
+
+    // Filled circle on the ground — the full horizontal reach area
     const circGeo = new THREE.CircleGeometry(reach, 48);
     const circMat = new THREE.MeshBasicMaterial({
       color: 0x3988ff, transparent: true, opacity: 0.25, side: THREE.DoubleSide,
@@ -285,7 +302,13 @@ export function createPlayerRig({ side, color, reach, scene }) {
     circle.rotation.x = -Math.PI / 2;
     circle.position.y = 0.012;
     root.add(circle);
-    p._reachMat = circMat;
+
+    p._reachZone = { circle, circMat };
+
+    // Change the reach zone colour on the fly (blue = idle, pink = ball in range)
+    p.setReachZoneColor = (hex) => {
+      circMat.color.setHex(hex);
+    };
   }
 
   return p;

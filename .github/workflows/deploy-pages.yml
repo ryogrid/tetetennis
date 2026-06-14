@@ -16,17 +16,22 @@ jobs:
   build:
     runs-on: ubuntu-latest
     steps:
+      # No `ref:` — checks out the branch this workflow is dispatched from,
+      # so you can deploy any branch (e.g. introduce-moonbit) from the
+      # "Run workflow" UI.
       - uses: actions/checkout@v4
-        with:
-          ref: master
       - uses: actions/setup-node@v4
         with:
           node-version: 22
           cache: npm
+      - name: Install MoonBit
+        run: |
+          curl -fsSL https://cli.moonbitlang.com/install/unix.sh | bash
+          echo "$HOME/.moon/bin" >> "$GITHUB_PATH"
       - run: npm ci
-      - run: npm test
-      - run: npm run physcheck
-      # GitHub Pages serves project sites under /<repo-name>/
+      - run: moon test
+      # GitHub Pages serves project sites under /<repo-name>/.
+      # The `prebuild` hook compiles the MoonBit logic to JS before Vite bundles.
       - run: npm run build -- --base=/${{ github.event.repository.name }}/
       - uses: actions/configure-pages@v5
       - uses: actions/upload-pages-artifact@v3

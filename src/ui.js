@@ -1,5 +1,30 @@
-// DOM overlay: HUD + menu screens. Holds no game state; game.js drives it.
+// DOM overlay: HUD + menu screens. Holds no game state; the MoonBit logic
+// drives it via the host.ui surface. Adapted from old/src/ui.js into a factory.
+//
+// Two contract changes from the old module:
+//  - Menus now receive only a selected INDEX; the display data (cards) lives
+//    here, keyed by index in the same order as the MoonBit lists.
+//  - The three separate gauges (toss / timing / height) are unified behind a
+//    single name-keyed gauge(name, frac, lo, hi, good) / hideGauge(name).
 import { SURFACE_THEMES } from './court.js';
+import { CHARACTERS } from './characters.js';
+
+// Difficulty display table (order: easy, normal, hard). From old ai.js.
+const DIFFICULTIES = [
+  { id: 'easy', name: 'Easy', desc: 'Slow reads, late reactions, soft serves.' },
+  { id: 'normal', name: 'Normal', desc: 'A solid club player. Fair fight.' },
+  { id: 'hard', name: 'Hard', desc: 'Sharp anticipation, big serves, few gifts.' },
+];
+
+// Player-side assist axis (order: off, on, full). From old game.js.
+const ASSIST_OPTIONS = [
+  { id: 'off',  name: 'Off',  desc: 'Classic challenge. No player-side help.' },
+  { id: 'on',   name: 'On',   desc: 'Slow-motion approach, easier pace, forgiving contact.' },
+  { id: 'full', name: 'Full', desc: 'Everything in On, plus auto-swing and auto-positioning.' },
+];
+
+// Surface display order: clay, grass, hard.
+const SURFACE_IDS = ['clay', 'grass', 'hard'];
 
 const css = `
 #hud * { box-sizing: border-box; }
@@ -164,32 +189,36 @@ const css = `
 }
 `;
 
-let els = {};
-let bannerTimer = null;
-let toastTimer = null;
-const flashTimers = {};
-let menuTapHandler = null;
-let hudShown = false;
-let touchVisible = false;
+export function createUI({ onVirtualKey, onMoveAxis } = {}) {
+  const els = {};
+  let bannerTimer = null;
+  let toastTimer = null;
+  const flashTimers = {};
+  let menuTapHandler = null;
+  let hudShown = false;
+  let touchVisible = false;
+  // per-name gauge "shown" state (toss / timing / height)
+  const gaugeShown = { toss: false, timing: false, height: false };
+  let moveHintShown = false;
+  let recommendedShot = '';
 
-export function setMenuTapHandler(fn) { menuTapHandler = fn; }
+  function div(id, parent, cls) {
+    const d = document.createElement('div');
+    if (id) d.id = id;
+    if (cls) d.className = cls;
+    (parent || document.getElementById('hud')).appendChild(d);
+    return d;
+  }
 
-function div(id, parent, cls) {
-  const d = document.createElement('div');
-  if (id) d.id = id;
-  if (cls) d.className = cls;
-  (parent || document.getElementById('hud')).appendChild(d);
-  return d;
-}
+  function statBars(stats) {
+    const order = ['POW', 'SPN', 'SLC', 'SRV', 'SPD', 'CTL'];
+    return order.map((k) =>
+      `<div class="statrow"><span>${k}</span><div class="statbar"><i style="width:${stats[k]}%"></i></div></div>`
+    ).join('');
+  }
 
-function statBars(stats) {
-  const order = ['POW', 'SPN', 'SLC', 'SRV', 'SPD', 'CTL'];
-  return order.map((k) =>
-    `<div class="statrow"><span>${k}</span><div class="statbar"><i style="width:${stats[k]}%"></i></div></div>`
-  ).join('');
-}
+  // ---------- init ----------
 
-export function initUI({ onVirtualKey, onMoveAxis } = {}) {
   const style = document.createElement('style');
   style.textContent = css;
   document.head.appendChild(style);
@@ -224,21 +253,19 @@ export function initUI({ onVirtualKey, onMoveAxis } = {}) {
     'Move: Arrow keys<br>Shots: Z flat &middot; X topspin &middot; C slice<br>' +
     'Serve: Space toss, then Z/X/C<br>Aim: hold a direction while swinging';
 
-  // menu tap support (tap a card to select it, tap again to confirm)
+  // menu tap support (tap a card to select it, tap again to confirm).
+  // Results screen taps pass index 0; menu_tap ignores the value there.
   els.menu.addEventListener('pointerdown', (e) => {
     if (!menuTapHandler) return;
     const card = e.target.closest('[data-idx]');
     if (card) menuTapHandler(parseInt(card.dataset.idx, 10));
-    else if (els.menu.dataset.screen === 'results') menuTapHandler('confirm');
+    else if (els.menu.dataset.screen === 'results') menuTapHandler(0);
   });
 
-  buildTouchControls(hud, onVirtualKey || (() => {}), onMoveAxis || (() => {}));
-  hideHUD();
-}
+  // ---------- on-screen controls (two-handed phone grip) ----------
 
-// ---------- on-screen controls (two-handed phone grip) ----------
-
-function buildTouchControls(hud, onKey, onAxis) {
+  const onKey = onVirtualKey || (() => {});
+  const onAxis = onMoveAxis || (() => {});
   els.touchui = div('touchui', hud);
 
   // analog stick, bottom-left (left thumb): PS-style, knob follows the thumb
@@ -286,7 +313,7 @@ function buildTouchControls(hud, onKey, onAxis) {
   stick.addEventListener('pointercancel', stickRelease);
 
   // single shot button, bottom-right (right thumb): tosses + serves and hits;
-  // shot type is chosen randomly by the game on each press
+  // shot type is chosen by the logic on each press
   const shotBtn = div('tb-shot', els.touchui, 'tbtn');
   shotBtn.textContent = 'SHOT';
   shotBtn.addEventListener('pointerdown', (e) => {
@@ -314,6 +341,15 @@ function buildTouchControls(hud, onKey, onAxis) {
     ? stored === 'on'
     : window.matchMedia('(pointer: coarse)').matches;
 
+  function applyTouchVisibility() {
+    els.touchui.style.display = hudShown && touchVisible ? 'block' : 'none';
+    els.tcBar.style.display = hudShown ? 'flex' : 'none';
+    // keyboard-oriented HUD boxes collide with the touch buttons; swap them
+    els.shotbar.style.display = hudShown && !touchVisible ? 'flex' : 'none';
+    els.controls.style.display = hudShown && !touchVisible ? 'block' : 'none';
+    if (els.tcToggle) els.tcToggle.innerHTML = touchVisible ? '&#9000;' : '&#127918;';
+  }
+
   toggle.addEventListener('pointerdown', (e) => {
     e.preventDefault();
     touchVisible = !touchVisible;
@@ -325,272 +361,247 @@ function buildTouchControls(hud, onKey, onAxis) {
     onKey('Escape', true);
     onKey('Escape', false);
   });
-}
 
-function applyTouchVisibility() {
-  els.touchui.style.display = hudShown && touchVisible ? 'block' : 'none';
-  els.tcBar.style.display = hudShown ? 'flex' : 'none';
-  // keyboard-oriented HUD boxes collide with the touch buttons; swap them
-  els.shotbar.style.display = hudShown && !touchVisible ? 'flex' : 'none';
-  els.controls.style.display = hudShown && !touchVisible ? 'block' : 'none';
-  if (els.tcToggle) els.tcToggle.innerHTML = touchVisible ? '&#9000;' : '&#127918;';
-}
+  // ---------- menus ----------
 
-export function showCharSelect(title, chars, idx, subtitle) {
-  els.menu.style.display = 'flex';
-  els.menu.dataset.screen = 'select';
-  els.menu.innerHTML =
-    `<div class="title">${title}</div>` +
-    (subtitle ? `<div class="subtitle">${subtitle}</div>` : '') +
-    `<div class="cards">` +
-    chars.map((c, i) =>
-      `<div class="card${i === idx ? ' sel' : ''}" id="card${i}" data-idx="${i}">
-        <h3 style="color:#${c.color.toString(16).padStart(6, '0')}">${c.name}</h3>
-        <div class="arch">${c.archetype}</div>
-        <div class="desc">${c.desc}</div>
-        ${statBars(c.stats)}
-      </div>`).join('') +
-    `</div><div class="hint">&larr; &rarr; select &middot; Enter confirm &middot; or tap (tap again to confirm)</div>`;
-}
-
-export function showSurfaceSelect(idx) {
-  const surfaces = ['clay', 'grass', 'hard'];
-  els.menu.style.display = 'flex';
-  els.menu.dataset.screen = 'select';
-  els.menu.innerHTML =
-    `<div class="title">SELECT SURFACE</div><div class="cards">` +
-    surfaces.map((s, i) => {
-      const t = SURFACE_THEMES[s];
-      return `<div class="card${i === idx ? ' sel' : ''}" data-idx="${i}">
-        <div class="swatch" style="background:#${t.court.toString(16).padStart(6, '0')}"></div>
-        <div class="swatch-label">${t.label}</div>
-      </div>`;
-    }).join('') +
-    `</div><div class="hint">&larr; &rarr; select &middot; Enter confirm &middot; Esc back &middot; or tap (tap again to confirm)</div>`;
-}
-
-// levels: [{id, name, desc}], idx: selected index
-export function showDifficultySelect(levels, idx) {
-  els.menu.style.display = 'flex';
-  els.menu.dataset.screen = 'select';
-  els.menu.innerHTML =
-    `<div class="title">SELECT DIFFICULTY</div><div class="cards">` +
-    levels.map((l, i) =>
-      `<div class="card${i === idx ? ' sel' : ''}" data-idx="${i}">
-        <h3>${l.name.toUpperCase()}</h3>
-        <div class="desc">${l.desc}</div>
-      </div>`).join('') +
-    `</div><div class="hint">&larr; &rarr; select &middot; Enter confirm &middot; Esc back &middot; or tap (tap again to confirm)</div>`;
-}
-
-// options: [{id, name, desc}], idx: selected index. This is the player-side
-// assist axis, separate from the opponent (difficulty) selection above.
-export function showAssistSelect(options, idx) {
-  els.menu.style.display = 'flex';
-  els.menu.dataset.screen = 'select';
-  els.menu.innerHTML =
-    `<div class="title">ASSIST (FOR YOU)</div>` +
-    `<div class="subtitle">Help for the player &mdash; independent of opponent strength</div>` +
-    `<div class="cards">` +
-    options.map((o, i) =>
-      `<div class="card${i === idx ? ' sel' : ''}" data-idx="${i}">
-        <h3>${o.name.toUpperCase()}</h3>
-        <div class="desc">${o.desc}</div>
-      </div>`).join('') +
-    `</div><div class="hint">&larr; &rarr; select &middot; Enter confirm &middot; Esc back &middot; or tap (tap again to confirm)</div>`;
-}
-
-export function showResults(winnerName, loserName, games, playerWon) {
-  els.menu.style.display = 'flex';
-  els.menu.dataset.screen = 'results';
-  els.menu.innerHTML =
-    `<div class="title">${playerWon ? 'YOU WIN!' : 'YOU LOSE'}</div>` +
-    `<div class="subtitle">${winnerName} d. ${loserName} &nbsp; ${games}</div>` +
-    `<div class="hint">Enter or tap: back to menu</div>`;
-}
-
-export function hideMenu() {
-  els.menu.style.display = 'none';
-}
-
-export function showHUD() {
-  hudShown = true;
-  els.scoreboard.style.display = 'block';
-  applyTouchVisibility();
-}
-
-export function hideHUD() {
-  hudShown = false;
-  els.scoreboard.style.display = 'none';
-  els.banner.style.opacity = 0;
-  els.toast.style.opacity = 0;
-  hideTossGauge();
-  hideMoveHint();
-  hideTimingMeter();
-  hideHeightBar();
-  setRecommendedShot(null);
-  applyTouchVisibility();
-}
-
-export function updateScore(s, pName, cName, serveNumber) {
-  const dotP = s.server === 'P' ? ' <span class="serve">&bull;</span>' : '';
-  const dotC = s.server === 'C' ? ' <span class="serve">&bull;</span>' : '';
-  const [gp, gc] = s.games.split('-');
-  let pp = '', pc = '';
-  if (s.points === 'Deuce') { pp = '40'; pc = '40'; }
-  else if (s.points === 'Ad P') { pp = 'Ad'; pc = '40'; }
-  else if (s.points === 'Ad C') { pp = '40'; pc = 'Ad'; }
-  else if (s.points.startsWith('TB')) { [pp, pc] = s.points.slice(3).split('-'); }
-  else { [pp, pc] = s.points.split('-'); }
-  els.scoreboard.innerHTML =
-    `<div class="row"><b>${pName}${dotP}</b><span>${gp} &nbsp; ${pp}</span></div>` +
-    `<div class="row"><b>${cName}${dotC}</b><span>${gc} &nbsp; ${pc}</span></div>` +
-    (serveNumber === 2 ? '<div class="row" style="color:#e8a04b;font-size:12px">2nd serve</div>' : '') +
-    (s.points.startsWith('TB') ? '<div class="row" style="color:#e8f24b;font-size:12px">Tiebreak</div>' : '');
-}
-
-export function banner(text, ms = 1300) {
-  els.banner.textContent = text;
-  els.banner.style.opacity = 1;
-  if (bannerTimer) clearTimeout(bannerTimer);
-  bannerTimer = setTimeout(() => { els.banner.style.opacity = 0; }, ms);
-}
-
-export function toast(text, ms = 1600) {
-  els.toast.textContent = text;
-  els.toast.style.opacity = 1;
-  if (toastTimer) clearTimeout(toastTimer);
-  toastTimer = setTimeout(() => { els.toast.style.opacity = 0; }, ms);
-}
-
-export function flashShot(type) {
-  // keyboard shot bar shows the type; touch has a single shot button
-  const ids = ['sb-' + type, 'tb-shot'];
-  for (const id of ids) {
-    const el = id && document.getElementById(id);
-    if (!el) continue;
-    el.classList.add('flash');
-    if (flashTimers[id]) clearTimeout(flashTimers[id]);
-    flashTimers[id] = setTimeout(() => el.classList.remove('flash'), 350);
+  function showCharSelect(title, idx, subtitle) {
+    els.menu.style.display = 'flex';
+    els.menu.dataset.screen = 'select';
+    els.menu.innerHTML =
+      `<div class="title">${title}</div>` +
+      (subtitle ? `<div class="subtitle">${subtitle}</div>` : '') +
+      `<div class="cards">` +
+      CHARACTERS.map((c, i) =>
+        `<div class="card${i === idx ? ' sel' : ''}" id="card${i}" data-idx="${i}">
+          <h3 style="color:#${c.color.toString(16).padStart(6, '0')}">${c.name}</h3>
+          <div class="arch">${c.archetype}</div>
+          <div class="desc">${c.desc}</div>
+          ${statBars(c.stats)}
+        </div>`).join('') +
+      `</div><div class="hint">&larr; &rarr; select &middot; Enter confirm &middot; or tap (tap again to confirm)</div>`;
   }
-}
 
-// Highlight the suggested shot on the keyboard shot bar. type | null.
-// (Touch mode has a single random-type button, so there is nothing to suggest.)
-let recommendedShot = null;
-const RECOMMEND_IDS = {
-  flat: ['sb-flat'],
-  topspin: ['sb-topspin'],
-  slice: ['sb-slice'],
-};
-export function setRecommendedShot(type) {
-  if (type === recommendedShot) return;
-  recommendedShot = type;
-  for (const key of Object.keys(RECOMMEND_IDS)) {
-    const on = key === type;
-    for (const id of RECOMMEND_IDS[key]) {
-      const el = document.getElementById(id);
-      if (el) el.classList.toggle('recommend', on);
+  function showSurfaceSelect(idx) {
+    els.menu.style.display = 'flex';
+    els.menu.dataset.screen = 'select';
+    els.menu.innerHTML =
+      `<div class="title">SELECT SURFACE</div><div class="cards">` +
+      SURFACE_IDS.map((s, i) => {
+        const t = SURFACE_THEMES[s];
+        return `<div class="card${i === idx ? ' sel' : ''}" data-idx="${i}">
+          <div class="swatch" style="background:#${t.court.toString(16).padStart(6, '0')}"></div>
+          <div class="swatch-label">${t.label}</div>
+        </div>`;
+      }).join('') +
+      `</div><div class="hint">&larr; &rarr; select &middot; Enter confirm &middot; Esc back &middot; or tap (tap again to confirm)</div>`;
+  }
+
+  function showDifficultySelect(idx) {
+    els.menu.style.display = 'flex';
+    els.menu.dataset.screen = 'select';
+    els.menu.innerHTML =
+      `<div class="title">SELECT DIFFICULTY</div><div class="cards">` +
+      DIFFICULTIES.map((l, i) =>
+        `<div class="card${i === idx ? ' sel' : ''}" data-idx="${i}">
+          <h3>${l.name.toUpperCase()}</h3>
+          <div class="desc">${l.desc}</div>
+        </div>`).join('') +
+      `</div><div class="hint">&larr; &rarr; select &middot; Enter confirm &middot; Esc back &middot; or tap (tap again to confirm)</div>`;
+  }
+
+  function showAssistSelect(idx) {
+    els.menu.style.display = 'flex';
+    els.menu.dataset.screen = 'select';
+    els.menu.innerHTML =
+      `<div class="title">ASSIST (FOR YOU)</div>` +
+      `<div class="subtitle">Help for the player &mdash; independent of opponent strength</div>` +
+      `<div class="cards">` +
+      ASSIST_OPTIONS.map((o, i) =>
+        `<div class="card${i === idx ? ' sel' : ''}" data-idx="${i}">
+          <h3>${o.name.toUpperCase()}</h3>
+          <div class="desc">${o.desc}</div>
+        </div>`).join('') +
+      `</div><div class="hint">&larr; &rarr; select &middot; Enter confirm &middot; Esc back &middot; or tap (tap again to confirm)</div>`;
+  }
+
+  function showResults(win, lose, games, playerWon) {
+    els.menu.style.display = 'flex';
+    els.menu.dataset.screen = 'results';
+    els.menu.innerHTML =
+      `<div class="title">${playerWon ? 'YOU WIN!' : 'YOU LOSE'}</div>` +
+      `<div class="subtitle">${win} d. ${lose} &nbsp; ${games}</div>` +
+      `<div class="hint">Enter or tap: back to menu</div>`;
+  }
+
+  function hideMenu() {
+    els.menu.style.display = 'none';
+  }
+
+  // ---------- hud ----------
+
+  function showHUD() {
+    hudShown = true;
+    els.scoreboard.style.display = 'block';
+    applyTouchVisibility();
+  }
+
+  function hideHUD() {
+    hudShown = false;
+    els.scoreboard.style.display = 'none';
+    els.banner.style.opacity = 0;
+    els.toast.style.opacity = 0;
+    hideGauge('toss');
+    hideGauge('timing');
+    hideGauge('height');
+    hideMoveHint();
+    setRecommendedShot('');
+    applyTouchVisibility();
+  }
+
+  // games/points are preformatted COMBINED strings from the logic
+  // (games "2-1", points "40-0" | "Deuce" | "Ad P" | "TB 3-2"); p/c are the
+  // player/cpu names. serveNo is 1 or 2. The logic owns all score formatting,
+  // so we split the combined "a-b" strings back onto the two name rows for the
+  // familiar two-line scoreboard (deuce/ad/tiebreak fold into both columns).
+  function splitPair(s) {
+    let body = s, prefix = '';
+    if (s === 'Deuce') return ['40', '40'];
+    if (s === 'Ad P') return ['Ad', '40'];
+    if (s === 'Ad C') return ['40', 'Ad'];
+    if (s.startsWith('TB ')) { prefix = 'TB'; body = s.slice(3); }
+    const [a, b] = body.split('-');
+    return [a, b, prefix];
+  }
+  function updateScore(games, points, p, c, serveNo) {
+    const [gp, gc] = splitPair(games);
+    const [pp, pc, tb] = splitPair(points);
+    els.scoreboard.innerHTML =
+      `<div class="row"><b>${p}</b><span>${gp} &nbsp; ${pp}</span></div>` +
+      `<div class="row"><b>${c}</b><span>${gc} &nbsp; ${pc}</span></div>` +
+      (serveNo === 2 ? '<div class="row" style="color:#e8a04b;font-size:12px">2nd serve</div>' : '') +
+      (tb === 'TB' ? '<div class="row" style="color:#e8f24b;font-size:12px">Tiebreak</div>' : '');
+  }
+
+  function banner(text) {
+    const ms = 1300;
+    els.banner.textContent = text;
+    els.banner.style.opacity = 1;
+    if (bannerTimer) clearTimeout(bannerTimer);
+    bannerTimer = setTimeout(() => { els.banner.style.opacity = 0; }, ms);
+  }
+
+  function toast(text, ms = 1600) {
+    els.toast.textContent = text;
+    els.toast.style.opacity = 1;
+    if (toastTimer) clearTimeout(toastTimer);
+    toastTimer = setTimeout(() => { els.toast.style.opacity = 0; }, ms);
+  }
+
+  function flashShot(type) {
+    // keyboard shot bar shows the type; touch has a single shot button
+    const ids = ['sb-' + type, 'tb-shot'];
+    for (const id of ids) {
+      const el = id && document.getElementById(id);
+      if (!el) continue;
+      el.classList.add('flash');
+      if (flashTimers[id]) clearTimeout(flashTimers[id]);
+      flashTimers[id] = setTimeout(() => el.classList.remove('flash'), 350);
     }
   }
-}
 
-export function serveSpeedToast(kmh) {
-  toast(`Serve: ${Math.round(kmh)} km/h`, 1600);
-}
-
-// ---------- toss gauge (serve timing aid for the fixed FPV camera) ----------
-
-let tossGaugeShown = false;
-
-// frac/bandLo/bandHi in [0,1], measured from the bottom of the gauge.
-export function updateTossGauge(frac, bandLo, bandHi, inSweet) {
-  if (!tossGaugeShown) {
-    els.tossgauge.style.display = 'block';
-    tossGaugeShown = true;
+  // Highlight the suggested shot on the keyboard shot bar. type '' clears.
+  const RECOMMEND_IDS = {
+    flat: ['sb-flat'],
+    topspin: ['sb-topspin'],
+    slice: ['sb-slice'],
+  };
+  function setRecommendedShot(type) {
+    if (type === recommendedShot) return;
+    recommendedShot = type;
+    for (const key of Object.keys(RECOMMEND_IDS)) {
+      const on = key === type;
+      for (const id of RECOMMEND_IDS[key]) {
+        const el = document.getElementById(id);
+        if (el) el.classList.toggle('recommend', on);
+      }
+    }
   }
-  els.tgBand.style.bottom = `${(bandLo * 100).toFixed(1)}%`;
-  els.tgBand.style.height = `${((bandHi - bandLo) * 100).toFixed(1)}%`;
-  els.tgDot.style.bottom = `${(Math.max(0, Math.min(1, frac)) * 100).toFixed(1)}%`;
-  els.tgDot.classList.toggle('sweet', !!inSweet);
-}
 
-export function hideTossGauge() {
-  if (!tossGaugeShown) return;
-  els.tossgauge.style.display = 'none';
-  tossGaugeShown = false;
-}
-
-// ---------- swing timing meter (rally "when to press" aid) ----------
-
-let timingMeterShown = false;
-
-// frac/bandLo/bandHi in [0,1], measured left-to-right; the dot sweeps toward
-// the right (1) as the ideal contact approaches. inGood => in the press window.
-export function updateTimingMeter(frac, bandLo, bandHi, inGood) {
-  if (!timingMeterShown) {
-    els.timingmeter.style.display = 'block';
-    timingMeterShown = true;
+  function serveSpeedToast(kmh) {
+    toast(`Serve: ${Math.round(kmh)} km/h`, 1600);
   }
-  els.tmBand.style.left = `${(bandLo * 100).toFixed(1)}%`;
-  els.tmBand.style.width = `${((bandHi - bandLo) * 100).toFixed(1)}%`;
-  els.tmDot.style.left = `${(Math.max(0, Math.min(1, frac)) * 100).toFixed(1)}%`;
-  els.tmDot.classList.toggle('good', !!inGood);
-}
 
-export function hideTimingMeter() {
-  if (!timingMeterShown) return;
-  els.timingmeter.style.display = 'none';
-  timingMeterShown = false;
-}
+  // ---------- unified gauges (toss / timing / height) ----------
+  // frac/lo/hi in [0,1]. toss + height are VERTICAL (measured from the bottom);
+  // timing is the HORIZONTAL meter (left-to-right). good => the dot snaps green.
 
-// ---------- incoming-height bar (rally version of the toss gauge) ----------
-
-let heightBarShown = false;
-
-// frac/bandLo/bandHi in [0,1] measured from the bottom; inBand => waist height.
-export function updateHeightBar(frac, bandLo, bandHi, inBand) {
-  if (!heightBarShown) {
-    els.heightbar.style.display = 'block';
-    heightBarShown = true;
+  function gauge(name, frac, lo, hi, good) {
+    const f = Math.max(0, Math.min(1, frac));
+    if (name === 'toss') {
+      if (!gaugeShown.toss) { els.tossgauge.style.display = 'block'; gaugeShown.toss = true; }
+      els.tgBand.style.bottom = `${(lo * 100).toFixed(1)}%`;
+      els.tgBand.style.height = `${((hi - lo) * 100).toFixed(1)}%`;
+      els.tgDot.style.bottom = `${(f * 100).toFixed(1)}%`;
+      els.tgDot.classList.toggle('sweet', !!good);
+    } else if (name === 'height') {
+      if (!gaugeShown.height) { els.heightbar.style.display = 'block'; gaugeShown.height = true; }
+      els.hbBand.style.bottom = `${(lo * 100).toFixed(1)}%`;
+      els.hbBand.style.height = `${((hi - lo) * 100).toFixed(1)}%`;
+      els.hbDot.style.bottom = `${(f * 100).toFixed(1)}%`;
+      els.hbDot.classList.toggle('good', !!good);
+    } else if (name === 'timing') {
+      if (!gaugeShown.timing) { els.timingmeter.style.display = 'block'; gaugeShown.timing = true; }
+      els.tmBand.style.left = `${(lo * 100).toFixed(1)}%`;
+      els.tmBand.style.width = `${((hi - lo) * 100).toFixed(1)}%`;
+      els.tmDot.style.left = `${(f * 100).toFixed(1)}%`;
+      els.tmDot.classList.toggle('good', !!good);
+    }
   }
-  els.hbBand.style.bottom = `${(bandLo * 100).toFixed(1)}%`;
-  els.hbBand.style.height = `${((bandHi - bandLo) * 100).toFixed(1)}%`;
-  els.hbDot.style.bottom = `${(Math.max(0, Math.min(1, frac)) * 100).toFixed(1)}%`;
-  els.hbDot.classList.toggle('good', !!inBand);
-}
 
-export function hideHeightBar() {
-  if (!heightBarShown) return;
-  els.heightbar.style.display = 'none';
-  heightBarShown = false;
-}
+  function hideGauge(name) {
+    if (!gaugeShown[name]) return;
+    gaugeShown[name] = false;
+    if (name === 'toss') els.tossgauge.style.display = 'none';
+    else if (name === 'height') els.heightbar.style.display = 'none';
+    else if (name === 'timing') els.timingmeter.style.display = 'none';
+  }
 
-// ---------- move hint (FPV can't see a sweet spot behind the camera) ----------
-
-let moveHintShown = false;
-
-// dx/dz: vector from the player to the sweet spot, court coords
-// (+x screen right, +z toward the camera = backward).
-export function updateMoveHint(dx, dz) {
-  const ux = Math.abs(dx) > 0.45 ? Math.sign(dx) : 0;
-  const uz = Math.abs(dz) > 0.45 ? Math.sign(dz) : 0;
+  // ---------- move hint (FPV can't see a sweet spot behind the camera) ----------
+  // dx/dz: vector from the player to the sweet spot, court coords
+  // (+x screen right, +z toward the camera = backward).
   const ARROWS = {
     '-1,-1': '↖', '0,-1': '↑', '1,-1': '↗',
     '-1,0': '←', '1,0': '→',
     '-1,1': '↙', '0,1': '↓', '1,1': '↘',
   };
-  const a = ARROWS[`${ux},${uz}`];
-  els.movehint.textContent = a || '◎'; // on the spot
-  els.movehint.classList.toggle('here', !a);
-  if (!moveHintShown) {
-    els.movehint.style.display = 'block';
-    moveHintShown = true;
+  function moveHint(dx, dz) {
+    const ux = Math.abs(dx) > 0.45 ? Math.sign(dx) : 0;
+    const uz = Math.abs(dz) > 0.45 ? Math.sign(dz) : 0;
+    const a = ARROWS[`${ux},${uz}`];
+    els.movehint.textContent = a || '◎'; // on the spot
+    els.movehint.classList.toggle('here', !a);
+    if (!moveHintShown) {
+      els.movehint.style.display = 'block';
+      moveHintShown = true;
+    }
   }
-}
 
-export function hideMoveHint() {
-  if (!moveHintShown) return;
-  els.movehint.style.display = 'none';
-  moveHintShown = false;
+  function hideMoveHint() {
+    if (!moveHintShown) return;
+    els.movehint.style.display = 'none';
+    moveHintShown = false;
+  }
+
+  applyTouchVisibility();
+  hideHUD();
+
+  return {
+    setMenuTapHandler(fn) { menuTapHandler = fn; },
+    showCharSelect, showSurfaceSelect, showDifficultySelect, showAssistSelect,
+    showResults, hideMenu,
+    showHUD, hideHUD, updateScore,
+    banner, toast, flashShot, serveSpeedToast, setRecommendedShot,
+    gauge, hideGauge,
+    moveHint, hideMoveHint,
+  };
 }

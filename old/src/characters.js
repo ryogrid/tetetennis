@@ -1,11 +1,6 @@
 // 5 playable characters. Stats 0-100:
 // POW groundstroke power, SPN topspin rate, SLC slice quality, SRV serve,
 // SPD movement, CTL control/consistency, REA reach & serve contact height.
-//
-// MUST stay in the same order as the MoonBit character list (boom, rojo, dash,
-// sly, ace): the menu/host APIs key into this table by index. Copied verbatim
-// from old/src/characters.js. Used by ui.js (card display) and render-host.js
-// (rig colour + reach radius).
 export const CHARACTERS = [
   {
     id: 'boom', name: 'Boom', archetype: 'Big Server', color: 0xd84a3a,
@@ -38,10 +33,3 @@ export const CHARACTERS = [
     stats: { POW: 74, SPN: 72, SLC: 70, SRV: 74, SPD: 74, CTL: 74, REA: 70 },
   },
 ];
-
-// REA stat -> horizontal reach radius (m). Mirrors the MoonBit
-// STATS_MAP.reach: (1.25 + 0.25 * REA/100) * 1.5. Only used for the human
-// reach-zone circle visual.
-export function reachRadius(REA) {
-  return (1.25 + 0.25 * REA / 100) * 1.5;
-}

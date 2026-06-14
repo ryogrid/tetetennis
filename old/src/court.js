@@ -1,21 +1,6 @@
 // Court, net, stands, lighting. buildCourt(surfaceId) returns a THREE.Group.
-// Adapted from old/src/court.js; the court geometry constants (formerly in
-// physics/constants.js, now owned by the MoonBit logic layer) are inlined here
-// since they only drive visuals.
 import * as THREE from 'three';
-
-// Court geometry (visual). Mirrors the MoonBit COURT/NET constants.
-const COURT = {
-  halfLen: 11.885,    // baseline z
-  halfWidth: 4.115,   // singles sideline x
-  doublesHalfWidth: 5.485,
-  serviceLine: 6.40,  // |z| of service lines
-  netPostX: 5.029,    // singles sticks
-};
-const NET = {
-  hCenter: 0.914,
-  hPost: 1.07,
-};
+import { COURT, NET } from './physics/constants.js';
 
 export const SURFACE_THEMES = {
   clay:  { court: 0xb1551e, apron: 0x8f4318, line: 0xf5f0e6, label: 'Clay' },

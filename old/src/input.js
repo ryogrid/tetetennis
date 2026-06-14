@@ -1,7 +1,4 @@
-// Keyboard state: held keys + per-frame edge-triggered presses. PULL model:
-// the MoonBit logic queries this each frame (moveX/moveZ/wasPressed/shotKey).
-// Adapted from old/src/input.js; moveVec() split into moveX()/moveZ(), and
-// shotKeyPressed() (null|'flat'|...) -> shotKey() ('' | 'flat' | ...).
+// Keyboard state: held keys + per-frame edge-triggered presses.
 const ALIASES = {
   KeyJ: 'KeyZ', KeyK: 'KeyX', KeyL: 'KeyC',
 };
@@ -37,37 +34,9 @@ export function createInput(onFirstInput) {
   });
   window.addEventListener('blur', () => down.clear());
 
-  // movement vector in court coords for the human (+x right on screen, -z
-  // toward the net): the analog joystick when active, else the arrow keys
-  function moveVec() {
-    if (axis.active) {
-      let { x, z } = axis;
-      const m = Math.hypot(x, z);
-      if (m > 1) { x /= m; z /= m; }
-      return { x, z };
-    }
-    let x = 0, z = 0;
-    if (down.has('ArrowLeft')) x -= 1;
-    if (down.has('ArrowRight')) x += 1;
-    if (down.has('ArrowUp')) z -= 1;
-    if (down.has('ArrowDown')) z += 1;
-    const m = Math.hypot(x, z);
-    if (m > 1) { x /= m; z /= m; }
-    return { x, z };
-  }
-
   return {
     isDown: (code) => down.has(code),
     wasPressed: (code) => pressed.has(code),
-    moveX() { return moveVec().x; },
-    moveZ() { return moveVec().z; },
-    // "" if none, else 'flat' | 'topspin' | 'slice'
-    shotKey() {
-      if (pressed.has('KeyZ')) return 'flat';
-      if (pressed.has('KeyX')) return 'topspin';
-      if (pressed.has('KeyC')) return 'slice';
-      return '';
-    },
     // on-screen buttons synthesize the same key codes as the keyboard
     setVirtualKey(code, isDown) {
       firstInput();
@@ -83,6 +52,35 @@ export function createInput(onFirstInput) {
       firstInput();
       axis.x = x; axis.z = z;
       axis.active = Math.hypot(x, z) > 0.001;
+    },
+    // movement vector in court coords for the human (+x right on screen, -z
+    // toward the net): the analog joystick when active, else the arrow keys
+    moveVec() {
+      if (axis.active) {
+        let { x, z } = axis;
+        const m = Math.hypot(x, z);
+        if (m > 1) { x /= m; z /= m; }
+        return { x, z };
+      }
+      let x = 0, z = 0;
+      if (down.has('ArrowLeft')) x -= 1;
+      if (down.has('ArrowRight')) x += 1;
+      if (down.has('ArrowUp')) z -= 1;
+      if (down.has('ArrowDown')) z += 1;
+      const m = Math.hypot(x, z);
+      if (m > 1) { x /= m; z /= m; }
+      return { x, z };
+    },
+    // aim from held keys at contact: x -1..1, depth +1 deep / -1 short
+    aimVec() {
+      const v = this.moveVec();
+      return { x: v.x, depth: -v.z }; // W/up = deep
+    },
+    shotKeyPressed() {
+      if (pressed.has('KeyZ')) return 'flat';
+      if (pressed.has('KeyX')) return 'topspin';
+      if (pressed.has('KeyC')) return 'slice';
+      return null;
     },
     endFrame() { pressed.clear(); },
   };

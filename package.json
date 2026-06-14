@@ -4,19 +4,21 @@
   "version": "0.1.0",
   "type": "module",
   "scripts": {
+    "logic:build": "moon build --target js --release",
+    "logic:test": "moon test",
+    "predev": "npm run logic:build",
     "dev": "vite",
+    "prebuild": "npm run logic:build",
     "build": "vite build",
     "preview": "vite preview",
-    "test": "vitest run",
-    "physcheck": "node scripts/physics-check.mjs",
-    "icons": "node scripts/gen-icons.mjs"
+    "test": "moon test",
+    "test:js": "moon test --target js"
   },
   "dependencies": {
     "three": "^0.165.0"
   },
   "devDependencies": {
     "playwright": "^1.60.0",
-    "vite": "^6.0.0",
-    "vitest": "^3.0.0"
+    "vite": "^6.0.0"
   }
 }

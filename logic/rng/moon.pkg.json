@@ -1,0 +1,6 @@
+{
+  "import": [
+    "tetetetennis/logic/vec",
+    "moonbitlang/core/math"
+  ]
+}

@@ -1,8 +1,21 @@
 # tetetetennis
 
-A browser 3D tennis game (Three.js). One-set match, you vs the CPU, with
-physically-based ball flight (drag + Magnus effect) and surface-dependent
-bounces, rendered first-person from your player's eyes.
+A browser 3D tennis game. One-set match, you vs the CPU, with physically-based
+ball flight (drag + Magnus effect) and surface-dependent bounces.
+
+The game is split into two layers:
+
+- **Game-logic layer — [MoonBit](https://www.moonbitlang.com/)**, compiled to a
+  JavaScript ES module (`moon build --target js`). It owns all state and the
+  simulation (ball flight, bounce, shot solver, contact/serve models, scoring,
+  CPU AI, the point/rally/menu state machines) and is unit-tested with
+  `moon test`. Lives under `logic/`.
+- **Render/sound layer — JavaScript + Three.js**, bundled by Vite. It handles
+  rendering, Web Audio, the DOM HUD/menus, touch/keyboard input and the PWA
+  shell, exposing a flat API the logic layer drives via FFI. Lives under `src/`.
+
+The previous all-JavaScript implementation is preserved under `old/` for
+reference; the refactor is documented in `design_docs/refactor-moonbit-layers.md`.
 
 ## Run
 
@@ -19,8 +32,9 @@ full-screen, landscape, with its own icon. After the first online visit a
 service worker caches the app, so it **plays fully offline** (all graphics
 are procedural and the audio is synthesized, so there are no extra downloads).
 
-The app icons are drawn, not stored as art — regenerate them with
-`npm run icons` (writes the PNGs and manifest icons into `public/`).
+The app icons are drawn procedurally, not stored as art; the generated PNGs and
+manifest icons live in `public/` (the generator script is preserved under
+`old/scripts/`).
 
 ## How to play
 
@@ -52,9 +66,10 @@ with both hands):
   - **Top-right**: `⌨` / `🎮` toggles the on-screen controls on/off (the
     choice is remembered), `✕` quits to the menu.
 
-### Reading the screen (first-person view)
+### Reading the screen
 
-- The camera is your player's eyes; your own body is not drawn.
+- The camera sits just behind your player (third-person), so you see your own
+  player from behind; it stays facing the court and never looks up.
 - **Yellow ring** — where the incoming ball will land.
 - **Trajectory dots** — the incoming ball's predicted path from just before
   the bounce: yellow dots down to the bounce, cyan dots for the arc after
@@ -87,7 +102,7 @@ with both hands):
   straighter, stretched line (~3.1 m deeper than the same launch without
   spin); it stays low and robs the bounce of pace, especially on grass.
 
-Ball pace is globally scaled (`PACE` in `src/physics/constants.js`, 0.64) to
+Ball pace is globally scaled (`pace` in `logic/physics/constants.mbt`, 0.64) to
 80 % of the original speed — rallies leave plenty of time to position.
 
 Serves: **flat** is the cannonball; **kick** clears the net high and dives
@@ -108,7 +123,8 @@ falls with impact speed, so hard-hit balls rebound proportionally lower.
 Flat and slice balls lose horizontal speed at the bounce, with the loss
 driven by each surface's friction coefficient (clay μ=0.80 robs a slice of
 ~7.3 m/s, hard μ=0.56 of ~5.0, grass μ=0.38 of ~3.2); a heavily overspun
-topspin ball can even kick forward — verified by `npm run physcheck`.
+topspin ball can even kick forward — all verified by `moon test` (the physics
+checks are ported into `logic/physics`).
 
 ## Characters
 
@@ -125,21 +141,26 @@ character's stats, so every opponent keeps their identity at every level.
 
 ## Development
 
-```bash
-npm test             # scoring logic unit tests (vitest)
-npm run physcheck    # headless ball-physics sanity checks
-node scripts/rally-check.mjs   # serve/stroke in-rate sanity
-node scripts/ai-check.mjs      # CPU return rates per difficulty
-npm run dev -- --port 5199 & node scripts/e2e-check.mjs  # browser smoke test (playwright)
-node scripts/fpv-check.mjs    # first-person camera / gauge / markers (needs the dev server)
-npm run icons        # regenerate the PWA icons into public/
-npm run build        # production build
+Requires the [MoonBit toolchain](https://www.moonbitlang.com/download)
+(`moon`) on your `PATH` in addition to Node.
 
-# PWA check: manifest, service worker, and a fully-offline reload, against
-# the production build served at the GitHub Pages base path
-npm run build -- --base=/tetetennis/
-npx vite preview --base=/tetetennis/ --port 4180 & node scripts/pwa-check.mjs
+```bash
+moon test               # logic-layer tests on the native backend (fast)
+moon test --target js   # same tests on the JS backend (bit-exact physics parity)
+moon build --target js --release   # compile the logic layer to JS
+
+npm run dev             # dev server (the `predev` hook compiles the logic first)
+npm run build           # production build (the `prebuild` hook compiles the logic)
+npm run preview         # preview the production build
 ```
 
-All sound effects are synthesized at runtime with the Web Audio API — no
-audio assets.
+The build is **hybrid**: `moon` compiles the MoonBit logic to
+`_build/js/release/build/logic/game/game.js` (an ES module), and Vite bundles
+the web app importing it. The `predev`/`prebuild` npm hooks run `moon build`
+automatically, so `npm run dev` / `npm run build` are all you normally need.
+
+CI (`.github/workflows/test.yml`) installs MoonBit, runs `moon test` on both
+backends, then `moon build` + the Vite build.
+
+All graphics are procedural and sound effects are synthesized at runtime with
+the Web Audio API — no asset downloads.

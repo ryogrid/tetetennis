@@ -1,6 +1,10 @@
 node_modules/
 dist/
 scripts/shots/
+old/scripts/shots/
+# MoonBit build output
+_build/
+target/
 \#CLAUDE.md\#
 # editor backups
 *.bak
