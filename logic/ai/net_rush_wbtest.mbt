@@ -17,3 +17,14 @@ test "AI out tolerance: in balls always played; hard judges borderline outs best
   // on a borderline out, hard lets it go more often (better judgement) than easy
   assert_true(out_letgo_prob("hard", 0.3) > out_letgo_prob("easy", 0.3))
 }
+
+///|
+test "AI tactical shots: lob a net-rusher, drop a deep camper, else neither" {
+  // human at the net (z=3): a winning roll -> Lob, a losing roll -> None
+  assert_true(tactical_shot_type(3.0, 0.1, "hard") == Some(Lob))
+  assert_true(tactical_shot_type(3.0, 0.95, "hard") == None)
+  // human camped deep (z=14): Drop
+  assert_true(tactical_shot_type(14.0, 0.1, "hard") == Some(Drop))
+  // human at a normal baseline depth (z=8): never a tactical override
+  assert_true(tactical_shot_type(8.0, 0.1, "hard") == None)
+}

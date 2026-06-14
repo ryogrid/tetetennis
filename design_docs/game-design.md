@@ -314,7 +314,10 @@ The CPU is **never** eased by Assist.
   offset).
 - **Shot selection** is weighted scoring over candidate targets: it favours the **open
   court** (distance from the human), penalises shots that force it to **run**, and applies
-  a **per-persona style bias** (e.g. a grinder leans topspin, a slicer leans slice).
+  a **per-persona style bias** (e.g. a grinder leans topspin, a slicer leans slice). Two
+  **tactical overrides** (`tactical_shot_type`, difficulty-scaled rate) react to the human:
+  if you **rush the net** (`human_z < 5 m`) it **lobs** over you (else its deep groundstroke
+  passes you); if you **camp deep** (`human_z > 13.5 m`) it hits a **drop** to pull you in.
 - **Net rush (`should_rush_net`)**: on a short ball (the predicted strike point within
   `net_chance_z = 9 m` of the net) that isn't fast, the AI rushes in to volley if its
   **net-tendency** stat clears the chance threshold (`chance + net/100 > 1`). Incoming
@@ -419,9 +422,6 @@ files to download (`src/audio.js`).
 The original design draft envisioned a richer system. **None of the following is in the
 current build** — the figures here are *proposed*, not measured from code. They are kept
 for reference and possible future work.
-
-### A.5 Smarter AI
-- Explicit "player rushes net → lob/passing" and "player drops deep → drop shot" rules.
 
 ### A.6 Stats, open court & richer UI
 - **Match stats** — Winners, Unforced Errors, Double Faults, average rally length,

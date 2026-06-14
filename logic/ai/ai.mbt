@@ -218,6 +218,43 @@ struct StrokePlan {
   aim_depth : Double
 }
 
+// Tactical shot vs the human's court position (Appendix A.5): lob a net-rusher,
+// drop on a player camped deep behind the baseline. `roll` is a pre-drawn
+// uniform; the trigger rate rises with difficulty.
+///|
+let net_play_z : Double = 5.0 // human within this of the net = at the net
+
+///|
+let deep_play_z : Double = 13.5 // human beyond this = camped deep
+
+///|
+fn tactical_shot_type(
+  human_z : Double,
+  roll : Double,
+  diff_id : String,
+) -> @shots.ShotType? {
+  let p = match diff_id {
+    "hard" => 0.8
+    "easy" => 0.35
+    _ => 0.6
+  }
+  if human_z < net_play_z {
+    if roll < p {
+      Some(Lob) // over the net-rusher's head (else a passing groundstroke)
+    } else {
+      None
+    }
+  } else if human_z > deep_play_z {
+    if roll < p {
+      Some(Drop) // pull the deep player forward
+    } else {
+      None
+    }
+  } else {
+    None
+  }
+}
+
 ///|
 fn choose_stroke(ai : Ai, ctx : AiCtx, pred_x : Double, pred_z : Double, rng : @rng.Gauss) -> StrokePlan {
   let stats = ai.stats
@@ -285,7 +322,13 @@ fn choose_stroke(ai : Ai, ctx : AiCtx, pred_x : Double, pred_z : Double, rng : @
     Topspin => 9.8
     _ => 9.2
   }
-  { type_: best_type, aim_x: best_tx / 2.8, aim_depth: (best_tz - base_z) / 2.4 }
+  let plan_x = best_tx / 2.8
+  // tactical override: lob a net-rusher, drop on a deep camper
+  match tactical_shot_type(human_z, rng.uniform(), ai.diff.id) {
+    Some(Lob) => { type_: Lob, aim_x: plan_x, aim_depth: 1.0 }
+    Some(Drop) => { type_: Drop, aim_x: plan_x, aim_depth: -1.0 }
+    _ => { type_: best_type, aim_x: plan_x, aim_depth: (best_tz - base_z) / 2.4 }
+  }
 }
 
 ///|
