@@ -32,8 +32,9 @@ full-screen, landscape, with its own icon. After the first online visit a
 service worker caches the app, so it **plays fully offline** (all graphics
 are procedural and the audio is synthesized, so there are no extra downloads).
 
-The app icons are drawn, not stored as art — regenerate them with
-`npm run icons` (writes the PNGs and manifest icons into `public/`).
+The app icons are drawn procedurally, not stored as art; the generated PNGs and
+manifest icons live in `public/` (the generator script is preserved under
+`old/scripts/`).
 
 ## How to play
 
@@ -100,7 +101,7 @@ with both hands):
   straighter, stretched line (~3.1 m deeper than the same launch without
   spin); it stays low and robs the bounce of pace, especially on grass.
 
-Ball pace is globally scaled (`PACE` in `src/physics/constants.js`, 0.64) to
+Ball pace is globally scaled (`pace` in `logic/physics/constants.mbt`, 0.64) to
 80 % of the original speed — rallies leave plenty of time to position.
 
 Serves: **flat** is the cannonball; **kick** clears the net high and dives
@@ -121,7 +122,8 @@ falls with impact speed, so hard-hit balls rebound proportionally lower.
 Flat and slice balls lose horizontal speed at the bounce, with the loss
 driven by each surface's friction coefficient (clay μ=0.80 robs a slice of
 ~7.3 m/s, hard μ=0.56 of ~5.0, grass μ=0.38 of ~3.2); a heavily overspun
-topspin ball can even kick forward — verified by `npm run physcheck`.
+topspin ball can even kick forward — all verified by `moon test` (the physics
+checks are ported into `logic/physics`).
 
 ## Characters
 
