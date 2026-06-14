@@ -410,9 +410,16 @@ length).
 All sound is **synthesized at runtime with the Web Audio API** — there are no audio
 files to download (`src/audio.js`).
 
-- **Hit sound**: a compact **two-layer** synth — band-pass-filtered white noise (the
-  "crack") plus a short sine "body" — scaled by impact speed and panned by the contact's
-  `x` position.
+- **Hit sound**: a **5-layer** synth shaped per shot type — ① Body/Pock (triangle swooping
+  to `bodyHz`), ② Crack (high-passed noise click), ③ Shimmer (1.8–2.8 kHz bandpass), ④
+  String Ring (high-Q bandpass tail whose centre sweeps **up** for topspin / **down** for
+  slice), ⑤ Brush (scrape for spin shots). Scaled by impact speed, **panned** by the
+  contact's `x`, jittered per hit, and fed a procedural **IR reverb** (`ConvolverNode`). A
+  **jammed** mishit is detuned and low-passed into a dull thud; a **Perfect Hit** adds a
+  bell (`sfxPerfect`).
+- **Optional samples**: a `loadSamples` hook plays recorded racket-impact files from
+  `audio/samples/` (with a manifest) if present, and **silently falls back to the synth**
+  otherwise — so the build stays download-free (see `src/audio/samples/CREDITS.md`).
 - **Other SFX**: bounce, net, crowd cheer (filtered noise), out, fault, toss, and a
   reach-alert tone, all procedurally generated. The first user interaction resumes the
   AudioContext.
@@ -430,14 +437,15 @@ files to download (`src/audio.js`).
 
 ---
 
-## Appendix A — Future / Not-Yet-Implemented Ideas
+## Appendix A — History
 
-The original design draft envisioned a richer system. **None of the following is in the
-current build** — the figures here are *proposed*, not measured from code. They are kept
-for reference and possible future work.
-
-### A.7 Sampled / richer audio
-- **Recorded hit samples** (loaded via `decodeAudioData`, played with `BufferSource`) with
-  a **5-layer synth fallback** (Body/Pock, Crack, Shimmer, String Ring, Brush), per-shot
-  pitch/pan/filtering, procedural **IR reverb** (`ConvolverNode`), and a perfect-hit bell.
-  *(The shipped game uses a 2-layer synth and no reverb — §12.)*
+This appendix previously listed the richer design that had not yet been built. **Those
+features are now all implemented** and documented in the body above — the Drop shot (§6.1),
+the charge / Perfect-Hit / Overcharge / Safety / Whiff mechanic and its topspin/slice
+enhancements (§6.2), Smash (§6.6) and Volley (§6.7), the fast-ball jam + counter model
+(§6.5), the oscillating serve power meter (§7), the smarter AI — net-rush + net-tendency
+stat, serve-return positioning, probabilistic out-tolerance, and the lob/drop tactical
+rules (§9), match-stats tracking + the expanded match-end screen with Rematch and the
+difficulty readout (§11), radar charts, the set-length selector, the open-court highlight
+(§10), the pause modal, and the 5-layer audio engine with IR reverb and a sample hook
+(§12). The full pre-implementation design history remains in git (branch `enhance-0615`).

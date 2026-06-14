@@ -14,7 +14,14 @@ pub type Host
 pub extern "js" fn host_sfx(h : Host, name : String) -> Unit = "(h,n)=>h.audio[n]()"
 
 ///|
-pub extern "js" fn host_sfx_hit(h : Host, speed : Double) -> Unit = "(h,s)=>h.audio.sfxHit(s)"
+pub extern "js" fn host_sfx_hit(
+  h : Host,
+  speed : Double,
+  shot : String,
+  pan : Double,
+  jammed : Bool,
+) -> Unit =
+  "(h,s,t,p,j)=>h.audio.sfxHit(s,t,p,j)"
 
 ///|
 pub extern "js" fn host_sfx_bounce(h : Host, speed : Double, surface : String) -> Unit =

@@ -699,7 +699,7 @@ fn execute_serve(
   ms.point_state = Rally
   ms.ball_stamp = ms.ball_stamp + 1
   let speed = @vec.hypot3(res.vx, res.vy, res.vz)
-  @ffi.host_sfx_hit(self.host, speed)
+  @ffi.host_sfx_hit(self.host, speed, "serve", b.px / 5.5, false)
   @ffi.host_serve_speed_toast(self.host, speed * 3.6)
   match @physics.predict_landing(b, ms.surface) {
     Some(l) => @ffi.host_show_landing(self.host, l.x, l.z)
@@ -772,7 +772,10 @@ fn attempt_contact(
           @rules.C => ms.stats.c_came_net = true
         }
       }
-      @ffi.host_sfx_hit(self.host, @vec.hypot3(r.vx, r.vy, r.vz))
+      @ffi.host_sfx_hit(
+        self.host, @vec.hypot3(r.vx, r.vy, r.vz), shot_type_str(r.shot_type),
+        b.px / 5.5, r.mishit,
+      )
       if side == @rules.P {
         @ffi.host_flash_shot(self.host, shot_type_str(r.shot_type))
         if r.perfect {
