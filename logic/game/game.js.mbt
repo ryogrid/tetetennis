@@ -624,6 +624,9 @@ fn attempt_contact(
         if r.perfect {
           @ffi.host_sfx(self.host, "sfxPerfect")
         }
+        if r.smash {
+          @ffi.host_toast(self.host, "SMASH!", 700)
+        }
       }
       match @physics.predict_landing(b, ms.surface) {
         Some(l) => @ffi.host_show_landing(self.host, l.x, l.z)

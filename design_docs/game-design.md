@@ -193,30 +193,6 @@ Low `q` widens the error model: lateral/depth aim noise and a small speed/spin j
 all scale with `(1 + 2.2·(1 − q))`, so "hitting hard from a bad position" sprays the
 ball. This is the central risk/reward dial.
 
-### 6.3 Contact quality (core mechanic)
-
-Where you meet the ball determines shot quality `q ∈ [0,1]`, the product of three factors
-(`shots.mbt:contact_quality`). The ideal contact is the ball at **waist height
-(0.85 m)**, an **arm-plus-racket length to the side (0.65 m)**
-(`constants.mbt:ideal_contact_h/_r`):
-
-- **`q_dist`** — distance from that ideal side-offset. A flat "1.0" band runs from
-  0.30 m out to **0.90 m** (0.65 + 0.25), then falls off to the reach limit; jamming the
-  ball against the body (closer than 0.30 m) caps quality below 1.
-- **`q_height`** — penalty for meeting the ball away from waist height (tolerance band
-  ±0.30 m, then a falloff capped at 0.55).
-- **`q_speed`** — fast incoming balls are harder: `clamp(1 − (v_in − 18)/55, 0.65, 1)`.
-  Above ~18 m/s of incoming pace, poor posture starts to bite.
-
-Reach scales with the `rea` stat — `(1.25 + 0.25·rea/100)·1.5`, i.e. **≈ 2.08–2.21 m**
-across the roster (theoretical 1.875–2.25 m); the human gets +0.2 m grace.
-A **whiff** (no contact, ball plays on) occurs when the ball is out of reach
-(`d > reach`) or above the overhead limit (`h > 1.15 + reach`).
-
-Low `q` widens the error model: lateral/depth aim noise and a small speed/spin jitter
-all scale with `(1 + 2.2·(1 − q))`, so "hitting hard from a bad position" sprays the
-ball. This is the central risk/reward dial.
-
 ### 6.4 Shot placement & aim
 
 A per-type default landing depth (Flat 6.5 m, Topspin 8.0 m, Slice/Lob 5.5 m, pulled
@@ -234,6 +210,16 @@ A **mishit** is triggered by *poor contact quality*, not a fixed pace threshold
 (`shots.mbt`): when `q < 0.3`, with probability **0.35** (0.15 with Assist on), the
 return is **slowed (×0.55), stripped of spin (×0.3), and yaw-skewed** — a weak, looping
 sitter. Setting up early (good posture) is how you avoid it.
+
+### 6.6 Smash
+
+Hitting **Flat** at a high contact (**≥ 1.7 m**) in the **forecourt** (within
+`smash_forecourt = 8.5 m` of the net) becomes a **Smash** (`shots.mbt`): the launch speed
+jumps to `smash_speed(pow) = (42 + 10·pow/100)·eff_pace` and is only lightly
+quality-dependent (`×(0.8 + 0.2·q)`), with a flat/downward launch band (−14°…2°) to slam
+the ball down — charge still adds up to +25 %. It is the finisher for high bounces and
+short lobs; the same high ball at the baseline is just a weak high flat. `Stroke.smash`
+drives a "SMASH!" cue.
 
 ## 7. Serve
 
@@ -405,8 +391,6 @@ current build** — the figures here are *proposed*, not measured from code. The
 for reference and possible future work.
 
 ### A.3 Situational shots
-- **Smash** — high point (≥1.7 m) × forecourt × Flat → a downward bomb (base ~42 m/s,
-  +charge).
 - **Volley / net play** — pre-bounce block/punch near the net: restrained power, high
   accuracy, little charge effect; lobs and passing shots as counters.
 - **Fast-ball jam model** — a pace-threshold (>26 m/s) mishit weighted by shot type

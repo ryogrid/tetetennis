@@ -50,6 +50,19 @@ let slice_charge_back_gain : Double = 0.6
 ///|
 let slice_charge_depth : Double = 2.0 // max extra depth toward the baseline (m)
 
+// Smash (Appendix A.3): a high point in the forecourt hit Flat slams downward.
+///|
+let smash_height : Double = 1.7 // contact height to qualify (m)
+
+///|
+let smash_forecourt : Double = 8.5 // max distance from the net to qualify (m)
+
+///|
+let smash_theta_min : Double = -14.0
+
+///|
+let smash_theta_max : Double = 2.0
+
 ///|
 pub(all) struct ContactQuality {
   q : Double
@@ -121,6 +134,7 @@ pub(all) struct Stroke {
   q : Double
   mishit : Bool
   perfect : Bool
+  smash : Bool
   shot_type : ShotType
 }
 
@@ -163,7 +177,8 @@ pub fn compute_stroke(
     @rules.P => -1.0
     @rules.C => 1.0
   }
-  let (def_speed_mul, def_theta_min, def_theta_max0) = shot_def(typ)
+  let (def_speed_mul, def_theta_min0, def_theta_max0) = shot_def(typ)
+  let mut def_theta_min = def_theta_min0
   let mut def_theta_max = def_theta_max0
   let type_z = match typ {
     Flat => 6.5
@@ -204,6 +219,17 @@ pub fn compute_stroke(
       speed = (12.0 + 4.0 * stats.slc / 100.0) * @physics.eff_pace()
       spin_rpm = -@physics.slice_rpm(stats.slc) * (0.55 + 0.45 * q) * 0.9
     }
+  }
+  // Smash: a high point in the forecourt hit Flat becomes a downward bomb.
+  // Less quality-dependent, so it stays fast even from an awkward overhead.
+  let is_smash = typ == Flat &&
+    ball_y >= smash_height &&
+    @vec.dabs(ball_z) < smash_forecourt
+  if is_smash {
+    speed = @physics.smash_speed(stats.pow) * (0.80 + 0.20 * q) // light q-dependence
+    spin_rpm = 200.0 + 200.0 * q
+    def_theta_min = smash_theta_min
+    def_theta_max = smash_theta_max
   }
   // Topspin/Slice charge enhancements: charge amplifies each shot's identity.
   let cc = @vec.clampd(charge_cc, 0.0, 1.0)
@@ -306,6 +332,7 @@ pub fn compute_stroke(
     q,
     mishit,
     perfect,
+    smash: is_smash,
     shot_type: typ,
   })
 }

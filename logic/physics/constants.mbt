@@ -165,6 +165,13 @@ pub fn serve_flat_speed(srv : Double) -> Double {
   (40.0 + 16.0 * srv / 100.0) * eff_pace()
 }
 
+// Overhead smash: a high forecourt flat slammed down. Much faster than a
+// groundstroke and only lightly quality-dependent.
+///|
+pub fn smash_speed(pow : Double) -> Double {
+  (42.0 + 10.0 * pow / 100.0) * eff_pace()
+}
+
 ///|
 pub fn run_speed(spd : Double) -> Double {
   (5.2 + 2.6 * spd / 100.0) * 1.5

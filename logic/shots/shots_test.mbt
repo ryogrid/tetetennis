@@ -249,6 +249,29 @@ test "topspin charge short-angle attack: pulls shorter and wider" {
   assert_true(@vec.dabs(x1) > @vec.dabs(x0)) // and pulled wider cross-court
 }
 
+// Launch speed + smash flag of a Flat stroke at a given contact height/depth.
+///|
+fn flat_stroke(ball_y : Double, ball_z : Double) -> (Double, Bool) {
+  let r = compute_stroke(
+    0.0, ball_z + 0.2, 0.5, ball_y, ball_z, 0.0, 2.0, 6.0, test_stats, Flat, 0.0,
+    0.0, @rules.P, @rng.Gauss::new(5),
+  )
+  match r {
+    Some(s) => (@vec.hypot3(s.vx, s.vy, s.vz), s.smash)
+    None => (0.0, false)
+  }
+}
+
+///|
+test "smash: a high forecourt flat is much faster than a high baseline flat" {
+  @assist.set_assist_level(Off)
+  let (sm_sp, sm_f) = flat_stroke(1.8, 6.0) // high point, forecourt -> smash
+  let (bl_sp, bl_f) = flat_stroke(1.8, 11.0) // high point, baseline -> weak flat
+  assert_true(sm_f) // forecourt overhead is a smash
+  assert_true(!bl_f) // the baseline high ball is not
+  assert_true(sm_sp > bl_sp * 1.4) // and the smash is far faster
+}
+
 ///|
 test "contact quality: whiff out of reach, full quality in the band" {
   @assist.set_assist_level(Off)
