@@ -14,8 +14,9 @@ The game is split into two layers:
   rendering, Web Audio, the DOM HUD/menus, touch/keyboard input and the PWA
   shell, exposing a flat API the logic layer drives via FFI. Lives under `src/`.
 
-The previous all-JavaScript implementation is preserved under `old/` for
-reference; the refactor is documented in `design_docs/refactor-moonbit-layers.md`.
+The previous all-JavaScript implementation (the codebase before the MoonBit
+refactoring) is preserved on the **`old_master0613`** branch for reference; the
+refactor itself is documented in `design_docs/refactor-moonbit-layers.md`.
 
 ## Run
 
@@ -33,8 +34,8 @@ service worker caches the app, so it **plays fully offline** (all graphics
 are procedural and the audio is synthesized, so there are no extra downloads).
 
 The app icons are drawn procedurally, not stored as art; the generated PNGs and
-manifest icons live in `public/` (the generator script is preserved under
-`old/scripts/`).
+manifest icons live in `public/` (the generator script lives on the
+`old_master0613` branch).
 
 ## How to play
 
