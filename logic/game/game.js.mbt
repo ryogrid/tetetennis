@@ -43,6 +43,50 @@ pub let swing_contact_t : Double = 0.18
 ///|
 pub let swing_dur : Double = 0.45
 
+// ---- charge / Perfect-Hit (Appendix A.2) ----
+
+///|
+let charge_time : Double = 0.8 // seconds of hold to reach full charge
+
+///|
+let charge_max : Double = 1.25 // overcharge ceiling
+
+///|
+let cpu_charge : Double = 0.375 // CPU swings at neutral power (0.85+0.40*0.375=1.0)
+
+///|
+let safety_drop_y : Double = 0.7 // auto-swing once a low ball drops below this
+
+///|
+let safety_approach_rate : Double = 3.0 // ...unless still closing faster than this
+
+///|
+let whiff_cd_dur : Double = 0.25 // cooldown after a release out of reach
+
+///|
+let stiff_dur : Double = 0.35 // post-impact stiffness duration
+
+///|
+let stiff_factor : Double = 0.12 // movement multiplier while stiff
+
+///|
+let full_assist_charge : Double = 0.7 // auto-charge level under Full assist
+
+///|
+let volley_forecourt : Double = 7.0 // hit a still-airborne ball within this of the net = volley
+
+///|
+let serve_meter_period : Double = 1.2 // oscillating serve power meter period (s)
+
+///|
+let open_court_enabled : Bool = true // Appendix A.6 floor highlight
+
+///|
+let serve_sweet_lo : Double = 0.70 // power-meter sweet-spot band
+
+///|
+let serve_sweet_hi : Double = 0.88
+
 // ---------------- enums ----------------
 
 ///|
@@ -51,10 +95,25 @@ enum AppState {
   MenuOpp
   MenuSurface
   MenuDifficulty
+  MenuGames
   MenuAssist
   Match
   Results
 } derive(Eq)
+
+// Games-to-win options for the set length selector (Appendix A.6).
+///|
+let games_options : Array[Int] = [2, 4, 6]
+
+///|
+fn games_idx_of(n : Int) -> Int {
+  for i = 0; i < games_options.length(); i = i + 1 {
+    if games_options[i] == n {
+      return i
+    }
+  }
+  games_options.length() - 1
+}
 
 ///|
 enum PointState {
@@ -63,6 +122,60 @@ enum PointState {
   Rally
   PointOver
 } derive(Eq)
+
+// Match statistics (Appendix A.6), accumulated through the match and shown on
+// the end screen. p = human, c = CPU.
+///|
+struct MatchStats {
+  mut p_winners : Int
+  mut c_winners : Int
+  mut p_unforced : Int
+  mut c_unforced : Int
+  mut p_double_faults : Int
+  mut c_double_faults : Int
+  mut points_played : Int
+  mut total_rally_shots : Int
+  mut rally_shots : Int // shots in the current point
+  mut p_first_serves : Int
+  mut p_first_in : Int
+  mut c_first_serves : Int
+  mut c_first_in : Int
+  mut p_run : Double // running distance (m)
+  mut c_run : Double
+  mut p_net_pts : Int
+  mut p_net_won : Int
+  mut c_net_pts : Int
+  mut c_net_won : Int
+  mut p_came_net : Bool // came to net during the current point
+  mut c_came_net : Bool
+}
+
+///|
+fn new_match_stats() -> MatchStats {
+  {
+    p_winners: 0,
+    c_winners: 0,
+    p_unforced: 0,
+    c_unforced: 0,
+    p_double_faults: 0,
+    c_double_faults: 0,
+    points_played: 0,
+    total_rally_shots: 0,
+    rally_shots: 0,
+    p_first_serves: 0,
+    p_first_in: 0,
+    c_first_serves: 0,
+    c_first_in: 0,
+    p_run: 0.0,
+    c_run: 0.0,
+    p_net_pts: 0,
+    p_net_won: 0,
+    c_net_pts: 0,
+    c_net_won: 0,
+    p_came_net: false,
+    c_came_net: false,
+  }
+}
 
 ///|
 enum RallyPhase {
@@ -101,6 +214,9 @@ struct MatchState {
   mut sweet_hit_clock : Double
   mut time : Double
   mut state_timer : Double
+  mut serve_meter : Double // current oscillating power-meter value [0,1]
+  mut serve_meter_t : Double // meter phase clock (s)
+  stats : MatchStats
   mut cpu_serve_plan : @ai.ServePlan?
   mut last_shot_pref : @shots.ShotType?
   mut was_in_reach : Bool
@@ -117,6 +233,8 @@ struct Game {
   mut sel_opp : Int
   mut sel_surface : Int
   mut sel_difficulty : Int
+  mut sel_games : Int // games to win the set
+  mut paused : Bool
   mut time_scale : Double
   mut ms : MatchState?
 }
@@ -154,6 +272,7 @@ fn shot_type_str(t : @shots.ShotType) -> String {
     Topspin => "topspin"
     Slice => "slice"
     Lob => "topspin"
+    Drop => "drop"
   }
 }
 
@@ -181,6 +300,7 @@ fn str_to_shot(s : String) -> @shots.ShotType? {
     "flat" => Some(Flat)
     "topspin" => Some(Topspin)
     "slice" => Some(Slice)
+    "drop" => Some(Drop)
     _ => None
   }
 }
@@ -272,6 +392,15 @@ fn confirm_surface(self : Game) -> Unit {
 fn confirm_difficulty(self : Game) -> Unit {
   @ffi.host_sfx(self.host, "sfxConfirm")
   self.sel_difficulty = self.menu_idx
+  self.state = MenuGames
+  self.menu_idx = games_idx_of(self.sel_games)
+  @ffi.host_show_games_select(self.host, self.menu_idx)
+}
+
+///|
+fn confirm_games(self : Game) -> Unit {
+  @ffi.host_sfx(self.host, "sfxConfirm")
+  self.sel_games = games_options[self.menu_idx]
   self.state = MenuAssist
   self.menu_idx = assist_idx()
   @ffi.host_show_assist_select(self.host, self.menu_idx)
@@ -303,6 +432,25 @@ fn names_for(ms : MatchState, side : @rules.Side) -> String {
   }
 }
 
+// End-screen stats payload: ';'-separated "Label\tYou\tOpp" rows (Appendix A.6).
+///|
+fn stats_string(ms : MatchState) -> String {
+  let s = ms.stats
+  let pts = if s.points_played == 0 { 1 } else { s.points_played }
+  let avg10 = (s.total_rally_shots.to_double() / pts.to_double() * 10.0).to_int()
+  let p_fs = if s.p_first_serves == 0 { 1 } else { s.p_first_serves }
+  let c_fs = if s.c_first_serves == 0 { 1 } else { s.c_first_serves }
+  let p1 = (s.p_first_in.to_double() / p_fs.to_double() * 100.0).to_int()
+  let c1 = (s.c_first_in.to_double() / c_fs.to_double() * 100.0).to_int()
+  "Winners\t\{s.p_winners}\t\{s.c_winners};" +
+  "Unforced errors\t\{s.p_unforced}\t\{s.c_unforced};" +
+  "Double faults\t\{s.p_double_faults}\t\{s.c_double_faults};" +
+  "1st serve in\t\{p1}%\t\{c1}%;" +
+  "Net pts won\t\{s.p_net_won}/\{s.p_net_pts}\t\{s.c_net_won}/\{s.c_net_pts};" +
+  "Avg rally\t\{avg10 / 10}.\{avg10 % 10}\t-;" +
+  "Distance run\t\{s.p_run.to_int()}m\t\{s.c_run.to_int()}m"
+}
+
 ///|
 fn refresh_score(self : Game, ms : MatchState) -> Unit {
   let ss = @rules.score_strings(ms.m)
@@ -324,7 +472,7 @@ fn start_match(self : Game) -> Unit {
     cpu,
     ai,
     ball: @physics.make_ball(),
-    m: @rules.create_match(@rules.P),
+    m: @rules.create_match(@rules.P, target_games=self.sel_games),
     surface,
     surface_id,
     point_state: PreServe,
@@ -345,6 +493,9 @@ fn start_match(self : Game) -> Unit {
     sweet_hit_clock: 0.0,
     time: 0.0,
     state_timer: 0.0,
+    serve_meter: 0.0,
+    serve_meter_t: 0.0,
+    stats: new_match_stats(),
     cpu_serve_plan: None,
     last_shot_pref: None,
     was_in_reach: false,
@@ -352,6 +503,7 @@ fn start_match(self : Game) -> Unit {
   }
   self.ms = Some(ms)
   self.state = Match
+  self.paused = false
   @ffi.host_start_match(self.host, surface_id, self.sel_player, self.sel_opp)
   @ffi.host_hide_menu(self.host)
   @ffi.host_show_hud(self.host)
@@ -448,7 +600,10 @@ fn position_for_serve(self : Game, ms : MatchState) -> Unit {
   ent(ms, sv).place(stance_x, sv_sign * (@physics.court_half_len + 0.4))
   let box = @shots.serve_box(sv, ms.court_side)
   let box_cx = (box.x_min + box.x_max) / 2.0
-  ent(ms, rc).place(box_cx * 1.4, -sv_sign * (@physics.court_half_len + 0.7))
+  // the CPU receiver reads the serve angle (sharper at higher difficulty); the
+  // human receiver uses the neutral bisector and then moves themselves
+  let shift = if rc == @rules.C { @ai.return_shift_factor(ms.ai) } else { 1.4 }
+  ent(ms, rc).place(box_cx * shift, -sv_sign * (@physics.court_half_len + 0.7))
   if sv == @rules.P {
     @ffi.host_serve_look_x(self.host, box_cx)
   }
@@ -489,7 +644,20 @@ fn start_toss(self : Game, ms : MatchState) -> Unit {
   e.start_serve_anim()
   @ffi.host_serve_anim(self.host, side_int(sv), true)
   ms.point_state = Serving
+  ms.serve_meter = 0.0
+  ms.serve_meter_t = 0.0
   @ffi.host_sfx(self.host, "sfxToss")
+}
+
+// Triangle-wave power meter: 0 -> 1 -> 0 over serve_meter_period seconds.
+///|
+fn serve_meter_value(t : Double) -> Double {
+  let phase = (t % serve_meter_period) / serve_meter_period
+  if phase < 0.5 {
+    phase * 2.0
+  } else {
+    2.0 - phase * 2.0
+  }
 }
 
 ///|
@@ -497,19 +665,25 @@ fn execute_serve(
   self : Game,
   ms : MatchState,
   ty : @shots.ServeType,
-  q_serve : Double,
+  power : Double,
   preset : @shots.Preset,
   aim_adjust : Double,
   aim_depth : Double,
 ) -> Unit {
   let sv = server(ms)
   let e = ent(ms, sv)
+  if ms.serve_number == 1 {
+    match sv {
+      @rules.P => ms.stats.p_first_serves = ms.stats.p_first_serves + 1
+      @rules.C => ms.stats.c_first_serves = ms.stats.c_first_serves + 1
+    }
+  }
   let b = ms.ball
   let contact_h = @physics.serve_contact_h(e.stats.rea)
   let from_y = @vec.dmax(1.6, @vec.dmin(b.py, contact_h))
   let res = @shots.compute_serve(
     e.stats, ty, b.px, from_y, b.pz, sv, ms.court_side, preset, aim_adjust, aim_depth,
-    q_serve, self.rng,
+    power, self.rng,
   )
   b.py = from_y
   b.vx = res.vx
@@ -525,7 +699,7 @@ fn execute_serve(
   ms.point_state = Rally
   ms.ball_stamp = ms.ball_stamp + 1
   let speed = @vec.hypot3(res.vx, res.vy, res.vz)
-  @ffi.host_sfx_hit(self.host, speed)
+  @ffi.host_sfx_hit(self.host, speed, "serve", b.px / 5.5, false)
   @ffi.host_serve_speed_toast(self.host, speed * 3.6)
   match @physics.predict_landing(b, ms.surface) {
     Some(l) => @ffi.host_show_landing(self.host, l.x, l.z)
@@ -545,6 +719,10 @@ fn attempt_contact(
   ty : @shots.ShotType,
   aim_x : Double,
   aim_depth : Double,
+  power_mul~ : Double = 1.0,
+  perfect_eligible~ : Bool = false,
+  overcharge~ : Double = 0.0,
+  charge_cc~ : Double = 0.0,
 ) -> Bool {
   let b = ms.ball
   if !b.active || ms.rally_phase != Live {
@@ -561,9 +739,14 @@ fn attempt_contact(
     return false // ball not on this player's side
   }
   let e = ent(ms, side)
+  // a still-airborne ball met near the net (Flat/Slice) is a volley
+  let volley = ms.bounces == 0 &&
+    @vec.dabs(b.pz) < volley_forecourt &&
+    (ty == @shots.Flat || ty == @shots.Slice)
   let res = @shots.compute_stroke(
     e.pos_x, e.pos_z, b.px, b.py, b.pz, b.vx, b.vy, b.vz, e.stats, ty, aim_x,
-    aim_depth, side, self.rng,
+    aim_depth, side, self.rng, power_mul~, perfect_eligible~, overcharge~,
+    charge_cc~, volley~,
   )
   match res {
     None => false // whiff
@@ -581,9 +764,26 @@ fn attempt_contact(
       ms.bounces = 0
       ms.serve_net_touched = false
       ms.ball_stamp = ms.ball_stamp + 1
-      @ffi.host_sfx_hit(self.host, @vec.hypot3(r.vx, r.vy, r.vz))
+      ent(ms, side).stiff_t = stiff_dur
+      ms.stats.rally_shots = ms.stats.rally_shots + 1
+      if r.volley {
+        match side {
+          @rules.P => ms.stats.p_came_net = true
+          @rules.C => ms.stats.c_came_net = true
+        }
+      }
+      @ffi.host_sfx_hit(
+        self.host, @vec.hypot3(r.vx, r.vy, r.vz), shot_type_str(r.shot_type),
+        b.px / 5.5, r.mishit,
+      )
       if side == @rules.P {
         @ffi.host_flash_shot(self.host, shot_type_str(r.shot_type))
+        if r.perfect {
+          @ffi.host_sfx(self.host, "sfxPerfect")
+        }
+        if r.smash {
+          @ffi.host_toast(self.host, "SMASH!", 700)
+        }
       }
       match @physics.predict_landing(b, ms.surface) {
         Some(l) => @ffi.host_show_landing(self.host, l.x, l.z)
@@ -606,7 +806,32 @@ fn fault(self : Game, ms : MatchState) -> Unit {
   } else {
     @ffi.host_banner(self.host, "DOUBLE FAULT")
     @ffi.host_sfx(self.host, "sfxFault")
+    match server(ms) {
+      @rules.P => ms.stats.p_double_faults = ms.stats.p_double_faults + 1
+      @rules.C => ms.stats.c_double_faults = ms.stats.c_double_faults + 1
+    }
+    self.record_error(ms, server(ms))
     self.point_end(ms, receiver(ms), "")
+  }
+}
+
+// ---- match-stats helpers (Appendix A.6) ----
+
+///|
+fn record_winner(self : Game, ms : MatchState, side : @rules.Side) -> Unit {
+  ignore(self)
+  match side {
+    @rules.P => ms.stats.p_winners = ms.stats.p_winners + 1
+    @rules.C => ms.stats.c_winners = ms.stats.c_winners + 1
+  }
+}
+
+///|
+fn record_error(self : Game, ms : MatchState, side : @rules.Side) -> Unit {
+  ignore(self)
+  match side {
+    @rules.P => ms.stats.p_unforced = ms.stats.p_unforced + 1
+    @rules.C => ms.stats.c_unforced = ms.stats.c_unforced + 1
   }
 }
 
@@ -625,6 +850,25 @@ fn point_end(self : Game, ms : MatchState, winner : @rules.Side, call_text : Str
   ms.state_timer = 0.0
   @ffi.host_hide_landing(self.host)
   self.hide_sweet(ms)
+  // accumulate per-point stats (rally length, net-point outcomes)
+  let st = ms.stats
+  st.points_played = st.points_played + 1
+  st.total_rally_shots = st.total_rally_shots + st.rally_shots
+  st.rally_shots = 0
+  if st.p_came_net {
+    st.p_net_pts = st.p_net_pts + 1
+    if winner == @rules.P {
+      st.p_net_won = st.p_net_won + 1
+    }
+  }
+  if st.c_came_net {
+    st.c_net_pts = st.c_net_pts + 1
+    if winner == @rules.C {
+      st.c_net_won = st.c_net_won + 1
+    }
+  }
+  st.p_came_net = false
+  st.c_came_net = false
   let ev = @rules.add_point(ms.m, winner)
   let win_name = names_for(ms, winner)
   @ffi.host_sfx_crowd(self.host, if winner == @rules.P { 1.0 } else { 0.55 })
@@ -661,6 +905,12 @@ fn process_bounce(self : Game, ms : MatchState, px : Double, pz : Double, speed 
         self.let_serve(ms)
         return
       }
+      if ms.serve_number == 1 {
+        match server(ms) {
+          @rules.P => ms.stats.p_first_in = ms.stats.p_first_in + 1
+          @rules.C => ms.stats.c_first_in = ms.stats.c_first_in + 1
+        }
+      }
       ms.rally_phase = Live
       ms.bounces = 1
     } else {
@@ -674,6 +924,7 @@ fn process_bounce(self : Game, ms : MatchState, px : Double, pz : Double, speed 
   if ms.bounces == 0 {
     if ms.last_hit_by == Some(side) {
       // ball never made it across (net dribble / mishit straight down)
+      self.record_error(ms, side) // unforced error by the hitter
       self.point_end(ms, @rules.other(side), "")
       return
     }
@@ -687,12 +938,19 @@ fn process_bounce(self : Game, ms : MatchState, px : Double, pz : Double, speed 
         Some(@rules.P) => @rules.C
         _ => @rules.P
       }
+      match last {
+        Some(s) => self.record_error(ms, s) // hit out = unforced error
+        None => ()
+      }
       self.point_end(ms, w, "OUT")
     }
   } else {
-    // double bounce: opponent of last hitter failed to return
+    // double bounce: opponent of last hitter failed to return = a winner
     match last {
-      Some(s) => self.point_end(ms, s, "")
+      Some(s) => {
+        self.record_winner(ms, s)
+        self.point_end(ms, s, "")
+      }
       None => ()
     }
   }
@@ -744,24 +1002,92 @@ fn rand_stroke(self : Game) -> @shots.ShotType {
 
 ///|
 fn do_serve(self : Game, ms : MatchState, kind : @shots.ShotType) -> Unit {
-  let b = ms.ball
-  let contact_h = @physics.serve_contact_h(ms.human.stats.rea)
-  let q_serve = 0.4 + 0.6 * @vec.dmax(0.0, 1.0 - @vec.dabs(b.py - contact_h) / 0.7)
+  // power is locked from the oscillating meter at the moment the serve key fires
+  let power = ms.serve_meter
   let ty = stroke_to_serve(kind)
   let aim_x = @ffi.host_move_x(self.host)
   let aim_depth = -@ffi.host_move_z(self.host)
-  self.execute_serve(ms, ty, q_serve, Body, aim_x, aim_depth)
+  self.execute_serve(ms, ty, power, Body, aim_x, aim_depth)
+}
+
+// Hold-to-charge rally strokes (Appendix A.2). Charge builds while a shot key
+// (or the touch SHOT button) is held; releasing fires the swing, a Safety Hit
+// auto-fires before the ball escapes, and releasing out of reach whiffs.
+///|
+fn update_human_charge(self : Game, ms : MatchState, dt : Double) -> Unit {
+  let ph = ms.human
+  let live = ms.point_state == Rally &&
+    ms.rally_phase == Live &&
+    ms.last_hit_by == Some(@rules.C) &&
+    ms.ball.active
+  // Full assist auto-charges/auto-swings via the auto-swing block; no manual hold.
+  if !live || @assist.assist_full() || ph.swinging || ph.whiff_cd > 0.0 {
+    if ph.charging {
+      ph.charging = false
+      @ffi.host_hide_charge(self.host)
+    }
+    return
+  }
+  let kb = str_to_shot(@ffi.host_shot_held(self.host))
+  let touch = @ffi.host_is_down(self.host, "TouchShot")
+  let kb_held = match kb {
+    Some(_) => true
+    None => false
+  }
+  let held = kb_held || touch
+  if !ph.charging {
+    if held {
+      ph.charging = true
+      ph.charge = 0.0
+      ph.charge_type = match kb {
+        Some(t) => t
+        None => self.rand_stroke()
+      }
+    } else {
+      @ffi.host_hide_charge(self.host)
+      return
+    }
+  }
+  if held {
+    ph.charge = @vec.dmin(charge_max, ph.charge + dt / charge_time)
+    @ffi.host_charge(self.host, ph.charge / charge_max, ph.charge > 1.0)
+    if self.should_safety_hit(ms) {
+      self.fire_charged_swing(ms, true)
+    }
+  } else {
+    self.fire_charged_swing(ms, false) // released -> swing
+  }
 }
 
 ///|
-fn do_stroke(self : Game, ms : MatchState, kind : @shots.ShotType) -> Unit {
-  ms.last_shot_pref = Some(kind)
-  if !@assist.assist_full() {
-    let b = ms.ball
-    let fh = b.px - ms.human.pos_x >= 0.0
-    ms.human.start_swing(kind, fh) |> ignore
-    @ffi.host_start_swing(self.host, 0, shot_type_str(kind), fh)
+fn fire_charged_swing(self : Game, ms : MatchState, safety : Bool) -> Unit {
+  let ph = ms.human
+  let b = ms.ball
+  let fh = b.px - ph.pos_x >= 0.0
+  ph.swing_charge = ph.charge
+  ph.swing_no_perfect = safety
+  ph.charging = false
+  ms.last_shot_pref = Some(ph.charge_type)
+  ph.start_swing(ph.charge_type, fh) |> ignore
+  @ffi.host_start_swing(self.host, 0, shot_type_str(ph.charge_type), fh)
+  @ffi.host_hide_charge(self.host)
+}
+
+// Auto-fire while charging if the ball is in reach but about to escape: it has
+// passed the player horizontally, or it has dropped low and is no longer
+// closing fast. Prevents a held charge from sailing past unhit.
+///|
+fn should_safety_hit(self : Game, ms : MatchState) -> Bool {
+  ignore(self)
+  let ph = ms.human
+  let b = ms.ball
+  let d = @vec.hypot2(b.px - ph.pos_x, b.pz - ph.pos_z)
+  if d > ph.reach {
+    return false
   }
+  let passed = b.pz > ph.pos_z && b.vz > 0.0
+  let low = b.py <= safety_drop_y && b.vy < 0.0 && b.vz < safety_approach_rate
+  passed || low
 }
 
 ///|
@@ -813,19 +1139,36 @@ pub fn handle_input() -> Unit {
         self.confirm_difficulty()
       }
     }
-    MenuAssist => {
+    MenuGames => {
       if self.handle_menu_nav(3) {
-        @ffi.host_show_assist_select(h, self.menu_idx)
+        @ffi.host_show_games_select(h, self.menu_idx)
       }
       if @ffi.host_was_pressed(h, "Escape") {
         self.state = MenuDifficulty
         self.menu_idx = self.sel_difficulty
         @ffi.host_show_difficulty_select(h, self.menu_idx)
       } else if self.confirm_pressed() {
+        self.confirm_games()
+      }
+    }
+    MenuAssist => {
+      if self.handle_menu_nav(3) {
+        @ffi.host_show_assist_select(h, self.menu_idx)
+      }
+      if @ffi.host_was_pressed(h, "Escape") {
+        self.state = MenuGames
+        self.menu_idx = games_idx_of(self.sel_games)
+        @ffi.host_show_games_select(h, self.menu_idx)
+      } else if self.confirm_pressed() {
         self.confirm_assist()
       }
     }
-    Results => if self.confirm_pressed() { self.back_to_char_menu() }
+    Results =>
+      if @ffi.host_was_pressed(self.host, "KeyR") {
+        self.start_match() // rematch with the same settings
+      } else if self.confirm_pressed() {
+        self.back_to_char_menu()
+      }
     Match => self.handle_match_input()
   }
 }
@@ -837,9 +1180,22 @@ fn handle_match_input(self : Game) -> Unit {
     Some(ms) => ms
     None => return
   }
+  // pause menu (physical pause): Esc toggles it; while paused, only Resume/Quit
+  if self.paused {
+    if @ffi.host_was_pressed(h, "Escape") || @ffi.host_was_pressed(h, "KeyP") {
+      self.paused = false
+      @ffi.host_hide_pause(self.host)
+    } else if @ffi.host_was_pressed(h, "KeyQ") {
+      self.paused = false
+      @ffi.host_hide_pause(self.host)
+      self.teardown_match()
+      self.back_to_char_menu()
+    }
+    return
+  }
   if @ffi.host_was_pressed(h, "Escape") {
-    self.teardown_match()
-    self.back_to_char_menu()
+    self.paused = true
+    @ffi.host_show_pause(self.host)
     return
   }
   let shot = str_to_shot(@ffi.host_shot_key(h))
@@ -853,12 +1209,9 @@ fn handle_match_input(self : Game) -> Unit {
       Some(s) => self.do_serve(ms, s)
       None => if touch_shot { self.do_serve(ms, self.rand_stroke()) }
     }
-  } else if ms.point_state == Rally {
-    match shot {
-      Some(s) => self.do_stroke(ms, s)
-      None => if touch_shot { self.do_stroke(ms, self.rand_stroke()) }
-    }
   }
+  // Rally strokes use the hold-to-charge model handled in fixed_update
+  // (update_human_charge), not an edge-triggered press here.
 }
 
 // ---------------- fixed update ----------------
@@ -866,8 +1219,8 @@ fn handle_match_input(self : Game) -> Unit {
 ///|
 pub fn fixed_update(dt : Double) -> Unit {
   let self = g()
-  if self.state != Match {
-    return
+  if self.state != Match || self.paused {
+    return // physical pause: no simulation advance
   }
   let ms = match self.ms {
     Some(ms) => ms
@@ -875,6 +1228,12 @@ pub fn fixed_update(dt : Double) -> Unit {
   }
   ms.time = ms.time + dt
   let b = ms.ball
+
+  // oscillating serve power meter (human's serve only)
+  if ms.point_state == Serving && server(ms) == @rules.P {
+    ms.serve_meter_t = ms.serve_meter_t + dt
+    ms.serve_meter = serve_meter_value(ms.serve_meter_t)
+  }
 
   // human movement (+ optional positioning magnetism)
   let mut hx = @ffi.host_move_x(self.host)
@@ -902,6 +1261,10 @@ pub fn fixed_update(dt : Double) -> Unit {
     }
   }
   ms.human.update(dt, hx, hz)
+  ms.stats.p_run = ms.stats.p_run +
+    @vec.hypot2(ms.human.vel_x, ms.human.vel_z) * dt
+  ms.stats.c_run = ms.stats.c_run +
+    @vec.hypot2(ms.cpu.vel_x, ms.cpu.vel_z) * dt
   if (ms.point_state == PreServe || ms.point_state == Serving) && server(ms) == @rules.P {
     let sx = @shots.serve_stance_x(@rules.P, ms.court_side)
     if sx > 0.0 {
@@ -949,7 +1312,11 @@ pub fn fixed_update(dt : Double) -> Unit {
     ms.cpu.pos_x = @shots.serve_stance_x(@rules.C, ms.court_side)
   }
 
-  // auto-swing assist (full assist only)
+  // human charge / release (hold to charge, release to swing); Full assist
+  // auto-charges + auto-releases at the sweet spot below.
+  self.update_human_charge(ms, dt)
+
+  // auto-swing assist (full assist only): auto-release at the sweet spot
   if @assist.assist_full() &&
     ms.point_state == Rally &&
     ms.last_hit_by == Some(@rules.C) &&
@@ -964,6 +1331,8 @@ pub fn fixed_update(dt : Double) -> Unit {
           match ty {
             Some(t) => {
               let fh = b.px - ms.human.pos_x >= 0.0
+              ms.human.swing_charge = full_assist_charge
+              ms.human.swing_no_perfect = false
               ms.human.start_swing(t, fh) |> ignore
               @ffi.host_start_swing(self.host, 0, shot_type_str(t), fh)
               ms.last_shot_pref = None
@@ -980,16 +1349,27 @@ pub fn fixed_update(dt : Double) -> Unit {
   if ph.swinging && !ph.contact_done && ph.swing_t >= swing_contact_t - swing_window {
     let aim_x = @ffi.host_move_x(self.host)
     let aim_depth = -@ffi.host_move_z(self.host)
-    if self.attempt_contact(ms, @rules.P, ph.swing_type, aim_x, aim_depth) {
+    let power_mul = 0.85 + 0.40 * @vec.dmin(ph.swing_charge, 1.0)
+    let overcharge = @vec.dmax(0.0, ph.swing_charge - 1.0)
+    let charge_cc = @vec.dmin(ph.swing_charge, 1.0)
+    if self.attempt_contact(
+        ms, @rules.P, ph.swing_type, aim_x, aim_depth, power_mul~,
+        perfect_eligible=(!ph.swing_no_perfect), overcharge~, charge_cc~,
+      ) {
       ph.contact_done = true
     } else if ph.swing_t >= swing_contact_t + swing_window {
       ph.contact_done = true
+      ph.whiff_cd = whiff_cd_dur // released/swung out of reach -> brief cooldown
     }
   }
   let pc = ms.cpu
   if pc.swinging && !pc.contact_done && pc.swing_t >= swing_contact_t {
     pc.contact_done = true
-    self.attempt_contact(ms, @rules.C, pc.pending_type, pc.pending_aim_x, pc.pending_aim_depth)
+    let cpu_power = 0.85 + 0.40 * @vec.dmin(cpu_charge, 1.0)
+    self.attempt_contact(
+      ms, @rules.C, pc.pending_type, pc.pending_aim_x, pc.pending_aim_depth,
+      power_mul=cpu_power,
+    )
     |> ignore
   }
 
@@ -1011,7 +1391,7 @@ pub fn fixed_update(dt : Double) -> Unit {
         Some(plan) =>
           if sv == @rules.C && b.vy < 0.0 && b.py <= contact_h {
             ms.cpu_serve_plan = None
-            self.execute_serve(ms, plan.type_, plan.q_serve, plan.preset, 0.0, 0.0)
+            self.execute_serve(ms, plan.type_, plan.power, plan.preset, 0.0, 0.0)
             return
           }
         None => ()
@@ -1122,8 +1502,12 @@ fn point_over_step(self : Game, ms : MatchState, dt : Double) -> Unit {
         } else {
           "\{ms.m.games_c}-\{ms.m.games_p}"
         }
+        let diff_name = @ai.difficulties[self.sel_difficulty].name
+        let stats_str = stats_string(ms)
         self.teardown_match()
-        @ffi.host_show_results(self.host, win_name, lose_name, g_str, w == @rules.P)
+        @ffi.host_show_results(
+          self.host, win_name, lose_name, g_str, w == @rules.P, diff_name, stats_str,
+        )
       }
       None => self.next_point(ms)
     }
@@ -1183,18 +1567,26 @@ pub fn frame_update(dt : Double) -> Unit {
   }
   ms.was_in_reach = in_reach
 
-  // toss gauge
+  // open-court highlight: the side the CPU has vacated, while you're on strike
+  if open_court_enabled &&
+    ms.point_state == Rally &&
+    ms.rally_phase == Live &&
+    ms.last_hit_by == Some(@rules.C) &&
+    @vec.dabs(ms.cpu.pos_x) > 1.0 {
+    @ffi.host_open_court(h, true, -@vec.dsign(ms.cpu.pos_x) * 2.7, -7.5)
+  } else {
+    @ffi.host_open_court(h, false, 0.0, 0.0)
+  }
+
+  // serve power meter (replaces the old toss gauge)
   if ms.point_state == Serving && server(ms) == @rules.P && b.active {
-    let contact_h = @physics.serve_contact_h(ms.human.stats.rea)
-    let lo = 1.2
-    let hi = contact_h + 0.5
-    let y = b.py
+    let p = ms.serve_meter
     @ffi.host_gauge(
-      h, "toss", (y - lo) / (hi - lo), (contact_h - 0.15 - lo) / (hi - lo),
-      (contact_h + 0.15 - lo) / (hi - lo), @vec.dabs(y - contact_h) <= 0.15,
+      h, "power", p, serve_sweet_lo, serve_sweet_hi, p >= serve_sweet_lo && p <=
+      serve_sweet_hi,
     )
   } else {
-    @ffi.host_hide_gauge(h, "toss")
+    @ffi.host_hide_gauge(h, "power")
   }
 
   // where-to-stand hint
@@ -1301,7 +1693,7 @@ pub fn menu_tap(idx : Int) -> Unit {
     return
   }
   let count = match self.state {
-    MenuSurface | MenuDifficulty | MenuAssist => 3
+    MenuSurface | MenuDifficulty | MenuGames | MenuAssist => 3
     MenuChar | MenuOpp => @shots.characters.length()
     _ => return
   }
@@ -1314,6 +1706,7 @@ pub fn menu_tap(idx : Int) -> Unit {
       MenuOpp => self.confirm_opp()
       MenuSurface => self.confirm_surface()
       MenuDifficulty => self.confirm_difficulty()
+      MenuGames => self.confirm_games()
       MenuAssist => self.confirm_assist()
       _ => ()
     }
@@ -1344,6 +1737,8 @@ pub fn game_init(host : @ffi.Host, seed : Int) -> Unit {
     sel_opp: 0,
     sel_surface: 2,
     sel_difficulty: 1,
+    sel_games: 6,
+    paused: false,
     time_scale: 1.0,
     ms: None,
   }

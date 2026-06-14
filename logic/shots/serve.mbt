@@ -117,7 +117,7 @@ pub fn compute_serve(
   target_preset : Preset,
   aim_adjust : Double,
   aim_depth : Double,
-  q_serve : Double,
+  power : Double, // serve power meter value p in [0,1]
   rng : @rng.Gauss,
 ) -> Serve {
   let box = serve_box(serving_side, court_side)
@@ -142,9 +142,17 @@ pub fn compute_serve(
   tx = @vec.clampd(tx, @vec.dmin(x_inner, x_outer), @vec.dmax(x_inner, x_outer))
   let mut target_x = tx
   let mut target_z = z_deep
-  let mut speed = @physics.serve_flat_speed(stats.srv) *
-    (0.68 + 0.32 * q_serve) *
-    def_speed_mul
+  // Power meter: speed grows with p; accuracy peaks in the sweet band
+  // [0.70, 0.88], scales down below it, and collapses in the overpower zone.
+  let p = @vec.clampd(power, 0.0, 1.0)
+  let acc = if p <= 0.70 {
+    0.5 + 0.5 * p / 0.70
+  } else if p <= 0.88 {
+    1.0
+  } else {
+    @vec.dmax(0.35, 1.0 - (p - 0.88) / 0.12 * 0.6)
+  }
+  let mut speed = @physics.serve_power_speed(stats.srv, p) * def_speed_mul
 
   // spin: rpm + axis split between lateral (top/back) and vertical (side)
   let mut spin_rpm = 0.0
@@ -167,8 +175,8 @@ pub fn compute_serve(
     }
   }
 
-  // error model (same shape as strokes)
-  let err_mul = @physics.err_mul_base(stats.ctl) * (1.0 + 2.2 * (1.0 - q_serve))
+  // error model (same shape as strokes); accuracy from the power band
+  let err_mul = @physics.err_mul_base(stats.ctl) * (1.0 + 2.2 * (1.0 - acc))
   target_x = target_x + rng.draw() * 0.30 * err_mul
   target_z = target_z + box.z_sign * rng.draw() * 0.35 * err_mul
   speed = speed * (1.0 + rng.draw() * 0.025 * err_mul)

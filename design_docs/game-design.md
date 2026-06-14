@@ -4,9 +4,8 @@
 > implemented** today, with parameters taken from the source of truth (the MoonBit
 > logic layer under `logic/` and the JS render/sound layer under `src/`). A short
 > source pointer (e.g. `logic/physics/constants.mbt`) follows the figures that come
-> from a specific file. **Appendix A** collects design ideas from the original draft
-> that are **not yet implemented**, preserved so the broader vision isn't lost — none
-> of it is in the build.
+> from a specific file. **Appendix A** is now just a short history note: the richer
+> design it once listed as "future" has all been implemented and folded into the body.
 
 ## 1. Concept
 
@@ -37,9 +36,9 @@ A simplified but faithful subset of real tennis (`logic/rules/rules.mbt`).
 
 - **Points**: 0 → 15 → 30 → 40 → Game. 40–40 is **Deuce**, then **Advantage → Game**
   (traditional advantage scoring; no No-Ad).
-- **Match**: a single set. First to **6 games with a 2-game lead**; at **6–6** a
-  **tiebreak** is played (first to **7 points, win by 2**). The number of games to win
-  is **fixed** — there is no "games-to-win" selector.
+- **Match**: a single set of selectable length (**2 / 4 / 6 games**, default 6;
+  `Match.target_games`). First to *target* games with a 2-game lead; at *target–target* a
+  **tiebreak** is played (first to **7 points, win by 2**).
 - **Serve right** alternates every game; the human serves first.
 - **Serve side**: Deuce (right) when the game's point count is even, Ad (left) when
   odd. The serve must land in the diagonally opposite service box. **Two faults =
@@ -102,7 +101,7 @@ effective pace is `eff_pace = 0.64 × pace_factor`.
 
 ### 6.1 Shot types
 
-Four shot types exist (`logic/shots/shots.mbt`, `ShotType`). Each defines a speed
+Five shot types exist (`logic/shots/shots.mbt`, `ShotType`). Each defines a speed
 multiplier and a launch-angle band `(speed_mul, θ_min°, θ_max°)`:
 
 | Type | speed_mul | θ band | Role |
@@ -111,40 +110,70 @@ multiplier and a launch-angle band `(speed_mul, θ_min°, θ_max°)`:
 | **Topspin** | 0.85 | 10°–32° | arcs over the net and dips; reliable rally staple |
 | **Slice** | 0.76 | 1°–16° | slow floater, stays low and skids; buys time |
 | **Lob** | 1.00 | 28°–55° | high, deep defensive ball |
+| **Drop** | — | 26°–50° | slowest; a backspin touch that floats just over the net and dies short, to pull a baseline-hugger forward |
 
-The human selects **Flat / Topspin / Slice** directly. **Lob is not directly
+The human selects **Flat / Topspin / Slice / Drop** directly. **Lob is not directly
 selectable**: it is auto-substituted as a forced defensive ball when the player is
 *stretched* (reaching at the edge of range) and not already slicing
 (`shots.mbt`, `cq.stretched && typ != Slice → Lob`). The CPU may also produce lobs.
 
 Spin RPM is stat- and quality-scaled: Flat `300 + 400·q`; Topspin
 `(2200 + 2600·spn/100)·(0.5 + 0.5·q)`; Slice `−(1500 + 1800·slc/100)·(0.5 + 0.5·q)`;
-Lob a light `500`. Slice also gets a touch of vertical-axis spin so it drifts toward
-the contact side.
+Lob a light `500`; Drop a heavy backspin `−slice_rpm·(0.55 + 0.45·q)·0.9`. Slice also
+gets a touch of vertical-axis spin so it drifts toward the contact side. Drop and Lob
+use an absolute touch speed (Drop `(12 + 4·slc/100)·eff_pace`, the slowest stroke;
+Lob `(15 + 4·pow/100)·eff_pace`) rather than the flat-speed model, and Drop targets a
+short `~2.2 m` past the net instead of the rally depth floor.
 
-### 6.2 Input & swing timing
+### 6.2 Input & the charge / Perfect-Hit mechanic
 
-Shots are **instant-press**, not charged (`src/input.js`):
+Rally strokes are **hold-to-charge** (`logic/game/game.js.mbt:update_human_charge`,
+`src/input.js`):
 
-- **Keyboard**: move with the Arrow keys; **Z/J = Flat, X/K = Topspin, C/L = Slice**;
-  **Space** tosses/serves.
-- **Touch**: an analog thumbstick (left) to move; a single **SHOT** button (right) that
-  tosses/serves and hits strokes — the shot type is chosen **at random** each swing.
+- **Keyboard**: move with the Arrow keys; **hold** **Z/J = Flat, X/K = Topspin,
+  C/L = Slice, V = Drop** to build charge, and **release** to swing; **Space** tosses/serves.
+- **Touch**: an analog thumbstick (left) to move; **hold** the single **SHOT** button
+  (right) to charge and release to hit — the shot type is chosen **at random** at the
+  start of each charge.
 
-A swing lasts `swing_dur = 0.45 s` and makes contact at `swing_contact_t = 0.18 s` into
-the animation. The **human gets a forgiving timing window** of ±`swing_window = 0.09 s`
-around that contact point: each frame in the window the game tries to meet the ball, and
-connects as soon as the ball is within reach. **The CPU's contact is exact.** There is
-**no charge/hold mechanic and no release-timing bonus** — the on-screen timing/sweet-spot
-aids (§10) only help you *position and time the swing*; they grant no power/spin/accuracy
-multiplier.
+**Charge.** While a shot key is held, charge `c` builds 0→1.0 over
+`charge_time = 0.8 s` and can be pushed into **Overcharge** up to `charge_max = 1.25`. The
+launch speed is multiplied by `power = 0.85 + 0.40·min(c, 1)` — a quick tap is weak
+(0.85×), a full charge is strong (1.25×). Overcharge (`c > 1`) adds aim error
+`∝ (c − 1)·2.8 m` and shrinks the safety margin, so going for maximum power raises out/net
+faults. After contact, movement is nearly halted (`stiff_factor = 0.12`) for
+`stiff_dur = 0.35 s` (post-impact stiffness).
+
+**Release & Perfect Hit.** Releasing fires the swing, which makes contact in the existing
+forgiving window (`swing_contact_t = 0.18 s ± swing_window = 0.09 s`; the CPU is exact).
+If the contact lands in the core (quality `q ≥ 0.90`), it is a **Perfect Hit**: speed
+×1.08, spin ×1.12, and aim error ×0.6, plus a gold cue and a bell (`sfxPerfect`). A
+**Safety Hit** auto-fires if you hold too long and the ball is about to escape (it has
+passed you horizontally, or dropped below `safety_drop_y = 0.7 m` while no longer closing
+faster than `safety_approach_rate = 3 m/s`) — it forgoes the Perfect bonus but keeps the
+rally alive. Releasing with the ball out of reach **whiffs** (a `0.25 s` cooldown).
+
+A **charge bar** (`host_charge`) shows the build-up and turns red in the overcharge zone.
+The CPU swings at neutral power (`cpu_charge` → `power = 1.0`); **Assist=Full** auto-charges
+and auto-releases at the sweet spot.
+
+**Charge enhancements** (scaled by `cc = min(charge, 1)`, so overcharge caps the effect)
+amplify each shot's identity (`shots.mbt`):
+
+- **Topspin** — spin ×`(1 + 0.6·cc)` and the cross-court target widens ×`(1 + 0.7·cc)`
+  (clamped to the sideline). A **short-angle attack** triggers when the contact is high
+  (≥1 m), angled (aiming sideways), and not jammed (incoming `< 22 m/s`): the landing is
+  pulled toward the service line by up to `5.5·cc m` (floored at 4 m from the net) and the
+  ball is driven lower and faster — a sharp dipping winner.
+- **Slice** — backspin ×`(1 + 0.6·cc)` and the target extends up to `2·cc m` deeper toward
+  the baseline, pinning the opponent back.
 
 ### 6.3 Contact quality (core mechanic)
 
 Where you meet the ball determines shot quality `q ∈ [0,1]`, the product of three factors
-(`shots.mbt:contact_quality`). The ideal contact is the ball at **waist height
-(0.85 m)**, an **arm-plus-racket length to the side (0.65 m)**
-(`constants.mbt:ideal_contact_h/_r`):
+(`shots.mbt:contact_quality`); `q` also gates the **Perfect Hit** (§6.2, `q ≥ 0.90`). The
+ideal contact is the ball at **waist height (0.85 m)**, an **arm-plus-racket length to the
+side (0.65 m)** (`constants.mbt:ideal_contact_h/_r`):
 
 - **`q_dist`** — distance from that ideal side-offset. A flat "1.0" band runs from
   0.30 m out to **0.90 m** (0.65 + 0.25), then falls off to the reach limit; jamming the
@@ -174,12 +203,43 @@ slightly shorter at low `q`) is offset by the movement keys held at contact
 - The target depth is clamped to the court (≈ 4.5–11.2 m from the net before error),
   and aim error can still push a line-seeking ball out — aiming the lines is riskier.
 
-### 6.5 Mishit (jammed return)
+### 6.5 Mishit, fast-ball jam & counter
 
-A **mishit** is triggered by *poor contact quality*, not a fixed pace threshold
-(`shots.mbt`): when `q < 0.3`, with probability **0.35** (0.15 with Assist on), the
-return is **slowed (×0.55), stripped of spin (×0.3), and yaw-skewed** — a weak, looping
-sitter. Setting up early (good posture) is how you avoid it.
+Two effects produce a weak return (`shots.mbt`):
+
+- **Posture mishit** — on *poor contact* (`q < 0.3`), with probability **0.35** (0.15 with
+  Assist on), the return is slowed (×0.55), spin-stripped (×0.3) and yaw-skewed.
+- **Fast-ball jam** — incoming pace above `jam_threshold = 26 m/s` jams the return,
+  scaled by **shot-type weakness** (Slice 0.35 → Flat 0.60 → Topspin 1.00 → touch 1.30),
+  reduced by **charge prep** (`×(1 − 0.7·cc)`) and good **posture** (`×(0.5 + 0.5·(1 − q))`).
+  A high `jam` slows the ball (×`(1 − 0.55·jam)`), kills spin, lofts it up and lands it
+  short — a sitter (flagged a mishit above `jam = 0.3`). So a full topspin swing breaks
+  down against pace while a **slice block** handles it; charging early tames the jam.
+
+**Counter / redirect.** Conversely, a *clean* hit off pace comes back faster: a
+`counter_gain` of **0.30** (Flat/Slice) or **0.12** (Topspin) × the excess pace × `(1 − jam)`
+× `q` is added to the launch speed — you borrow the opponent's pace. Normal rally speeds
+(≤ ~26 m/s) trigger neither effect.
+
+### 6.6 Smash
+
+Hitting **Flat** at a high contact (**≥ 1.7 m**) in the **forecourt** (within
+`smash_forecourt = 8.5 m` of the net) becomes a **Smash** (`shots.mbt`): the launch speed
+jumps to `smash_speed(pow) = (42 + 10·pow/100)·eff_pace` and is only lightly
+quality-dependent (`×(0.8 + 0.2·q)`), with a flat/downward launch band (−14°…2°) to slam
+the ball down — charge still adds up to +25 %. It is the finisher for high bounces and
+short lobs; the same high ball at the baseline is just a weak high flat. `Stroke.smash`
+drives a "SMASH!" cue.
+
+### 6.7 Volley (net play)
+
+A **Flat or Slice** taken **out of the air** (the ball has not bounced, `ms.bounces == 0`)
+within `volley_forecourt = 7 m` of the net is a **Volley** (`game.js.mbt:attempt_contact`
+→ `compute_stroke`): a block/punch with **restrained power** (×0.80, and charge barely
+matters — `power`/overcharge are neutralised), a **flatter** punch (θ capped at 12°), and
+**much tighter aim** (error ×0.4). It is the way to rush the net and *accurately* finish a
+weak ball, distinct from baseline power shots. A high forecourt flat still prefers the
+Smash (§6.6).
 
 ## 7. Serve
 
@@ -194,24 +254,24 @@ Three serves (`logic/shots/serve.mbt`, `ServeType`), each `(speed_mul, θ_min°,
 | **Kick** | 0.64 | 2°–14° | high net clearance, high bounce; the safe 2nd serve |
 
 Serve type is chosen before the toss (the human can pick; the CPU plans Flat/Slice on
-1st serve, Kick on 2nd). The launch speed is
-`serve_flat_speed(srv) · (0.68 + 0.32·q_serve) · type_mul`, where
-`serve_flat_speed = (40 + 16·srv/100) · eff_pace` (`constants.mbt`, `serve.mbt`), `q_serve`
-is the toss-timing quality (§7.2), and `type_mul` is the table value above. In practice
-serves land around **~15–35 m/s** — a well-tossed Boom flat (`srv = 96`, classic pace) tops
-out at ≈ 35 m/s, while kick second serves and weaker servers sit much lower.
+1st serve, Kick on 2nd). The launch speed comes from the **power meter** value `p`:
+`serve_power_speed(srv, p) · type_mul`, with
+`serve_power_speed = (42 + 36·p)·(0.82 + 0.36·srv/100)·eff_pace` (`constants.mbt`). The shot
+solver caps a flat serve at roughly **~47–50 m/s** so it still lands in the box — a clear
+jump over the old toss model and, with the new jam (§6.5), very hard to return cold.
 
-### 7.2 Serve control — the toss gauge
+### 7.2 Serve control — the power meter
 
-Serving is **toss-timing**, not a power meter (`game.js.mbt`, `host_gauge "toss"`):
+Serving uses an **oscillating power meter** (`game.js.mbt`, `host_gauge "power"`):
 
 1. After being placed, the server may shift laterally within the serve side for angle.
-2. Press **Space** to toss. As the ball rises and falls, a **vertical toss gauge** shows
-   its height; a **green band** marks the ideal contact height. You hit by timing the
-   strike near the top of the toss.
-3. Serve quality is `q_serve = 0.4 + 0.6·max(0, 1 − |y − contact_h| / 0.7)` — best when
-   the ball is struck within **±0.15 m** of the ideal contact height (the green band),
-   scaling smoothly to a 0.4 floor otherwise. (`contact_h ≈ 2.55–3.1 m`, stat-scaled.)
+2. Press **Space** to toss. A horizontal meter then **oscillates 0 → 1 → 0** with period
+   `serve_meter_period = 1.2 s`.
+3. Press a serve key (**Z/X/C** = flat/kick/slice) to **lock** the meter value `p` and hit.
+   - **Sweet spot** `p ∈ [0.70, 0.88]` — fast *and* accurate (full `acc = 1`).
+   - **Below** 0.70 — speed and accuracy scale down together (safe but slow).
+   - **Overpower** `p > 0.88` — still fast but accuracy collapses
+     (`acc → 0.35`), so faults spike.
 4. After serving, movement is briefly locked (post-serve recovery), longer for harder
    serves — fast wide serves leave you out of position.
 
@@ -243,16 +303,27 @@ The CPU is **never** eased by Assist.
   returns to a home position near the centre of its baseline when not hitting.
 - It **re-reads** the prediction periodically with an error that **shrinks as the ball
   nears**, so it converges on the real landing spot.
-- **Letting outs pass**: if the predicted landing is outside its own court, the AI lets
-  the ball go (a hard filter on the prediction) and resets to home. *(The probabilistic,
-  difficulty-scaled out-tolerance described in the original draft is not implemented — see
-  Appendix A.)*
+- **Letting outs pass** (`out_letgo_prob`): if the predicted landing is past a line, the AI
+  lets it go with a probability that depends on how far out it is and on difficulty — a
+  **clear out** (>0.6 m past the line) is let go ~95 % of the time, a **borderline** out is
+  judged better at higher difficulty (Hard 0.92 vs Easy 0.35), and an in ball is always
+  played. So a strong CPU wins the point on your out balls; a weak one chases them.
+- **Serve-return positioning** (`return_shift_factor`): the CPU receiver shifts toward the
+  served box, more sharply at higher difficulty (Hard 1.7× vs Easy 1.05× the box-centre
+  offset).
 - **Shot selection** is weighted scoring over candidate targets: it favours the **open
   court** (distance from the human), penalises shots that force it to **run**, and applies
-  a **per-persona style bias** (e.g. a grinder leans topspin, a slicer leans slice).
+  a **per-persona style bias** (e.g. a grinder leans topspin, a slicer leans slice). Two
+  **tactical overrides** (`tactical_shot_type`, difficulty-scaled rate) react to the human:
+  if you **rush the net** (`human_z < 5 m`) it **lobs** over you (else its deep groundstroke
+  passes you); if you **camp deep** (`human_z > 13.5 m`) it hits a **drop** to pull you in.
+- **Net rush (`should_rush_net`)**: on a short ball (the predicted strike point within
+  `net_chance_z = 9 m` of the net) that isn't fast, the AI rushes in to volley if its
+  **net-tendency** stat clears the chance threshold (`chance + net/100 > 1`). Incoming
+  serve-pace cancels the chance, so it won't charge a hard ball. When rushing it stands a
+  step **in front** of the strike point and then **holds a forward home position**
+  (`home_z = −6.5`) until a deep ball pushes it back.
 
-The AI does **not** currently model an explicit baseline-vs-net stance, rush the net /
-volley, or run special serve-return positioning (Appendix A).
 
 ### 9.2 Difficulty
 
@@ -271,18 +342,19 @@ shot-selection randomness.)
 
 ### 9.3 Characters / personas
 
-Five personas (`logic/shots/characters.mbt`), each with seven 0–100 stats
-**pow / spn / slc / srv / spd / ctl / rea** (power, spin, slice, serve, speed, control,
-reaction). The CPU plays with the same physics and a shot-selection bias from its
-`style`. The JS UI shows these stats as bars on the persona cards.
+Five personas (`logic/shots/characters.mbt`), each with eight 0–100 stats
+**pow / spn / slc / srv / spd / ctl / rea / net** (power, spin, slice, serve, speed,
+control, reaction, net-tendency). The CPU plays with the same physics, a shot-selection
+bias from its `style`, and a net-rush threshold from `net`. The JS UI shows these stats on
+the persona cards.
 
-| Persona | Archetype | pow | spn | slc | srv | spd | ctl | rea |
-|---|---|---|---|---|---|---|---|---|
-| **Boom** | Big Server | 85 | 45 | 50 | 96 | 55 | 58 | 88 |
-| **Rojo** | Spin Grinder | 74 | 96 | 55 | 62 | 82 | 70 | 60 |
-| **Dash** | Counterpuncher | 55 | 65 | 60 | 50 | 96 | 88 | 55 |
-| **Sly** | Slice Specialist | 60 | 38 | 95 | 74 | 72 | 80 | 70 |
-| **Ace** | All-Rounder | 74 | 72 | 70 | 74 | 74 | 74 | 70 |
+| Persona | Archetype | pow | spn | slc | srv | spd | ctl | rea | net |
+|---|---|---|---|---|---|---|---|---|---|
+| **Boom** | Big Server | 85 | 45 | 50 | 96 | 55 | 58 | 88 | 55 |
+| **Rojo** | Spin Grinder | 74 | 96 | 55 | 62 | 82 | 70 | 60 | 22 |
+| **Dash** | Counterpuncher | 55 | 65 | 60 | 50 | 96 | 88 | 55 | 35 |
+| **Sly** | Slice Specialist | 60 | 38 | 95 | 74 | 72 | 80 | 70 | 58 |
+| **Ace** | All-Rounder | 74 | 72 | 70 | 74 | 74 | 74 | 70 | 45 |
 
 ## 10. Camera & Visual Hints
 
@@ -299,33 +371,54 @@ you can't see your own contact point from there, several on-court aids are rende
   when your timing is right ("hit now").
 - **Reach circle** — a circle on the court that is **blue** normally and turns **pink**
   (with a rising tone) when the ball enters your striking range.
+- **Open-court highlight** (`host_open_court`, `open_court_enabled`) — a translucent green
+  patch on the side the CPU has vacated while you're on strike, marking where a winner is.
 - **Move-hint arrow** — points toward the sweet spot (turns into a green ◎ when you're on
   it), since it can sit behind the camera.
 - **Gauges** — vertical **toss** and **height** gauges and a **timing** meter during the
-  serve/strike, with coloured sweet-spot bands.
+  serve/strike, with coloured sweet-spot bands, plus a **charge bar** that fills while a
+  stroke is held and turns red in the overcharge zone (§6.2).
 
 ## 11. UI
 
 DOM-based, drawn by `src/ui.js`:
 
 - **Title flow**: select **Difficulty**, **Surface** (Clay/Grass/Hard), **Persona**
-  (stat-bar cards), and **Assist** level, then start.
+  (radar-chart cards), **Set length** (2/4/6 games), and **Assist** level, then start.
 - **Scoreboard**: games, points, both player/opponent names, a 2nd-serve indicator, and
   a tiebreak indicator.
 - **In-game HUD**: a permanent compact **control guide** on the screen edge, the serve/
   strike **gauges**, and a **point-resolution banner** (e.g. "FAULT", "DOUBLE FAULT",
   "LET").
-- **Match end**: Win/Loss result with the final games score, and a prompt back to the
-  menu.
+- **Pause** (`host_show_pause`): **Esc** during a match opens a Resume/Quit modal and
+  **physically pauses** the simulation (`fixed_update` early-returns while `paused`).
+  Resume (Esc/P) returns to play; Quit needs a confirming second click (Q).
+- **Match end**: Win/Loss, the final games score and the **difficulty**, a **stats table**
+  (Winners, Unforced errors, Double faults, 1st-serve %, Net points won, Avg rally length,
+  Distance run — both players; `game.js.mbt:stats_string` → `host_show_results`), a
+  **Rematch** button (or **R**) that restarts with the same settings, and a prompt back to
+  the menu.
+
+The stats are accumulated through the match in a `MatchStats` record on `MatchState`,
+instrumented at the point-ending sites (`record_winner`/`record_error`, double faults,
+first-serve in/out, per-frame running distance, per-point net-point outcomes and rally
+length).
 
 ## 12. Audio
 
 All sound is **synthesized at runtime with the Web Audio API** — there are no audio
 files to download (`src/audio.js`).
 
-- **Hit sound**: a compact **two-layer** synth — band-pass-filtered white noise (the
-  "crack") plus a short sine "body" — scaled by impact speed and panned by the contact's
-  `x` position.
+- **Hit sound**: a **5-layer** synth shaped per shot type — ① Body/Pock (triangle swooping
+  to `bodyHz`), ② Crack (high-passed noise click), ③ Shimmer (1.8–2.8 kHz bandpass), ④
+  String Ring (high-Q bandpass tail whose centre sweeps **up** for topspin / **down** for
+  slice), ⑤ Brush (scrape for spin shots). Scaled by impact speed, **panned** by the
+  contact's `x`, jittered per hit, and fed a procedural **IR reverb** (`ConvolverNode`). A
+  **jammed** mishit is detuned and low-passed into a dull thud; a **Perfect Hit** adds a
+  bell (`sfxPerfect`).
+- **Optional samples**: a `loadSamples` hook plays recorded racket-impact files from
+  `audio/samples/` (with a manifest) if present, and **silently falls back to the synth**
+  otherwise — so the build stays download-free (see `src/audio/samples/CREDITS.md`).
 - **Other SFX**: bounce, net, crowd cheer (filtered noise), out, fault, toss, and a
   reach-alert tone, all procedurally generated. The first user interaction resumes the
   AudioContext.
@@ -343,65 +436,15 @@ files to download (`src/audio.js`).
 
 ---
 
-## Appendix A — Future / Not-Yet-Implemented Ideas
+## Appendix A — History
 
-The original design draft envisioned a richer system. **None of the following is in the
-current build** — the figures here are *proposed*, not measured from code. They are kept
-for reference and possible future work.
-
-### A.1 Extra shot types
-- **Drop shot** — backspin touch shot that barely bounces, to pull a baseline-hugger
-  forward.
-
-### A.2 Charge / release shot mechanic
-- Hold the shot key to build charge `c` (0→1.0 over 0.8 s, **Overcharge** to 1.25); power
-  `= 0.85 + 0.40·min(c,1)`; release at the right instant to hit.
-- **Perfect Hit / "Just Meet"** — releasing while the ball is in the sweet spot grants a
-  bonus (speed ×1.08, aim-error ×0.6, spin ×1.12), with gold-white ring/sparks and a bell
-  harmonic. **Safety Hit** auto-fires before the ball escapes; releasing out of reach is a
-  **Whiff** with a 0.25 s cooldown.
-- **Topspin/Slice charge enhancements** — charge amplifies each shot's identity:
-  topspin spin/angle gains, a "short-angle attack" pull toward the service line with a
-  low/fast drive solver; slice depth and float gains.
-
-*(In the shipped game, shots are instant-press; the sweet-spot/timing visuals are aids
-only and grant no bonus — see §6.2–6.3.)*
-
-### A.3 Situational shots
-- **Smash** — high point (≥1.7 m) × forecourt × Flat → a downward bomb (base ~42 m/s,
-  +charge).
-- **Volley / net play** — pre-bounce block/punch near the net: restrained power, high
-  accuracy, little charge effect; lobs and passing shots as counters.
-- **Fast-ball jam model** — a pace-threshold (>26 m/s) mishit weighted by shot type
-  (Slice block strongest, Topspin weakest), plus **counter/redirect** speed bonuses
-  (+~30 % Flat/Slice, +~12 % Topspin) for redirecting incoming pace.
-
-### A.4 Serve power meter
-- An **oscillating power meter** (triangle wave, 0→1→0, ~1.2 s period) with a release
-  sweet spot `p ∈ [0.70, 0.88]` and an overpower zone, replacing the current toss gauge.
-- A higher serve-speed ceiling (proposed `SERVE_SPEED_MIN 30 → MAX 56`, big-server
-  ~62 m/s) and a persona `serveSpeedMul`. *(Actual serves are ~20–36 m/s — §7.1.)*
-
-### A.5 Smarter AI
-- Explicit **baseline vs. net** tactical stance per incoming ball, tuned by a per-persona
-  **Net Tendency** stat; net rushing and staying forward after the rush.
-- **Serve-return positioning** that bisects the wide/centre-T angle, dynamic at higher
-  difficulty.
-- **Probabilistic, difficulty-scaled** out-tolerance (borderline outs occasionally
-  played) instead of the current hard filter.
-- Explicit "player rushes net → lob/passing" and "player drops deep → drop shot" rules.
-
-### A.6 Stats, open court & richer UI
-- **Match stats** — Winners, Unforced Errors, Double Faults, average rally length,
-  1st-serve %, net-point win %, and running distance, shown on an expanded match-end
-  screen, plus a **Rematch** button.
-- **Open-court floor highlight** (an `OPEN_COURT_ENABLED`-style toggle) — not present.
-- **Radar charts** for persona stats (currently bars), a **games-to-win selector**, a
-  **pause modal** (Resume/Quit with confirm), a **charge bar**, and a difficulty readout
-  on the scoreboard.
-
-### A.7 Sampled / richer audio
-- **Recorded hit samples** (loaded via `decodeAudioData`, played with `BufferSource`) with
-  a **5-layer synth fallback** (Body/Pock, Crack, Shimmer, String Ring, Brush), per-shot
-  pitch/pan/filtering, procedural **IR reverb** (`ConvolverNode`), and a perfect-hit bell.
-  *(The shipped game uses a 2-layer synth and no reverb — §12.)*
+This appendix previously listed the richer design that had not yet been built. **Those
+features are now all implemented** and documented in the body above — the Drop shot (§6.1),
+the charge / Perfect-Hit / Overcharge / Safety / Whiff mechanic and its topspin/slice
+enhancements (§6.2), Smash (§6.6) and Volley (§6.7), the fast-ball jam + counter model
+(§6.5), the oscillating serve power meter (§7), the smarter AI — net-rush + net-tendency
+stat, serve-return positioning, probabilistic out-tolerance, and the lob/drop tactical
+rules (§9), match-stats tracking + the expanded match-end screen with Rematch and the
+difficulty readout (§11), radar charts, the set-length selector, the open-court highlight
+(§10), the pause modal, and the 5-layer audio engine with IR reverb and a sample hook
+(§12). The full pre-implementation design history remains in git (branch `enhance-0615`).

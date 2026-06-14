@@ -18,6 +18,14 @@ struct Player {
   mut serve_anim : Bool
   mut serve_anim_t : Double
   mut run_phase : Double
+  // charge / Perfect-Hit state (human-driven; the CPU swings at neutral power)
+  mut charging : Bool
+  mut charge : Double
+  mut charge_type : @shots.ShotType
+  mut swing_charge : Double // charge captured when the swing fired
+  mut swing_no_perfect : Bool // safety hits forgo the Perfect-Hit bonus
+  mut stiff_t : Double // post-impact movement stiffness timer
+  mut whiff_cd : Double // cooldown after a whiffed release
   max_speed : Double
   accel : Double
   reach : Double
@@ -52,6 +60,13 @@ fn create_player(
     serve_anim: false,
     serve_anim_t: 0.0,
     run_phase: 0.0,
+    charging: false,
+    charge: 0.0,
+    charge_type: Flat,
+    swing_charge: 0.0,
+    swing_no_perfect: false,
+    stiff_t: 0.0,
+    whiff_cd: 0.0,
     max_speed: @physics.run_speed(stats.spd) * speed_mul,
     accel: @physics.run_accel(stats.spd) * speed_mul,
     reach: @physics.reach(stats.rea),
@@ -98,7 +113,14 @@ fn Player::place(self : Player, x : Double, z : Double) -> Unit {
 // velocity; braking is 1.8x stronger. Advances swing/serve timers + run phase.
 ///|
 fn Player::update(self : Player, dt : Double, move_x : Double, move_z : Double) -> Unit {
-  let slow = if self.swinging { 0.45 } else { 1.0 }
+  // post-impact stiffness nearly halts movement briefly after a hit
+  let slow = if self.stiff_t > 0.0 {
+    stiff_factor
+  } else if self.swinging {
+    0.45
+  } else {
+    1.0
+  }
   let tx = move_x * self.max_speed * slow
   let tz = move_z * self.max_speed * slow
   let dvx = tx - self.vel_x
@@ -124,6 +146,12 @@ fn Player::update(self : Player, dt : Double, move_x : Double, move_z : Double) 
     if self.swing_t >= swing_dur {
       self.swinging = false
     }
+  }
+  if self.stiff_t > 0.0 {
+    self.stiff_t = self.stiff_t - dt
+  }
+  if self.whiff_cd > 0.0 {
+    self.whiff_cd = self.whiff_cd - dt
   }
   if self.serve_anim {
     self.serve_anim_t = self.serve_anim_t + dt

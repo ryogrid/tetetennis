@@ -165,6 +165,29 @@ pub fn serve_flat_speed(srv : Double) -> Double {
   (40.0 + 16.0 * srv / 100.0) * eff_pace()
 }
 
+// Serve power meter (Appendix A.4): meter value p in [0,1] maps to launch speed
+// between serve_speed_min and serve_speed_max (raw), scaled by serve strength and
+// the global pace. The shot solver caps a flat serve that still lands in the box
+// at ~47 m/s, so the requested speed is an upper bound, not the launch speed.
+///|
+pub let serve_speed_min : Double = 42.0
+
+///|
+pub let serve_speed_max : Double = 78.0
+
+///|
+pub fn serve_power_speed(srv : Double, p : Double) -> Double {
+  let base = serve_speed_min + (serve_speed_max - serve_speed_min) * p
+  base * (0.82 + 0.36 * srv / 100.0) * eff_pace()
+}
+
+// Overhead smash: a high forecourt flat slammed down. Much faster than a
+// groundstroke and only lightly quality-dependent.
+///|
+pub fn smash_speed(pow : Double) -> Double {
+  (42.0 + 10.0 * pow / 100.0) * eff_pace()
+}
+
 ///|
 pub fn run_speed(spd : Double) -> Double {
   (5.2 + 2.6 * spd / 100.0) * 1.5

@@ -14,7 +14,14 @@ pub type Host
 pub extern "js" fn host_sfx(h : Host, name : String) -> Unit = "(h,n)=>h.audio[n]()"
 
 ///|
-pub extern "js" fn host_sfx_hit(h : Host, speed : Double) -> Unit = "(h,s)=>h.audio.sfxHit(s)"
+pub extern "js" fn host_sfx_hit(
+  h : Host,
+  speed : Double,
+  shot : String,
+  pan : Double,
+  jammed : Bool,
+) -> Unit =
+  "(h,s,t,p,j)=>h.audio.sfxHit(s,t,p,j)"
 
 ///|
 pub extern "js" fn host_sfx_bounce(h : Host, speed : Double, surface : String) -> Unit =
@@ -101,6 +108,15 @@ pub extern "js" fn host_serve_anim(h : Host, side : Int, on : Bool) -> Unit =
 pub extern "js" fn host_reach_color(h : Host, in_reach : Bool) -> Unit =
   "(h,r)=>h.render.setReachColor(r)"
 
+///|
+pub extern "js" fn host_open_court(
+  h : Host,
+  show : Bool,
+  x : Double,
+  z : Double,
+) -> Unit =
+  "(h,s,x,z)=>h.render.setOpenCourt(s,x,z)"
+
 // ---------------- camera ----------------
 // The camera reads the latest player/ball positions the logic already pushed.
 
@@ -137,17 +153,30 @@ pub extern "js" fn host_show_assist_select(h : Host, idx : Int) -> Unit =
   "(h,i)=>h.ui.showAssistSelect(i)"
 
 ///|
+pub extern "js" fn host_show_games_select(h : Host, idx : Int) -> Unit =
+  "(h,i)=>h.ui.showGamesSelect(i)"
+
+///|
+pub extern "js" fn host_show_pause(h : Host) -> Unit = "(h)=>h.ui.showPause()"
+
+///|
+pub extern "js" fn host_hide_pause(h : Host) -> Unit = "(h)=>h.ui.hidePause()"
+
+///|
 pub extern "js" fn host_hide_menu(h : Host) -> Unit = "(h)=>h.ui.hideMenu()"
 
 ///|
+// stats is a ';'-separated list of "Label\tYou\tOpp" rows for the end screen.
 pub extern "js" fn host_show_results(
   h : Host,
   win : String,
   lose : String,
   games : String,
   player_won : Bool,
+  difficulty : String,
+  stats : String,
 ) -> Unit =
-  "(h,w,l,g,pw)=>h.ui.showResults(w,l,g,pw)"
+  "(h,w,l,g,pw,d,s)=>h.ui.showResults(w,l,g,pw,d,s)"
 
 // ---------------- ui: hud ----------------
 
@@ -202,6 +231,14 @@ pub extern "js" fn host_gauge(
 pub extern "js" fn host_hide_gauge(h : Host, name : String) -> Unit =
   "(h,n)=>h.ui.hideGauge(n)"
 
+// charge bar: frac in [0,1] of the overcharge ceiling; over = in overcharge zone
+///|
+pub extern "js" fn host_charge(h : Host, frac : Double, over : Bool) -> Unit =
+  "(h,f,o)=>h.ui.charge(f,o)"
+
+///|
+pub extern "js" fn host_hide_charge(h : Host) -> Unit = "(h)=>h.ui.hideCharge()"
+
 ///|
 pub extern "js" fn host_move_hint(h : Host, dx : Double, dz : Double) -> Unit =
   "(h,dx,dz)=>h.ui.moveHint(dx,dz)"
@@ -223,6 +260,14 @@ pub extern "js" fn host_move_z(h : Host) -> Double = "(h)=>h.input.moveZ()"
 // "" | "flat" | "topspin" | "slice"
 ///|
 pub extern "js" fn host_shot_key(h : Host) -> String = "(h)=>h.input.shotKey()"
+
+// currently-held shot key (for hold-to-charge): "" | "flat" | "topspin" | ...
+///|
+pub extern "js" fn host_shot_held(h : Host) -> String = "(h)=>h.input.shotHeld()"
+
+///|
+pub extern "js" fn host_is_down(h : Host, code : String) -> Bool =
+  "(h,c)=>h.input.isDown(c)"
 
 // ---------------- assist persistence ----------------
 

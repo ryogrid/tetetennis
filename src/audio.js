@@ -10,6 +10,22 @@ export function createAudio() {
   let master = null;
   let whiteBuf = null;
   let pinkBuf = null;
+  let reverb = null;     // ConvolverNode (procedural IR)
+  let reverbSend = null; // wet bus
+  const samples = {};    // optional decoded hit samples by shot type
+
+  // Procedural impulse response: decaying stereo noise.
+  function makeReverbIR(sec, decay) {
+    const len = Math.floor(ctx.sampleRate * sec);
+    const buf = ctx.createBuffer(2, len, ctx.sampleRate);
+    for (let ch = 0; ch < 2; ch++) {
+      const d = buf.getChannelData(ch);
+      for (let i = 0; i < len; i++) {
+        d[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / len, decay);
+      }
+    }
+    return buf;
+  }
 
   function initAudio() {
     if (ctx) { if (ctx.state === 'suspended') ctx.resume(); return; }
@@ -17,6 +33,16 @@ export function createAudio() {
     master = ctx.createGain();
     master.gain.value = 0.6;
     master.connect(ctx.destination);
+
+    // small procedural room reverb on a wet send bus
+    reverb = ctx.createConvolver();
+    reverb.buffer = makeReverbIR(1.1, 2.6);
+    reverb.connect(ctx.destination);
+    reverbSend = ctx.createGain();
+    reverbSend.gain.value = 0.18;
+    reverbSend.connect(reverb);
+
+    loadSamples(); // optional; falls back to synth if absent
 
     const len = 2 * ctx.sampleRate;
     whiteBuf = ctx.createBuffer(1, len, ctx.sampleRate);
@@ -52,27 +78,115 @@ export function createAudio() {
     gainNode.gain.exponentialRampToValueAtTime(0.0001, t + attack + decay);
   }
 
-  // Racket impact. speed in m/s (~10-55).
-  function sfxHit(speed) {
-    if (!ctx) return;
-    const sNorm = Math.min(speed / 55, 1);
-    const noise = noiseSrc(whiteBuf, 0.09);
-    const bp = ctx.createBiquadFilter();
-    bp.type = 'bandpass';
-    bp.frequency.value = 1400 + speed * 25;
-    bp.Q.value = 1.2;
-    const g1 = ctx.createGain();
-    env(g1, 0.5 + 0.4 * sNorm, 0.002, 0.09);
-    noise.connect(bp).connect(g1).connect(master);
+  // Optional recorded hit samples. Drop {flat,topspin,slice,lob,drop,serve}.mp3
+  // into src/audio/samples/ (see CREDITS.md) to use them; otherwise the synth
+  // below is used. Kept fully offline-friendly: a missing manifest just no-ops.
+  async function loadSamples() {
+    try {
+      const res = await fetch('audio/samples/manifest.json');
+      if (!res.ok) return;
+      const list = await res.json(); // { flat: "flat.mp3", ... }
+      for (const [type, file] of Object.entries(list)) {
+        try {
+          const r = await fetch(`audio/samples/${file}`);
+          const arr = await r.arrayBuffer();
+          samples[type] = await ctx.decodeAudioData(arr);
+        } catch { /* skip this one */ }
+      }
+    } catch { /* no samples bundled -> synth fallback */ }
+  }
 
-    const osc = ctx.createOscillator();
-    osc.type = 'sine';
-    osc.frequency.value = 180 + speed * 1.5;
+  // per-shot tone shaping for the synth hit
+  const SHOT = {
+    flat:    { body: 220, bright: 1.00, ring: 0,  brush: 0.0, rate: 1.00 },
+    topspin: { body: 200, bright: 0.85, ring: 1,  brush: 0.5, rate: 1.02 },
+    slice:   { body: 240, bright: 0.70, ring: -1, brush: 0.4, rate: 1.05 },
+    lob:     { body: 175, bright: 0.50, ring: 0,  brush: 0.1, rate: 0.92 },
+    drop:    { body: 185, bright: 0.45, ring: -1, brush: 0.2, rate: 0.90 },
+    serve:   { body: 205, bright: 1.10, ring: 0,  brush: 0.0, rate: 0.96 },
+  };
+
+  // Racket impact: a 5-layer synth (Body, Crack, Shimmer, String Ring, Brush)
+  // shaped per shot type, panned by contact x, with a reverb send. A jammed
+  // (mishit) contact is detuned and low-passed into a dull thud.
+  function sfxHit(speed, type, pan, jammed) {
+    if (!ctx) return;
+    const s = SHOT[type] || SHOT.flat;
+    const sNorm = Math.min((speed || 20) / 55, 1);
+    const jit = 1 + (Math.random() - 0.5) * 0.06; // pitch jitter every hit
+    const out = ctx.createGain();
+    out.gain.value = jammed ? 0.7 : 1.0;
+    const panner = ctx.createStereoPanner ? ctx.createStereoPanner() : null;
+    if (panner) { panner.pan.value = Math.max(-1, Math.min(1, pan || 0)); out.connect(panner); panner.connect(master); panner.connect(reverbSend); }
+    else { out.connect(master); out.connect(reverbSend); }
+
+    // a jammed contact dulls everything through a low-pass
+    let bus = out;
+    if (jammed) {
+      const lp = ctx.createBiquadFilter();
+      lp.type = 'lowpass'; lp.frequency.value = 600;
+      lp.connect(out); bus = lp;
+    }
+
+    // if a recorded sample exists, play it (still panned/reverbed) and skip synth
+    if (samples[type]) {
+      const src = ctx.createBufferSource();
+      src.buffer = samples[type];
+      src.playbackRate.value = s.rate * jit * (jammed ? 0.85 : 1);
+      const g = ctx.createGain();
+      env(g, 0.5 + 0.5 * sNorm, 0.001, 0.25);
+      src.connect(g).connect(bus);
+      src.start();
+      return;
+    }
+
+    const bright = s.bright * (jammed ? 0.4 : 1) * (0.7 + 0.3 * sNorm);
+    const body = s.body * jit;
+
+    // (1) Body / Pock: triangle swooping from high down to bodyHz
+    const o1 = ctx.createOscillator();
+    o1.type = 'triangle';
+    o1.frequency.setValueAtTime(body * 6, ctx.currentTime);
+    o1.frequency.exponentialRampToValueAtTime(body, ctx.currentTime + 0.05);
+    const g1 = ctx.createGain();
+    env(g1, 0.45 * (0.5 + sNorm), 0.001, 0.09);
+    o1.connect(g1).connect(bus); o1.start(); o1.stop(ctx.currentTime + 0.12);
+
+    // (2) Crack / Attack: sharp high-passed noise click
+    const n2 = noiseSrc(whiteBuf, 0.03);
+    const hp = ctx.createBiquadFilter();
+    hp.type = 'highpass'; hp.frequency.value = 2600 * bright;
     const g2 = ctx.createGain();
-    env(g2, 0.4 * (0.5 + sNorm), 0.002, 0.06);
-    osc.connect(g2).connect(master);
-    osc.start();
-    osc.stop(ctx.currentTime + 0.1);
+    env(g2, 0.30 * bright, 0.0005, 0.03);
+    n2.connect(hp).connect(g2).connect(bus);
+
+    // (3) Shimmer: 1.8-2.8kHz bandpass noise for high-end sparkle
+    const n3 = noiseSrc(whiteBuf, 0.06);
+    const bp3 = ctx.createBiquadFilter();
+    bp3.type = 'bandpass'; bp3.frequency.value = (1800 + 1000 * sNorm) * bright; bp3.Q.value = 0.8;
+    const g3 = ctx.createGain();
+    env(g3, 0.18 * bright, 0.001, 0.06);
+    n3.connect(bp3).connect(g3).connect(bus);
+
+    // (4) String Ring: high-Q bandpass tail, centre sweeps up (topspin) / down (slice)
+    const n4 = noiseSrc(whiteBuf, 0.12);
+    const bp4 = ctx.createBiquadFilter();
+    bp4.type = 'bandpass'; bp4.Q.value = 9;
+    bp4.frequency.setValueAtTime(body * 3, ctx.currentTime);
+    bp4.frequency.exponentialRampToValueAtTime(body * 3 * (1 + 0.4 * s.ring), ctx.currentTime + 0.12);
+    const g4 = ctx.createGain();
+    env(g4, 0.16, 0.002, 0.12);
+    n4.connect(bp4).connect(g4).connect(bus);
+
+    // (5) Brush / Scrape: spin shots get a little scraping noise
+    if (s.brush > 0) {
+      const n5 = noiseSrc(whiteBuf, 0.08);
+      const bp5 = ctx.createBiquadFilter();
+      bp5.type = 'bandpass'; bp5.frequency.value = 3200; bp5.Q.value = 0.5;
+      const g5 = ctx.createGain();
+      env(g5, 0.10 * s.brush, 0.004, 0.08);
+      n5.connect(bp5).connect(g5).connect(bus);
+    }
   }
 
   // Ground bounce; surfaceId 'clay' | 'grass' | 'hard'.
@@ -219,9 +333,28 @@ export function createAudio() {
     osc.stop(t + 0.08);
   }
 
+  // Perfect-Hit bell: a clear two-partial chime stacked on top of the hit.
+  function sfxPerfect() {
+    if (!ctx) return;
+    const t = ctx.currentTime;
+    for (const [f, v, d] of [[1568, 0.16, 0.28], [2349, 0.09, 0.22]]) {
+      const osc = ctx.createOscillator();
+      osc.type = 'sine';
+      osc.frequency.value = f;
+      const g = ctx.createGain();
+      g.gain.setValueAtTime(0.0001, t);
+      g.gain.exponentialRampToValueAtTime(v, t + 0.004);
+      g.gain.exponentialRampToValueAtTime(0.0001, t + d);
+      osc.connect(g).connect(master);
+      if (reverbSend) g.connect(reverbSend);
+      osc.start(t);
+      osc.stop(t + d + 0.02);
+    }
+  }
+
   return {
     initAudio,
     sfxHit, sfxBounce, sfxCrowd, sfxNet, sfxOut, sfxFault,
-    sfxToss, sfxMenu, sfxConfirm, sfxReachAlert,
+    sfxToss, sfxMenu, sfxConfirm, sfxReachAlert, sfxPerfect,
   };
 }

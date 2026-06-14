@@ -106,6 +106,7 @@ pub(all) struct Ai {
   mut swing_jitter : Double
   mut home_x : Double
   mut home_z : Double
+  mut at_net : Bool // rushing/holding the net this exchange
 }
 
 ///|
@@ -133,6 +134,55 @@ pub fn create_ai(character : @shots.Character, difficulty_id : String) -> Ai {
     swing_jitter: 0.0,
     home_x: 0.0,
     home_z: -12.3,
+    at_net: false,
+  }
+}
+
+// Net-rush decision (Appendix A.5): rush on a short ball, scaled by the persona's
+// net tendency; fast incoming pace cancels the chance (a hard ball isn't a sitter).
+///|
+let net_chance_z : Double = 9.0
+
+///|
+let net_rush_required : Double = 1.0
+
+///|
+fn should_rush_net(net_tendency : Double, pred_z : Double, in_pace : Double) -> Bool {
+  let depth = @vec.dabs(pred_z) // strike point's distance from the net
+  if depth > net_chance_z {
+    return false
+  }
+  let chance = (net_chance_z - depth) / net_chance_z -
+    @vec.dmax(0.0, (in_pace - 18.0) / 30.0)
+  chance + net_tendency / 100.0 > net_rush_required
+}
+
+// Probability the AI lets a predicted-out ball go (Appendix A.5). An in ball is
+// always played; a clear out is almost always let go; a borderline out is judged
+// better at higher difficulty (so hard play the point, easy chase the out).
+///|
+pub fn out_letgo_prob(diff_id : String, margin : Double) -> Double {
+  if margin <= 0.0 {
+    return 0.0
+  }
+  if margin > 0.6 {
+    return 0.95
+  }
+  match diff_id {
+    "hard" => 0.92
+    "easy" => 0.35
+    _ => 0.65
+  }
+}
+
+// How far the receiver shifts toward the served box (Appendix A.5): sharper read
+// at higher difficulty.
+///|
+pub fn return_shift_factor(ai : Ai) -> Double {
+  match ai.diff.id {
+    "hard" => 1.7
+    "easy" => 1.05
+    _ => 1.4
   }
 }
 
@@ -166,6 +216,43 @@ struct StrokePlan {
   type_ : @shots.ShotType
   aim_x : Double
   aim_depth : Double
+}
+
+// Tactical shot vs the human's court position (Appendix A.5): lob a net-rusher,
+// drop on a player camped deep behind the baseline. `roll` is a pre-drawn
+// uniform; the trigger rate rises with difficulty.
+///|
+let net_play_z : Double = 5.0 // human within this of the net = at the net
+
+///|
+let deep_play_z : Double = 13.5 // human beyond this = camped deep
+
+///|
+fn tactical_shot_type(
+  human_z : Double,
+  roll : Double,
+  diff_id : String,
+) -> @shots.ShotType? {
+  let p = match diff_id {
+    "hard" => 0.8
+    "easy" => 0.35
+    _ => 0.6
+  }
+  if human_z < net_play_z {
+    if roll < p {
+      Some(Lob) // over the net-rusher's head (else a passing groundstroke)
+    } else {
+      None
+    }
+  } else if human_z > deep_play_z {
+    if roll < p {
+      Some(Drop) // pull the deep player forward
+    } else {
+      None
+    }
+  } else {
+    None
+  }
 }
 
 ///|
@@ -235,14 +322,20 @@ fn choose_stroke(ai : Ai, ctx : AiCtx, pred_x : Double, pred_z : Double, rng : @
     Topspin => 9.8
     _ => 9.2
   }
-  { type_: best_type, aim_x: best_tx / 2.8, aim_depth: (best_tz - base_z) / 2.4 }
+  let plan_x = best_tx / 2.8
+  // tactical override: lob a net-rusher, drop on a deep camper
+  match tactical_shot_type(human_z, rng.uniform(), ai.diff.id) {
+    Some(Lob) => { type_: Lob, aim_x: plan_x, aim_depth: 1.0 }
+    Some(Drop) => { type_: Drop, aim_x: plan_x, aim_depth: -1.0 }
+    _ => { type_: best_type, aim_x: plan_x, aim_depth: (best_tz - base_z) / 2.4 }
+  }
 }
 
 ///|
 pub(all) struct ServePlan {
   type_ : @shots.ServeType
   preset : @shots.Preset
-  q_serve : Double
+  power : Double // serve power-meter value [0,1]
 }
 
 ///|
@@ -276,12 +369,13 @@ pub fn choose_serve(ai : Ai, is_second : Bool, rng : @rng.Gauss) -> ServePlan {
       Body
     }
   }
-  let base = (if is_second { 0.78 } else { 0.7 }) + diff.serve_q
-  let q_serve = @vec.dmax(
+  // aggressive (higher power) first serve; safer (lower power) second serve
+  let base = (if is_second { 0.58 } else { 0.74 }) + diff.serve_q
+  let power = @vec.dmax(
     0.4,
-    @vec.dmin(1.0, base + 0.3 * rng.uniform() * (0.5 + stats.ctl / 200.0)),
+    @vec.dmin(0.98, base + 0.18 * rng.uniform() * (0.5 + stats.ctl / 200.0)),
   )
-  { type_, preset, q_serve }
+  { type_, preset, power }
 }
 
 // Time to cover `dist` from rest with limited accel, then top speed.
@@ -355,6 +449,8 @@ pub fn update_ai(ai : Ai, ctx : AiCtx, rng : @rng.Gauss) -> AiMove {
     ai.has_pred = false
     ai.pred_stamp = -1
     ai.home_x = @vec.dmax(-2.0, @vec.dmin(2.0, ctx.human_x * -0.2))
+    // after a net rush the AI holds a forward home position; else the baseline
+    ai.home_z = if ai.at_net { -6.5 } else { -12.3 }
     let (mx, mz) = seek(ctx.cpu_x, ctx.cpu_z, ai.home_x, ai.home_z, 0.25)
     return { ..no_swing, x: mx, z: mz }
   }
@@ -384,10 +480,17 @@ pub fn update_ai(ai : Ai, ctx : AiCtx, rng : @rng.Gauss) -> AiMove {
       ai.landing_out = false
     } else {
       match @physics.predict_landing(ball, ctx.surface) {
-        Some(l) =>
-          ai.landing_out = @vec.dsign(l.z) < 0.0 &&
-            (@vec.dabs(l.x) > @physics.court_half_width + @physics.line_grace ||
-            @vec.dabs(l.z) > @physics.court_half_len + @physics.line_grace)
+        Some(l) => {
+          let on_side = @vec.dsign(l.z) < 0.0
+          let mx = @vec.dabs(l.x) - (@physics.court_half_width + @physics.line_grace)
+          let mz = @vec.dabs(l.z) - (@physics.court_half_len + @physics.line_grace)
+          let margin = @vec.dmax(mx, mz) // > 0 means past a line
+          // only roll for genuinely-out balls (keeps the rng stream stable for
+          // the common in-bounds case)
+          ai.landing_out = on_side &&
+            margin > 0.0 &&
+            rng.uniform() < out_letgo_prob(ai.diff.id, margin)
+        }
         None => ai.landing_out = false
       }
     }
@@ -411,6 +514,12 @@ pub fn update_ai(ai : Ai, ctx : AiCtx, rng : @rng.Gauss) -> AiMove {
         ai.pred_z = p.z + ai.err_z * pos_err * 0.3 * shrink
         ai.pred_t_abs = ctx.game_time + p.t
         ai.has_pred = true
+        // decide whether to rush the net on this (short, slow) chance ball
+        ai.at_net = should_rush_net(
+          ai.stats.net,
+          ai.pred_z,
+          @vec.hypot3(ball.vx, ball.vy, ball.vz),
+        )
         if !ai.has_plan {
           let plan = choose_stroke(ai, ctx, p.x, p.z, rng)
           ai.plan_type = plan.type_
@@ -428,14 +537,16 @@ pub fn update_ai(ai : Ai, ctx : AiCtx, rng : @rng.Gauss) -> AiMove {
     return { ..no_swing, x: mx, z: mz }
   }
 
-  // run to a spot a bit behind/forehand of the strike point
+  // run to a spot near the strike point: a bit behind it normally, or a step in
+  // front of it (toward the net) when rushing to volley.
   let stand_x = @vec.dmax(
     @physics.player_x_min,
     @vec.dmin(@physics.player_x_max, ai.pred_x + 0.55),
   )
+  let z_off = if ai.at_net { 0.6 } else { -0.35 }
   let stand_z = @vec.dmax(
     -@physics.player_z_max,
-    @vec.dmin(-@physics.player_z_min, ai.pred_z - 0.35),
+    @vec.dmin(-@physics.player_z_min, ai.pred_z + z_off),
   )
   let (mx, mz) = seek(ctx.cpu_x, ctx.cpu_z, stand_x, stand_z, 0.08)
   let mut swing = false

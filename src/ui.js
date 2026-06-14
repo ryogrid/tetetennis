@@ -22,6 +22,12 @@ const ASSIST_OPTIONS = [
   { id: 'on',   name: 'On',   desc: 'Slow-motion approach, easier pace, forgiving contact.' },
   { id: 'full', name: 'Full', desc: 'Everything in On, plus auto-swing and auto-positioning.' },
 ];
+// must match games_options in logic/game/game.js.mbt
+const GAMES_OPTIONS = [
+  { name: '2 Games', desc: 'Quick set: first to 2 games (win by 2, tiebreak at 2-2).' },
+  { name: '4 Games', desc: 'Short set: first to 4 games (win by 2, tiebreak at 4-4).' },
+  { name: '6 Games', desc: 'Full set: first to 6 games (win by 2, tiebreak at 6-6).' },
+];
 
 // Surface display order: clay, grass, hard.
 const SURFACE_IDS = ['clay', 'grass', 'hard'];
@@ -52,6 +58,16 @@ const css = `
 .swatch { width: 150px; height: 100px; border-radius: 10px; border: 3px solid #333; }
 .swatch-label { text-align: center; margin-top: 8px; font-size: 16px; }
 .hint { font-size: 13px; color: #777; }
+.matchstats { border-collapse: collapse; margin: 6px 0; font-size: 14px; color: #cdd; }
+.matchstats th, .matchstats td { padding: 3px 14px; text-align: center; }
+.matchstats th { color: #888; font-weight: 600; font-size: 12px; }
+.matchstats td:first-child { text-align: left; color: #9aa; }
+.menubtn {
+  pointer-events: auto; margin: 8px 0 4px; padding: 8px 22px; border-radius: 8px;
+  background: rgba(80,230,120,.18); border: 1px solid rgba(80,230,120,.7);
+  color: #e8ffe8; font-size: 15px; letter-spacing: 1px; cursor: pointer;
+}
+.menubtn.quit { background: rgba(230,90,90,.16); border-color: rgba(230,90,90,.7); color: #ffecec; }
 #scoreboard {
   position: absolute; top: 14px; left: 14px; background: rgba(10,10,18,.78);
   border-radius: 8px; padding: 10px 14px; font-size: 15px; min-width: 170px;
@@ -181,6 +197,43 @@ const css = `
   position: absolute; top: -20px; left: 50%; transform: translateX(-50%);
   font-size: 11px; color: #aaa; letter-spacing: 1px; white-space: nowrap;
 }
+#powermeter {
+  position: absolute; bottom: 26%; left: 50%; transform: translateX(-50%);
+  width: 230px; height: 18px; display: none;
+  background: rgba(10,10,18,.55); border: 1px solid rgba(255,255,255,.3);
+  border-radius: 9px;
+}
+#powermeter .pm-band {
+  position: absolute; top: 0; bottom: 0;
+  background: rgba(80,230,120,.30);
+  border-left: 1px solid rgba(80,230,120,.9);
+  border-right: 1px solid rgba(80,230,120,.9);
+}
+#powermeter .pm-dot {
+  position: absolute; top: 50%; width: 16px; height: 16px;
+  margin-top: -8px; margin-left: -8px; border-radius: 50%;
+  background: #d8f24b; box-shadow: 0 0 6px rgba(0,0,0,.5);
+}
+#powermeter .pm-dot.good { background: #50e678; box-shadow: 0 0 12px #50e678; }
+#powermeter .pm-label {
+  position: absolute; top: -20px; left: 50%; transform: translateX(-50%);
+  font-size: 11px; color: #aaa; letter-spacing: 1px; white-space: nowrap;
+}
+#chargebar {
+  position: absolute; bottom: 19%; left: 50%; transform: translateX(-50%);
+  width: 210px; height: 12px; display: none;
+  background: rgba(10,10,18,.55); border: 1px solid rgba(255,255,255,.3);
+  border-radius: 7px; overflow: hidden;
+}
+#chargebar .cb-fill {
+  position: absolute; left: 0; top: 0; bottom: 0; width: 0%;
+  background: linear-gradient(90deg, #4ad8ff, #ffe34d);
+}
+#chargebar.over .cb-fill { background: linear-gradient(90deg, #ff8a3d, #ff3b3b); }
+#chargebar .cb-mark {
+  position: absolute; top: -2px; bottom: -2px; left: 80%; width: 2px;
+  background: rgba(255,255,255,.7);
+}
 #tc-bar { position: absolute; top: 12px; right: 12px; display: none; gap: 8px; }
 #tc-bar button {
   pointer-events: auto; width: 44px; height: 38px; border-radius: 8px;
@@ -210,11 +263,30 @@ export function createUI({ onVirtualKey, onMoveAxis } = {}) {
     return d;
   }
 
+  // Radar chart of the eight 0-100 persona stats, drawn as inline SVG.
   function statBars(stats) {
-    const order = ['POW', 'SPN', 'SLC', 'SRV', 'SPD', 'CTL'];
-    return order.map((k) =>
-      `<div class="statrow"><span>${k}</span><div class="statbar"><i style="width:${stats[k]}%"></i></div></div>`
-    ).join('');
+    const axes = ['POW', 'SPN', 'SLC', 'SRV', 'SPD', 'CTL', 'REA', 'NET'];
+    const n = axes.length;
+    const cx = 90, cy = 80, R = 60;
+    const pt = (i, r) => {
+      const a = -Math.PI / 2 + (i / n) * Math.PI * 2;
+      return [cx + Math.cos(a) * r, cy + Math.sin(a) * r];
+    };
+    // concentric grid rings + axis spokes
+    let grid = '';
+    for (const f of [0.25, 0.5, 0.75, 1]) {
+      grid += `<polygon points="${axes.map((_, i) => pt(i, R * f).map((v) => v.toFixed(1)).join(',')).join(' ')}" fill="none" stroke="rgba(255,255,255,.12)"/>`;
+    }
+    let spokes = '', labels = '';
+    axes.forEach((k, i) => {
+      const [ex, ey] = pt(i, R);
+      spokes += `<line x1="${cx}" y1="${cy}" x2="${ex.toFixed(1)}" y2="${ey.toFixed(1)}" stroke="rgba(255,255,255,.12)"/>`;
+      const [lx, ly] = pt(i, R + 12);
+      labels += `<text x="${lx.toFixed(1)}" y="${ly.toFixed(1)}" fill="#9aa" font-size="9" text-anchor="middle" dominant-baseline="middle">${k}</text>`;
+    });
+    const poly = axes.map((k, i) => pt(i, R * (stats[k] || 0) / 100).map((v) => v.toFixed(1)).join(',')).join(' ');
+    return `<svg class="statradar" viewBox="0 0 180 165" width="180" height="165">${grid}${spokes}` +
+      `<polygon points="${poly}" fill="rgba(80,230,120,.28)" stroke="#50e678" stroke-width="1.5"/>${labels}</svg>`;
   }
 
   // ---------- init ----------
@@ -247,11 +319,24 @@ export function createUI({ onVirtualKey, onMoveAxis } = {}) {
     '<div class="tm-label">HIT</div><div class="tm-band"></div><div class="tm-dot"></div>';
   els.tmBand = els.timingmeter.querySelector('.tm-band');
   els.tmDot = els.timingmeter.querySelector('.tm-dot');
+  els.powermeter = div('powermeter', hud);
+  els.powermeter.innerHTML =
+    '<span class="pm-label">SERVE POWER</span><div class="pm-band"></div><div class="pm-dot"></div>';
+  els.pmBand = els.powermeter.querySelector('.pm-band');
+  els.pmDot = els.powermeter.querySelector('.pm-dot');
+  els.chargebar = div('chargebar', hud);
+  // the mark sits at 80% = the start of the overcharge zone (full=100% of 1.25)
+  els.chargebar.innerHTML = '<i class="cb-fill"></i><span class="cb-mark"></span>';
+  els.cbFill = els.chargebar.querySelector('.cb-fill');
   els.shotbar.innerHTML =
-    '<div id="sb-flat">Z Flat</div><div id="sb-topspin">X Topspin</div><div id="sb-slice">C Slice</div>';
+    '<div id="sb-flat">Z Flat</div><div id="sb-topspin">X Topspin</div>' +
+    '<div id="sb-slice">C Slice</div><div id="sb-drop">V Drop</div>';
   els.controls.innerHTML =
-    'Move: Arrow keys<br>Shots: Z flat &middot; X topspin &middot; C slice<br>' +
-    'Serve: Space toss, then Z/X/C<br>Aim: hold a direction while swinging';
+    'Move: Arrow keys<br>Shots: <b>hold</b> Z/X/C/V to charge, <b>release</b> to hit ' +
+    '(Z flat &middot; X topspin &middot; C slice &middot; V drop)<br>' +
+    'Release in the sweet spot for a Perfect Hit; full charge overcharges (risky)<br>' +
+    'Serve: Space toss, then Z/X/C when the power meter is in the green band<br>' +
+    'Aim: hold a direction at the moment you release';
 
   // menu tap support (tap a card to select it, tap again to confirm).
   // Results screen taps pass index 0; menu_tap ignores the value there.
@@ -409,6 +494,19 @@ export function createUI({ onVirtualKey, onMoveAxis } = {}) {
       `</div><div class="hint">&larr; &rarr; select &middot; Enter confirm &middot; Esc back &middot; or tap (tap again to confirm)</div>`;
   }
 
+  function showGamesSelect(idx) {
+    els.menu.style.display = 'flex';
+    els.menu.dataset.screen = 'select';
+    els.menu.innerHTML =
+      `<div class="title">SET LENGTH</div><div class="cards">` +
+      GAMES_OPTIONS.map((o, i) =>
+        `<div class="card${i === idx ? ' sel' : ''}" data-idx="${i}">
+          <h3>${o.name.toUpperCase()}</h3>
+          <div class="desc">${o.desc}</div>
+        </div>`).join('') +
+      `</div><div class="hint">&larr; &rarr; select &middot; Enter confirm &middot; Esc back &middot; or tap (tap again to confirm)</div>`;
+  }
+
   function showAssistSelect(idx) {
     els.menu.style.display = 'flex';
     els.menu.dataset.screen = 'select';
@@ -424,16 +522,62 @@ export function createUI({ onVirtualKey, onMoveAxis } = {}) {
       `</div><div class="hint">&larr; &rarr; select &middot; Enter confirm &middot; Esc back &middot; or tap (tap again to confirm)</div>`;
   }
 
-  function showResults(win, lose, games, playerWon) {
+  function showResults(win, lose, games, playerWon, difficulty, stats) {
     els.menu.style.display = 'flex';
     els.menu.dataset.screen = 'results';
+    // stats: ';'-separated "Label\tYou\tOpp" rows
+    const rows = (stats || '').split(';').filter(Boolean).map((r) => {
+      const [label, you, opp] = r.split('\t');
+      return `<tr><td>${label}</td><td>${you}</td><td>${opp}</td></tr>`;
+    }).join('');
+    const table = rows
+      ? `<table class="matchstats"><tr><th></th><th>You</th><th>${lose}</th></tr>${rows}</table>`
+      : '';
     els.menu.innerHTML =
       `<div class="title">${playerWon ? 'YOU WIN!' : 'YOU LOSE'}</div>` +
-      `<div class="subtitle">${win} d. ${lose} &nbsp; ${games}</div>` +
+      `<div class="subtitle">${win} d. ${lose} &nbsp; ${games}` +
+      `${difficulty ? ` &middot; ${difficulty}` : ''}</div>` +
+      table +
+      `<button id="rematch-btn" class="menubtn">Rematch (R)</button>` +
       `<div class="hint">Enter or tap: back to menu</div>`;
+    const rb = document.getElementById('rematch-btn');
+    if (rb) {
+      const fire = (e) => {
+        e.stopPropagation();
+        if (onVirtualKey) { onVirtualKey('KeyR', true); onVirtualKey('KeyR', false); }
+      };
+      rb.addEventListener('pointerdown', fire);
+    }
   }
 
   function hideMenu() {
+    els.menu.style.display = 'none';
+  }
+
+  function fireKey(code) {
+    if (onVirtualKey) { onVirtualKey(code, true); onVirtualKey(code, false); }
+  }
+
+  function showPause() {
+    els.menu.style.display = 'flex';
+    els.menu.dataset.screen = 'pause';
+    els.menu.innerHTML =
+      `<div class="title">PAUSED</div>` +
+      `<button id="resume-btn" class="menubtn">Resume (Esc)</button>` +
+      `<button id="quit-btn" class="menubtn quit">Quit match (Q)</button>` +
+      `<div class="hint">Esc or P to resume &middot; Q to quit</div>`;
+    const rb = document.getElementById('resume-btn');
+    if (rb) rb.addEventListener('pointerdown', (e) => { e.stopPropagation(); fireKey('Escape'); });
+    const qb = document.getElementById('quit-btn');
+    let armed = false; // require a confirming second click to avoid mis-quits
+    if (qb) qb.addEventListener('pointerdown', (e) => {
+      e.stopPropagation();
+      if (!armed) { armed = true; qb.textContent = 'Click again to quit'; return; }
+      fireKey('KeyQ');
+    });
+  }
+
+  function hidePause() {
     els.menu.style.display = 'none';
   }
 
@@ -514,6 +658,7 @@ export function createUI({ onVirtualKey, onMoveAxis } = {}) {
     flat: ['sb-flat'],
     topspin: ['sb-topspin'],
     slice: ['sb-slice'],
+    drop: ['sb-drop'],
   };
   function setRecommendedShot(type) {
     if (type === recommendedShot) return;
@@ -555,6 +700,12 @@ export function createUI({ onVirtualKey, onMoveAxis } = {}) {
       els.tmBand.style.width = `${((hi - lo) * 100).toFixed(1)}%`;
       els.tmDot.style.left = `${(f * 100).toFixed(1)}%`;
       els.tmDot.classList.toggle('good', !!good);
+    } else if (name === 'power') {
+      if (!gaugeShown.power) { els.powermeter.style.display = 'block'; gaugeShown.power = true; }
+      els.pmBand.style.left = `${(lo * 100).toFixed(1)}%`;
+      els.pmBand.style.width = `${((hi - lo) * 100).toFixed(1)}%`;
+      els.pmDot.style.left = `${(f * 100).toFixed(1)}%`;
+      els.pmDot.classList.toggle('good', !!good);
     }
   }
 
@@ -564,6 +715,22 @@ export function createUI({ onVirtualKey, onMoveAxis } = {}) {
     if (name === 'toss') els.tossgauge.style.display = 'none';
     else if (name === 'height') els.heightbar.style.display = 'none';
     else if (name === 'timing') els.timingmeter.style.display = 'none';
+    else if (name === 'power') els.powermeter.style.display = 'none';
+  }
+
+  // hold-to-charge bar. frac is the charge over the overcharge ceiling [0,1];
+  // over=true tints it red once past full power.
+  let chargeShown = false;
+  function charge(frac, over) {
+    if (!chargeShown) { els.chargebar.style.display = 'block'; chargeShown = true; }
+    els.cbFill.style.width = `${Math.max(0, Math.min(1, frac)) * 100}%`;
+    els.chargebar.classList.toggle('over', !!over);
+  }
+  function hideCharge() {
+    if (!chargeShown) return;
+    chargeShown = false;
+    els.chargebar.style.display = 'none';
+    els.chargebar.classList.remove('over');
   }
 
   // ---------- move hint (FPV can't see a sweet spot behind the camera) ----------
@@ -597,11 +764,12 @@ export function createUI({ onVirtualKey, onMoveAxis } = {}) {
 
   return {
     setMenuTapHandler(fn) { menuTapHandler = fn; },
-    showCharSelect, showSurfaceSelect, showDifficultySelect, showAssistSelect,
+    showCharSelect, showSurfaceSelect, showDifficultySelect, showGamesSelect, showAssistSelect,
+    showPause, hidePause,
     showResults, hideMenu,
     showHUD, hideHUD, updateScore,
     banner, toast, flashShot, serveSpeedToast, setRecommendedShot,
-    gauge, hideGauge,
+    gauge, hideGauge, charge, hideCharge,
     moveHint, hideMoveHint,
   };
 }

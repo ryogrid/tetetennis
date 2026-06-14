@@ -61,11 +61,20 @@ export function createInput(onFirstInput) {
     wasPressed: (code) => pressed.has(code),
     moveX() { return moveVec().x; },
     moveZ() { return moveVec().z; },
-    // "" if none, else 'flat' | 'topspin' | 'slice'
+    // "" if none, else 'flat' | 'topspin' | 'slice' | 'drop'
     shotKey() {
       if (pressed.has('KeyZ')) return 'flat';
       if (pressed.has('KeyX')) return 'topspin';
       if (pressed.has('KeyC')) return 'slice';
+      if (pressed.has('KeyV')) return 'drop';
+      return '';
+    },
+    // currently-held shot key (hold-to-charge); '' if none
+    shotHeld() {
+      if (down.has('KeyZ')) return 'flat';
+      if (down.has('KeyX')) return 'topspin';
+      if (down.has('KeyC')) return 'slice';
+      if (down.has('KeyV')) return 'drop';
       return '';
     },
     // on-screen buttons synthesize the same key codes as the keyboard

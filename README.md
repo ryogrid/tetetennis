@@ -44,12 +44,11 @@ manifest icons live in `public/` (the generator script lives on the
 | Action | Keys |
 |---|---|
 | Move | Arrow keys — you strafe facing forward; diagonals combine (e.g. up+left); movement has real acceleration and braking |
-| Flat shot | Z (or J) |
-| Topspin shot | X (or K) |
-| Slice shot | C (or L) |
-| Serve | Space to toss, then Z/X/C when the **toss gauge** dot is in the green band (Z flat / X kick / C slice) |
-| Aim | hold a direction **at the moment of the hit** — works for strokes and serves (left/right = sides, up = deep, down = short) |
-| Menus | Arrows + Enter, Esc = back / quit match |
+| Stroke | **Hold** Z/J (flat), X/K (topspin), C/L (slice), V (drop) to charge, then **release** to hit. Release in the sweet spot for a **Perfect Hit**; a full charge **overcharges** (more power, more risk) |
+| Serve | Space to toss, then Z/X/C (flat / kick / slice) when the **power meter** is in the green band; overpowering it is fast but wild |
+| Aim | hold a direction **at the moment you release** — works for strokes and serves (left/right = sides, up = deep, down = short) |
+| Pause | Esc opens a Resume/Quit pause menu (P or Esc resumes) |
+| Menus | Arrows + Enter, Esc = back |
 
 ### Touch / on-screen controls
 
@@ -62,8 +61,9 @@ with both hands):
     console thumbstick — push further to move faster, and the knob springs back
     to centre when you let go. Hold a direction while swinging to aim.
   - **Right thumb** — one **SHOT** button (bottom-right): it tosses and serves,
-    and hits your strokes during a rally. The shot type is chosen **at random**
-    each time (flat / topspin / slice), so just focus on timing and position.
+    and hits your strokes during a rally. **Hold** it to charge and **release** to
+    hit; the shot type is chosen **at random** each time, so just focus on timing
+    and position.
   - **Top-right**: `⌨` / `🎮` toggles the on-screen controls on/off (the
     choice is remembered), `✕` quits to the menu.
 
@@ -80,9 +80,14 @@ with both hands):
 - **Cyan ring + arrow** — where to stand for a clean contact: the ring marks
   the spot on the court, the on-screen arrow points the way (it turns into a
   green ◎ when you are on the spot).
-- **Toss gauge** (during your serve) — the camera keeps facing the court, so
-  the toss height is shown as a vertical gauge; hit when the dot is in the
-  green band for full power and accuracy.
+- **Charge bar** — while you hold a stroke, a bar fills; it turns red in the
+  **overcharge** zone (max power, but risky). Release in the sweet spot for a
+  Perfect Hit.
+- **Serve power meter** (during your serve) — a horizontal meter oscillates;
+  hit when it is in the green band for a fast, accurate serve. Overpowering it
+  serves harder but sprays.
+- **Open-court highlight** — a translucent patch marks the side the CPU has
+  vacated; aim there for a winner.
 
 - Shot quality depends on your position: the ideal contact is the ball at
   **waist height, an arm-plus-racket length to your side** (forehand or
@@ -91,7 +96,7 @@ with both hands):
 - A **blue circle** on the court shows your horizontal reach area. It turns
   **pink** and a subtle rising tone plays when the incoming ball enters your
   striking range — a quick cue that it's time to swing.
-- Serve power/accuracy depends on hitting near the top of the toss.
+- Serve power/accuracy depends on locking the power meter in the green band.
 
 ## Shot types
 
@@ -102,6 +107,16 @@ with both hands):
 - **Slice** — clearly slower floater whose backspin carries it on a
   straighter, stretched line (~3.1 m deeper than the same launch without
   spin); it stays low and robs the bounce of pace, especially on grass.
+- **Drop** — the slowest stroke: a backspin touch that floats just over the net
+  and dies short, to pull a baseline-hugging opponent forward.
+- **Lob** (automatic) — when you're stretched out of position you'll loft a
+  defensive lob instead of a normal stroke. Against a net-rusher the CPU lobs too.
+
+Holding a stroke **charges** it (more power, plus shot-specific extras: topspin
+gains a sharp short-angle attack, slice digs deeper). A **Perfect Hit** (release
+in the sweet spot) adds a little speed, spin and accuracy. Fast incoming balls
+can **jam** a full swing into a weak sitter — block them with slice or charge
+early — while a clean flat/slice **counters** the pace back faster.
 
 Ball pace is globally scaled (`pace` in `logic/physics/constants.mbt`, 0.64) to
 80 % of the original speed — rallies leave plenty of time to position.
