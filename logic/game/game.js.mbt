@@ -97,15 +97,28 @@ let serve_sweet_hi : Double = 0.88
 
 ///|
 enum AppState {
+  MenuMode // top-level MATCH vs PRACTICE select (home screen)
   MenuChar
   MenuOpp
   MenuSurface
   MenuDifficulty
   MenuGames
   MenuAssist
+  MenuPracFeed // practice: stroke vs serve feed
+  MenuPracShot // practice: shot type of the fed ball
+  MenuPracDepth // practice: feed depth (stroke feeds only)
   Match
   Results
 } derive(Eq)
+
+// Practice-mode feed configuration (design/practice-mode). Present on a
+// MatchState only when the match is a practice session; None for a scored match.
+///|
+struct Practice {
+  feed : Int // 0 stroke, 1 serve
+  shot : Int // index into the per-feed shot list
+  depth : Int // 0 shallow, 1 deep, 2 random
+}
 
 // Games-to-win options for the set length selector (Appendix A.6).
 ///|
@@ -226,6 +239,7 @@ struct MatchState {
   mut cpu_serve_plan : @ai.ServePlan?
   mut last_shot_pref : @shots.ShotType?
   mut was_in_reach : Bool
+  practice : Practice? // None = scored match; Some = practice feed session
   events : Array[@physics.Event]
 }
 
@@ -240,9 +254,31 @@ struct Game {
   mut sel_surface : Int
   mut sel_difficulty : Int
   mut sel_games : Int // games to win the set
+  mut is_practice : Bool // home-screen mode: false = MATCH, true = PRACTICE
+  mut prac_feed : Int // practice: 0 stroke, 1 serve
+  mut prac_shot : Int // practice: shot index
+  mut prac_depth : Int // practice: 0 shallow, 1 deep, 2 random
   mut paused : Bool
   mut time_scale : Double
   mut ms : MatchState?
+}
+
+// Number of shot-type choices on the practice shot screen (5 strokes / 3 serves).
+///|
+fn prac_shot_count(self : Game) -> Int {
+  if self.prac_feed == 0 {
+    5
+  } else {
+    3
+  }
+}
+
+///|
+fn is_practice_ms(ms : MatchState) -> Bool {
+  match ms.practice {
+    Some(_) => true
+    None => false
+  }
 }
 
 ///|
@@ -356,6 +392,20 @@ fn names_c() -> String {
 // ---------------- menu navigation ----------------
 
 ///|
+fn show_mode_menu(self : Game) -> Unit {
+  @ffi.host_show_mode_select(self.host, self.menu_idx)
+}
+
+///|
+fn confirm_mode(self : Game) -> Unit {
+  @ffi.host_sfx(self.host, "sfxConfirm")
+  self.is_practice = self.menu_idx == 1
+  self.state = MenuChar
+  self.menu_idx = self.sel_player
+  self.show_char_menu()
+}
+
+///|
 fn show_char_menu(self : Game) -> Unit {
   @ffi.host_show_char_select(self.host, "SELECT YOUR PLAYER", self.menu_idx, "")
 }
@@ -389,9 +439,54 @@ fn confirm_opp(self : Game) -> Unit {
 fn confirm_surface(self : Game) -> Unit {
   @ffi.host_sfx(self.host, "sfxConfirm")
   self.sel_surface = self.menu_idx
-  self.state = MenuDifficulty
-  self.menu_idx = 1 // default normal
-  @ffi.host_show_difficulty_select(self.host, self.menu_idx)
+  if self.is_practice {
+    self.state = MenuPracFeed
+    self.menu_idx = self.prac_feed
+    @ffi.host_show_practice_feed(self.host, self.menu_idx)
+  } else {
+    self.state = MenuDifficulty
+    self.menu_idx = 1 // default normal
+    @ffi.host_show_difficulty_select(self.host, self.menu_idx)
+  }
+}
+
+///|
+fn confirm_prac_feed(self : Game) -> Unit {
+  @ffi.host_sfx(self.host, "sfxConfirm")
+  self.prac_feed = self.menu_idx
+  self.state = MenuPracShot
+  // the shot list differs by feed kind; keep the prior index if still valid
+  if self.prac_shot >= self.prac_shot_count() {
+    self.prac_shot = 0
+  }
+  self.menu_idx = self.prac_shot
+  @ffi.host_show_practice_shot(self.host, self.menu_idx, self.prac_feed)
+}
+
+///|
+fn confirm_prac_shot(self : Game) -> Unit {
+  @ffi.host_sfx(self.host, "sfxConfirm")
+  self.prac_shot = self.menu_idx
+  if self.prac_feed == 0 {
+    // stroke feed: choose the bounce depth next
+    self.state = MenuPracDepth
+    self.menu_idx = self.prac_depth
+    @ffi.host_show_practice_depth(self.host, self.menu_idx)
+  } else {
+    // serve feed: depth doesn't apply -> straight to assist
+    self.state = MenuAssist
+    self.menu_idx = assist_idx()
+    @ffi.host_show_assist_select(self.host, self.menu_idx)
+  }
+}
+
+///|
+fn confirm_prac_depth(self : Game) -> Unit {
+  @ffi.host_sfx(self.host, "sfxConfirm")
+  self.prac_depth = self.menu_idx
+  self.state = MenuAssist
+  self.menu_idx = assist_idx()
+  @ffi.host_show_assist_select(self.host, self.menu_idx)
 }
 
 ///|
@@ -422,10 +517,11 @@ fn confirm_assist(self : Game) -> Unit {
 }
 
 ///|
-fn back_to_char_menu(self : Game) -> Unit {
-  self.state = MenuChar
+fn back_to_home(self : Game) -> Unit {
+  self.is_practice = false
+  self.state = MenuMode
   self.menu_idx = 0
-  self.show_char_menu()
+  self.show_mode_menu()
 }
 
 // ---------------- match setup ----------------
@@ -457,10 +553,49 @@ fn stats_string(ms : MatchState) -> String {
   "Distance run\t\{s.p_run.to_int()}m\t\{s.c_run.to_int()}m"
 }
 
+// Practice HUD read-out, e.g. "Stroke · Topspin · Deep" / "Serve · Kick".
+///|
+fn practice_label(p : Practice) -> String {
+  if p.feed == 1 {
+    let name = match @shots.practice_serve_type(p.shot) {
+      ServeFlat => "Flat"
+      ServeSlice => "Slice"
+      ServeKick => "Kick"
+    }
+    "Serve · " + name
+  } else {
+    let name = shot_label(@shots.practice_stroke_type(p.shot))
+    let depth = match p.depth {
+      0 => "Shallow"
+      1 => "Deep"
+      _ => "Random"
+    }
+    "Stroke · " + name + " · " + depth
+  }
+}
+
+///|
+fn shot_label(t : @shots.ShotType) -> String {
+  match t {
+    Flat => "Flat"
+    Topspin => "Topspin"
+    Slice => "Slice"
+    Lob => "Lob"
+    Drop => "Drop"
+  }
+}
+
 ///|
 fn refresh_score(self : Game, ms : MatchState) -> Unit {
-  let ss = @rules.score_strings(ms.m)
-  @ffi.host_update_score(self.host, ss.games, ss.points, names_p(), names_c(), ms.serve_number)
+  match ms.practice {
+    Some(p) => @ffi.host_practice_hud(self.host, practice_label(p))
+    None => {
+      let ss = @rules.score_strings(ms.m)
+      @ffi.host_update_score(
+        self.host, ss.games, ss.points, names_p(), names_c(), ms.serve_number,
+      )
+    }
+  }
 }
 
 ///|
@@ -473,12 +608,19 @@ fn start_match(self : Game) -> Unit {
   let ai = @ai.create_ai(char_c, @ai.difficulties[self.sel_difficulty].id)
   let human = create_player(@rules.P, char_p, 1.0)
   let cpu = create_player(@rules.C, char_c, ai.diff.speed_mul)
+  let practice : Practice? = if self.is_practice {
+    Some({ feed: self.prac_feed, shot: self.prac_shot, depth: self.prac_depth })
+  } else {
+    None
+  }
+  // practice: the CPU is the permanent feeder; points never alternate the server
+  let first_server = if self.is_practice { @rules.C } else { @rules.P }
   let ms : MatchState = {
     human,
     cpu,
     ai,
     ball: @physics.make_ball(),
-    m: @rules.create_match(@rules.P, target_games=self.sel_games),
+    m: @rules.create_match(first_server, target_games=self.sel_games),
     surface,
     surface_id,
     point_state: PreServe,
@@ -505,6 +647,7 @@ fn start_match(self : Game) -> Unit {
     cpu_serve_plan: None,
     last_shot_pref: None,
     was_in_reach: false,
+    practice,
     events: [],
   }
   self.ms = Some(ms)
@@ -609,6 +752,14 @@ fn position_for_serve(self : Game, ms : MatchState) -> Unit {
   // human receiver uses the neutral bisector and then moves themselves
   let shift = if rc == @rules.C { @ai.return_shift_factor(ms.ai) } else { 1.4 }
   ent(ms, rc).place(box_cx * shift, -sv_sign * (@physics.court_half_len + 0.7))
+  // practice stroke feed isn't a serve: the receiver waits at centre baseline
+  match ms.practice {
+    Some(p) =>
+      if p.feed == 0 {
+        ent(ms, rc).place(0.0, -sv_sign * (@physics.court_half_len + 0.7))
+      }
+    None => ()
+  }
   if sv == @rules.P {
     @ffi.host_serve_look_x(self.host, box_cx)
   }
@@ -715,6 +866,79 @@ fn execute_serve(
   }
 }
 
+// Practice serve feed: randomized placement so returns vary side to side.
+///|
+fn prac_random_preset(self : Game) -> @shots.Preset {
+  let r = self.rng.uniform()
+  if r < 0.34 {
+    Wide
+  } else if r < 0.67 {
+    Body
+  } else {
+    T
+  }
+}
+
+// Practice stroke feed (design/practice-mode): the CPU launches a forced
+// groundstroke from its racket toward the human — chosen shot type, forced
+// depth, randomized lateral aim. No toss, no serve-box check: it enters play as
+// a live groundstroke the human returns.
+///|
+fn start_feed(self : Game, ms : MatchState, p : Practice) -> Unit {
+  let cpu = ms.cpu
+  let b = ms.ball
+  // ball at the CPU's racket: a clean, slow contact so any shot type computes
+  b.active = true
+  b.px = cpu.pos_x
+  b.py = @physics.ideal_contact_h
+  b.pz = cpu.pos_z
+  b.vx = 0.0
+  b.vy = 0.0
+  b.vz = 0.0
+  b.sx = 0.0
+  b.sy = 0.0
+  b.sz = 0.0
+  let ty = @shots.practice_stroke_type(p.shot)
+  let aim_depth = @shots.practice_depth_aim(p.depth, self.rng.uniform() < 0.5)
+  let aim_x = (self.rng.uniform() * 2.0 - 1.0) * 0.85
+  let res = @shots.compute_stroke(
+    cpu.pos_x, cpu.pos_z, b.px, b.py, b.pz, b.vx, b.vy, b.vz, cpu.stats, ty,
+    aim_x, aim_depth, @rules.C, self.rng,
+  )
+  match res {
+    None => {
+      // shouldn't happen with a ball at the racket; retry on the next tick
+      b.active = false
+      ms.state_timer = 0.0
+    }
+    Some(r) => {
+      b.vx = r.vx
+      b.vy = r.vy
+      b.vz = r.vz
+      b.sx = r.sx
+      b.sy = r.sy
+      b.sz = r.sz
+      ms.rally_phase = Live // a groundstroke is already in play
+      ms.last_hit_by = Some(@rules.C)
+      ms.bounces = 0
+      ms.serve_net_touched = false
+      ms.point_state = Rally
+      ms.ball_stamp = ms.ball_stamp + 1
+      let fh = (b.px - cpu.pos_x) * -1.0 >= 0.0 // CPU faces +z
+      cpu.start_swing(ty, fh) |> ignore
+      @ffi.host_start_swing(self.host, 1, shot_type_str(ty), fh)
+      @ffi.host_sfx_hit(
+        self.host, @vec.hypot3(r.vx, r.vy, r.vz), shot_type_str(r.shot_type),
+        b.px / 5.5, r.mishit,
+      )
+      match @physics.predict_landing(b, ms.surface) {
+        Some(l) => @ffi.host_show_landing(self.host, l.x, l.z)
+        None => ()
+      }
+    }
+  }
+}
+
 // Returns true if a stroke was actually made (false on any guard/whiff).
 ///|
 fn attempt_contact(
@@ -802,6 +1026,12 @@ fn attempt_contact(
 ///|
 fn fault(self : Game, ms : MatchState) -> Unit {
   @ffi.host_hide_landing(self.host)
+  if is_practice_ms(ms) {
+    // practice serve feed missed the box: end the rep and re-feed
+    @ffi.host_banner(self.host, "FAULT")
+    self.point_end(ms, @rules.P, "")
+    return
+  }
   if ms.serve_number == 1 {
     ms.serve_number = 2
     @ffi.host_banner(self.host, "FAULT")
@@ -855,6 +1085,14 @@ fn point_end(self : Game, ms : MatchState, winner : @rules.Side, call_text : Str
   ms.state_timer = 0.0
   @ffi.host_hide_landing(self.host)
   self.hide_sweet(ms)
+  // practice: no scoring, no stats, no banners — just re-feed after the cooldown
+  if is_practice_ms(ms) {
+    ms.stats.rally_shots = 0
+    if call_text != "" {
+      @ffi.host_banner(self.host, call_text)
+    }
+    return
+  }
   // accumulate per-point stats (rally length, net-point outcomes)
   let st = ms.stats
   st.points_played = st.points_played + 1
@@ -1107,11 +1345,23 @@ pub fn handle_input() -> Unit {
   let self = g()
   let h = self.host
   match self.state {
+    MenuMode => {
+      if self.handle_menu_nav(2) {
+        self.show_mode_menu()
+      }
+      if self.confirm_pressed() {
+        self.confirm_mode()
+      }
+    }
     MenuChar => {
       if self.handle_menu_nav(@shots.characters.length()) {
         self.show_char_menu()
       }
-      if self.confirm_pressed() {
+      if @ffi.host_was_pressed(h, "Escape") {
+        self.state = MenuMode
+        self.menu_idx = if self.is_practice { 1 } else { 0 }
+        self.show_mode_menu()
+      } else if self.confirm_pressed() {
         self.confirm_char()
       }
     }
@@ -1163,14 +1413,62 @@ pub fn handle_input() -> Unit {
         self.confirm_games()
       }
     }
+    MenuPracFeed => {
+      if self.handle_menu_nav(2) {
+        @ffi.host_show_practice_feed(h, self.menu_idx)
+      }
+      if @ffi.host_was_pressed(h, "Escape") {
+        self.state = MenuSurface
+        self.menu_idx = self.sel_surface
+        @ffi.host_show_surface_select(h, self.menu_idx)
+      } else if self.confirm_pressed() {
+        self.confirm_prac_feed()
+      }
+    }
+    MenuPracShot => {
+      if self.handle_menu_nav(self.prac_shot_count()) {
+        @ffi.host_show_practice_shot(h, self.menu_idx, self.prac_feed)
+      }
+      if @ffi.host_was_pressed(h, "Escape") {
+        self.state = MenuPracFeed
+        self.menu_idx = self.prac_feed
+        @ffi.host_show_practice_feed(h, self.menu_idx)
+      } else if self.confirm_pressed() {
+        self.confirm_prac_shot()
+      }
+    }
+    MenuPracDepth => {
+      if self.handle_menu_nav(3) {
+        @ffi.host_show_practice_depth(h, self.menu_idx)
+      }
+      if @ffi.host_was_pressed(h, "Escape") {
+        self.state = MenuPracShot
+        self.menu_idx = self.prac_shot
+        @ffi.host_show_practice_shot(h, self.menu_idx, self.prac_feed)
+      } else if self.confirm_pressed() {
+        self.confirm_prac_depth()
+      }
+    }
     MenuAssist => {
       if self.handle_menu_nav(3) {
         @ffi.host_show_assist_select(h, self.menu_idx)
       }
       if @ffi.host_was_pressed(h, "Escape") {
-        self.state = MenuGames
-        self.menu_idx = games_idx_of(self.sel_games)
-        @ffi.host_show_games_select(h, self.menu_idx)
+        if self.is_practice {
+          if self.prac_feed == 0 {
+            self.state = MenuPracDepth
+            self.menu_idx = self.prac_depth
+            @ffi.host_show_practice_depth(h, self.menu_idx)
+          } else {
+            self.state = MenuPracShot
+            self.menu_idx = self.prac_shot
+            @ffi.host_show_practice_shot(h, self.menu_idx, self.prac_feed)
+          }
+        } else {
+          self.state = MenuGames
+          self.menu_idx = games_idx_of(self.sel_games)
+          @ffi.host_show_games_select(h, self.menu_idx)
+        }
       } else if self.confirm_pressed() {
         self.confirm_assist()
       }
@@ -1179,7 +1477,7 @@ pub fn handle_input() -> Unit {
       if @ffi.host_was_pressed(self.host, "KeyR") {
         self.start_match() // rematch with the same settings
       } else if self.confirm_pressed() {
-        self.back_to_char_menu()
+        self.back_to_home()
       }
     Match => self.handle_match_input()
   }
@@ -1201,7 +1499,7 @@ fn handle_match_input(self : Game) -> Unit {
       self.paused = false
       @ffi.host_hide_pause(self.host)
       self.teardown_match()
-      self.back_to_char_menu()
+      self.back_to_home()
     }
     return
   }
@@ -1287,8 +1585,9 @@ pub fn fixed_update(dt : Double) -> Unit {
     ms.human.pos_z = @physics.court_half_len + 0.4
   }
 
-  // CPU movement / brain
-  if ms.point_state == Rally && ms.rally_phase != Over {
+  // CPU movement / brain. In practice the CPU only feeds and never rallies, so
+  // its brain/contact are suppressed; it just stands after each feed.
+  if !is_practice_ms(ms) && ms.point_state == Rally && ms.rally_phase != Over {
     let mv = @ai.update_ai(
       ms.ai,
       {
@@ -1321,7 +1620,11 @@ pub fn fixed_update(dt : Double) -> Unit {
   }
   if (ms.point_state == PreServe || ms.point_state == Serving) && server(ms) == @rules.C {
     ms.cpu.pos_z = -(@physics.court_half_len + 0.4)
-    ms.cpu.pos_x = @shots.serve_stance_x(@rules.C, ms.court_side)
+    // a stroke feed comes from centre baseline; a serve feed from the serve stance
+    ms.cpu.pos_x = match ms.practice {
+      Some(p) => if p.feed == 0 { 0.0 } else { @shots.serve_stance_x(@rules.C, ms.court_side) }
+      None => @shots.serve_stance_x(@rules.C, ms.court_side)
+    }
   }
 
   // human charge / release (hold to charge, release to swing); Full assist
@@ -1375,7 +1678,7 @@ pub fn fixed_update(dt : Double) -> Unit {
     }
   }
   let pc = ms.cpu
-  if pc.swinging && !pc.contact_done && pc.swing_t >= swing_contact_t {
+  if !is_practice_ms(ms) && pc.swinging && !pc.contact_done && pc.swing_t >= swing_contact_t {
     pc.contact_done = true
     let cpu_power = 0.85 + 0.40 * @vec.dmin(cpu_charge, 1.0)
     self.attempt_contact(
@@ -1389,9 +1692,28 @@ pub fn fixed_update(dt : Double) -> Unit {
   match ms.point_state {
     PreServe => {
       ms.state_timer = ms.state_timer + dt
-      if server(ms) == @rules.C && ms.state_timer > 1.0 {
-        ms.cpu_serve_plan = Some(@ai.choose_serve(ms.ai, ms.serve_number == 2, self.rng))
-        self.start_toss(ms)
+      match ms.practice {
+        Some(p) =>
+          if ms.state_timer > 0.8 {
+            if p.feed == 1 {
+              // serve feed: forced type, randomized placement, sweet-band power
+              ms.cpu_serve_plan = Some({
+                type_: @shots.practice_serve_type(p.shot),
+                preset: self.prac_random_preset(),
+                power: 0.8,
+              })
+              self.start_toss(ms)
+            } else {
+              self.start_feed(ms, p)
+            }
+          }
+        None =>
+          if server(ms) == @rules.C && ms.state_timer > 1.0 {
+            ms.cpu_serve_plan = Some(
+              @ai.choose_serve(ms.ai, ms.serve_number == 2, self.rng),
+            )
+            self.start_toss(ms)
+          }
       }
     }
     Serving => {
@@ -1683,10 +2005,13 @@ pub fn get_time_scale(dt : Double) -> Double {
 pub fn menu_tap(idx : Int) -> Unit {
   let self = g()
   if self.state == Results {
-    self.back_to_char_menu()
+    self.back_to_home()
     return
   }
   let count = match self.state {
+    MenuMode | MenuPracFeed => 2
+    MenuPracDepth => 3
+    MenuPracShot => self.prac_shot_count()
     MenuSurface | MenuDifficulty | MenuGames | MenuAssist => 3
     MenuChar | MenuOpp => @shots.characters.length()
     _ => return
@@ -1696,23 +2021,33 @@ pub fn menu_tap(idx : Int) -> Unit {
   }
   if idx == self.menu_idx {
     match self.state {
+      MenuMode => self.confirm_mode()
       MenuChar => self.confirm_char()
       MenuOpp => self.confirm_opp()
       MenuSurface => self.confirm_surface()
       MenuDifficulty => self.confirm_difficulty()
       MenuGames => self.confirm_games()
       MenuAssist => self.confirm_assist()
+      MenuPracFeed => self.confirm_prac_feed()
+      MenuPracShot => self.confirm_prac_shot()
+      MenuPracDepth => self.confirm_prac_depth()
       _ => ()
     }
   } else {
     self.menu_idx = idx
     @ffi.host_sfx(self.host, "sfxMenu")
     match self.state {
+      MenuMode => self.show_mode_menu()
       MenuChar => self.show_char_menu()
       MenuOpp => self.show_opp_menu()
       MenuSurface => @ffi.host_show_surface_select(self.host, self.menu_idx)
       MenuDifficulty => @ffi.host_show_difficulty_select(self.host, self.menu_idx)
+      MenuGames => @ffi.host_show_games_select(self.host, self.menu_idx)
       MenuAssist => @ffi.host_show_assist_select(self.host, self.menu_idx)
+      MenuPracFeed => @ffi.host_show_practice_feed(self.host, self.menu_idx)
+      MenuPracShot =>
+        @ffi.host_show_practice_shot(self.host, self.menu_idx, self.prac_feed)
+      MenuPracDepth => @ffi.host_show_practice_depth(self.host, self.menu_idx)
       _ => ()
     }
   }
@@ -1725,13 +2060,17 @@ pub fn game_init(host : @ffi.Host, seed : Int) -> Unit {
   let self : Game = {
     host,
     rng: @rng.Gauss::new(seed),
-    state: MenuChar,
+    state: MenuMode,
     menu_idx: 0,
     sel_player: 0,
     sel_opp: 0,
     sel_surface: 2,
     sel_difficulty: 1,
     sel_games: 6,
+    is_practice: false,
+    prac_feed: 0,
+    prac_shot: 0,
+    prac_depth: 2, // default to random depth
     paused: false,
     time_scale: 1.0,
     ms: None,
@@ -1744,5 +2083,5 @@ pub fn game_init(host : @ffi.Host, seed : Int) -> Unit {
     "full" => @assist.set_assist_level(Full)
     _ => ()
   }
-  self.show_char_menu()
+  self.show_mode_menu()
 }

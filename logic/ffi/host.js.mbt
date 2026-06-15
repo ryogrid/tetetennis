@@ -156,6 +156,29 @@ pub extern "js" fn host_show_assist_select(h : Host, idx : Int) -> Unit =
 pub extern "js" fn host_show_games_select(h : Host, idx : Int) -> Unit =
   "(h,i)=>h.ui.showGamesSelect(i)"
 
+// practice-mode screens (design/practice-mode)
+///|
+pub extern "js" fn host_show_mode_select(h : Host, idx : Int) -> Unit =
+  "(h,i)=>h.ui.showModeSelect(i)"
+
+///|
+pub extern "js" fn host_show_practice_feed(h : Host, idx : Int) -> Unit =
+  "(h,i)=>h.ui.showPracticeFeed(i)"
+
+// kind: 0 stroke (5 shot types) / 1 serve (3 serve types)
+///|
+pub extern "js" fn host_show_practice_shot(h : Host, idx : Int, kind : Int) -> Unit =
+  "(h,i,k)=>h.ui.showPracticeShot(i,k)"
+
+///|
+pub extern "js" fn host_show_practice_depth(h : Host, idx : Int) -> Unit =
+  "(h,i)=>h.ui.showPracticeDepth(i)"
+
+// practice HUD: a single read-out line replacing the scoreboard
+///|
+pub extern "js" fn host_practice_hud(h : Host, label : String) -> Unit =
+  "(h,l)=>h.ui.practiceHud(l)"
+
 ///|
 pub extern "js" fn host_show_pause(h : Host) -> Unit = "(h)=>h.ui.showPause()"
 

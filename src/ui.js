@@ -32,6 +32,37 @@ const GAMES_OPTIONS = [
 // Surface display order: clay, grass, hard.
 const SURFACE_IDS = ['clay', 'grass', 'hard'];
 
+// Practice-mode option tables (design/practice-mode). Order must match the
+// MoonBit index mappings in logic/game/game.js.mbt + logic/shots.
+const MODE_OPTIONS = [
+  { name: 'Match', desc: 'A scored singles match vs. the CPU. Win the set.' },
+  { name: 'Practice', desc: 'The CPU feeds you balls on your terms. No score — just rally.' },
+];
+const FEED_OPTIONS = [
+  { name: 'Stroke', desc: 'The CPU feeds groundstrokes from the baseline.' },
+  { name: 'Serve', desc: 'The CPU serves to you; practice your return.' },
+];
+// must match @shots.practice_stroke_type (0..4)
+const STROKE_SHOTS = [
+  { name: 'Flat', desc: 'Driving, low-spin pace.' },
+  { name: 'Topspin', desc: 'Heavy, dipping, kicks up.' },
+  { name: 'Slice', desc: 'Floating backspin, stays low.' },
+  { name: 'Lob', desc: 'High and deep over your head.' },
+  { name: 'Drop', desc: 'Soft touch that dies near the net.' },
+];
+// must match @shots.practice_serve_type (0..2)
+const SERVE_SHOTS = [
+  { name: 'Flat', desc: 'Fast, flat first serve.' },
+  { name: 'Slice', desc: 'Curving slice that pulls you wide.' },
+  { name: 'Kick', desc: 'Topspin kick that jumps up high.' },
+];
+// must match Practice.depth (0 shallow, 1 deep, 2 random)
+const DEPTH_OPTIONS = [
+  { name: 'Shallow', desc: 'Bounces in the forecourt — move up.' },
+  { name: 'Deep', desc: 'Bounces near the baseline — back up.' },
+  { name: 'Random', desc: 'Mixes shallow and deep each feed.' },
+];
+
 const css = `
 #hud * { box-sizing: border-box; }
 .screen {
@@ -479,6 +510,41 @@ export function createUI({ onVirtualKey, onMoveAxis } = {}) {
       `</div><div class="hint">&larr; &rarr; select &middot; Enter confirm &middot; Esc back &middot; or tap (tap again to confirm)</div>`;
   }
 
+  // generic card-list screen for the simple name/desc selectors
+  function cardListScreen(title, options, idx, withEsc, subtitle) {
+    els.menu.style.display = 'flex';
+    els.menu.dataset.screen = 'select';
+    const hint = withEsc
+      ? '&larr; &rarr; select &middot; Enter confirm &middot; Esc back &middot; or tap (tap again to confirm)'
+      : '&larr; &rarr; select &middot; Enter confirm &middot; or tap (tap again to confirm)';
+    els.menu.innerHTML =
+      `<div class="title">${title}</div>` +
+      (subtitle ? `<div class="subtitle">${subtitle}</div>` : '') +
+      `<div class="cards">` +
+      options.map((o, i) =>
+        `<div class="card${i === idx ? ' sel' : ''}" data-idx="${i}">
+          <h3>${o.name.toUpperCase()}</h3>
+          <div class="desc">${o.desc}</div>
+        </div>`).join('') +
+      `</div><div class="hint">${hint}</div>`;
+  }
+
+  function showModeSelect(idx) {
+    cardListScreen('SELECT MODE', MODE_OPTIONS, idx, false);
+  }
+
+  function showPracticeFeed(idx) {
+    cardListScreen('CPU FEEDS', FEED_OPTIONS, idx, true);
+  }
+
+  function showPracticeShot(idx, kind) {
+    cardListScreen('BALL TYPE', kind === 1 ? SERVE_SHOTS : STROKE_SHOTS, idx, true);
+  }
+
+  function showPracticeDepth(idx) {
+    cardListScreen('FEED DEPTH', DEPTH_OPTIONS, idx, true);
+  }
+
   function showAssistSelect(idx) {
     els.menu.style.display = 'flex';
     els.menu.dataset.screen = 'select';
@@ -598,6 +664,13 @@ export function createUI({ onVirtualKey, onMoveAxis } = {}) {
       (tb === 'TB' ? '<div class="row" style="color:#e8f24b;font-size:12px">Tiebreak</div>' : '');
   }
 
+  // practice HUD: replace the scoreboard with a single feed-settings read-out
+  function practiceHud(label) {
+    els.scoreboard.innerHTML =
+      `<div class="row"><b>PRACTICE</b></div>` +
+      `<div class="row" style="color:#e8f24b;font-size:13px">${label}</div>`;
+  }
+
   function banner(text) {
     const ms = 1300;
     els.banner.textContent = text;
@@ -708,9 +781,10 @@ export function createUI({ onVirtualKey, onMoveAxis } = {}) {
   return {
     setMenuTapHandler(fn) { menuTapHandler = fn; },
     showCharSelect, showSurfaceSelect, showDifficultySelect, showGamesSelect, showAssistSelect,
+    showModeSelect, showPracticeFeed, showPracticeShot, showPracticeDepth,
     showPause, hidePause,
     showResults, hideMenu,
-    showHUD, hideHUD, updateScore,
+    showHUD, hideHUD, updateScore, practiceHud,
     banner, toast, flashShot, serveSpeedToast, setRecommendedShot,
     gauge, hideGauge, charge, hideCharge,
     moveHint, hideMoveHint,

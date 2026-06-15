@@ -21,6 +21,16 @@ pub(all) enum ServeType {
   ServeSlice
 } derive(Eq, Show)
 
+// Practice-mode serve feed: menu index -> serve type (0 Flat, 1 Slice, 2 Kick).
+///|
+pub fn practice_serve_type(i : Int) -> ServeType {
+  match i {
+    0 => ServeFlat
+    1 => ServeSlice
+    _ => ServeKick
+  }
+}
+
 // (speed_mul, theta_min_deg, theta_max_deg)
 ///|
 pub fn serve_def(t : ServeType) -> (Double, Double, Double) {

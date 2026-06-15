@@ -30,6 +30,36 @@ pub fn shot_def(t : ShotType) -> (Double, Double, Double) {
 ///|
 let reach_grace : Double = 0.2
 
+// ---- practice-mode feed mapping (design/practice-mode) ----
+// Stroke feeds offer all five shot types, indexed in menu order.
+///|
+pub fn practice_stroke_type(i : Int) -> ShotType {
+  match i {
+    0 => Flat
+    1 => Topspin
+    2 => Slice
+    3 => Lob
+    _ => Drop
+  }
+}
+
+///|
+pub let practice_shallow_aim : Double = -0.8 // forecourt bounce
+
+///|
+pub let practice_deep_aim : Double = 0.8 // backcourt bounce
+
+// Depth choice -> compute_stroke aim_depth. 0 shallow, 1 deep, 2 random (the
+// caller supplies the coin flip so this stays pure / testable).
+///|
+pub fn practice_depth_aim(depth : Int, pick_deep : Bool) -> Double {
+  match depth {
+    0 => practice_shallow_aim
+    1 => practice_deep_aim
+    _ => if pick_deep { practice_deep_aim } else { practice_shallow_aim }
+  }
+}
+
 // Topspin/Slice charge enhancements (Appendix A.2). cc in [0,1] (overcharge caps
 // the enhancement at 1) amplifies each shot's identity.
 ///|
