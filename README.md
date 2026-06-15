@@ -37,6 +37,20 @@ The app icons are drawn procedurally, not stored as art; the generated PNGs and
 manifest icons live in `public/` (the generator script lives on the
 `old_master0613` branch).
 
+## Game modes
+
+The home screen offers two modes:
+
+- **Match** — a scored singles set against the CPU (pick player, opponent, surface,
+  difficulty, set length, assist). This is the classic game.
+- **Practice** — the CPU acts as a ball machine: it feeds you balls on your terms and
+  **no points are counted**, so you can groove a return. You choose your player, the CPU's
+  player, the surface, whether it feeds a **stroke or a serve**, the **shot type**
+  (strokes: flat / topspin / slice / lob / drop; serves: flat / slice / kick), and — for
+  stroke feeds — the **depth** (shallow forecourt / deep backcourt / random). Feeds vary
+  side-to-side so you have to move. Esc → Quit returns to the home screen. See
+  [`design/practice-mode/practice-mode.md`](design/practice-mode/practice-mode.md).
+
 ## How to play
 
 ### Keyboard

@@ -100,6 +100,82 @@ fn mean_stroke_typ(typ : ShotType, contact_z : Double) -> (Double, Double, Int) 
   (speed_sum / nn.to_double(), depth_sum / nn.to_double(), n)
 }
 
+// ---- practice-mode feed mapping (design/practice-mode) ----
+
+///|
+test "practice feed: shot/serve index + depth mappings" {
+  // stroke feeds expose all five shot types in menu order
+  assert_true(practice_stroke_type(0) == Flat)
+  assert_true(practice_stroke_type(1) == Topspin)
+  assert_true(practice_stroke_type(2) == Slice)
+  assert_true(practice_stroke_type(3) == Lob)
+  assert_true(practice_stroke_type(4) == Drop)
+  // serve feeds expose flat / slice / kick
+  assert_true(practice_serve_type(0) == ServeFlat)
+  assert_true(practice_serve_type(1) == ServeSlice)
+  assert_true(practice_serve_type(2) == ServeKick)
+  // shallow aims short (negative), deep aims long (positive)
+  assert_true(practice_depth_aim(0, false) < 0.0)
+  assert_true(practice_depth_aim(0, true) < 0.0)
+  assert_true(practice_depth_aim(1, false) > 0.0)
+  assert_true(practice_depth_aim(1, true) > 0.0)
+  // random follows the supplied coin flip
+  assert_true(practice_depth_aim(2, true) == practice_deep_aim)
+  assert_true(practice_depth_aim(2, false) == practice_shallow_aim)
+}
+
+// Mean landing depth (z on the human +z side) of a CPU stroke feed at a given
+// depth selection, mirroring start_feed (ball at the racket, slow contact).
+///|
+fn mean_feed_depth(depth : Int) -> (Double, Int) {
+  let g = @rng.Gauss::new(2024)
+  let cz = -11.0
+  let mut z_sum = 0.0
+  let mut n = 0
+  for _i = 0; _i < 200; _i = _i + 1 {
+    let aim_depth = practice_depth_aim(depth, true)
+    let res = compute_stroke(
+      0.0, cz, 0.0, @physics.ideal_contact_h, cz, 0.0, 0.0, 0.0, test_stats,
+      Topspin, 0.0, aim_depth, @rules.C, g,
+    )
+    match res {
+      Some(r) => {
+        let b = @physics.make_ball()
+        b.px = 0.0
+        b.py = @physics.ideal_contact_h
+        b.pz = cz
+        b.vx = r.vx
+        b.vy = r.vy
+        b.vz = r.vz
+        b.sx = r.sx
+        b.sy = r.sy
+        b.sz = r.sz
+        b.activate()
+        match @physics.predict_landing(b, @physics.surface_hard) {
+          Some(l) => if l.z > 0.0 {
+            z_sum = z_sum + l.z
+            n = n + 1
+          }
+          None => ()
+        }
+      }
+      None => ()
+    }
+  }
+  let nn = if n == 0 { 1 } else { n }
+  (z_sum / nn.to_double(), n)
+}
+
+///|
+test "practice feed: shallow feeds land shorter than deep feeds" {
+  @assist.set_assist_level(Off)
+  let (shallow_z, shallow_n) = mean_feed_depth(0)
+  let (deep_z, deep_n) = mean_feed_depth(1)
+  assert_true(shallow_n > 150) // feeds reliably clear the net into the court
+  assert_true(deep_n > 150)
+  assert_true(deep_z > shallow_z + 1.5) // deep lands clearly closer to the baseline
+}
+
 ///|
 test "drop shot: slower and lands shorter than a slice, and clears into court" {
   @assist.set_assist_level(Off)
