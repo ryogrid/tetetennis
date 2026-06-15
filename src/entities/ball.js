@@ -138,21 +138,24 @@ export function createBallEntity(scene) {
   const _cPost = new THREE.Color(0x39d7ff);
   const _cIdeal = new THREE.Color(0xff8a3d); // ideal (waist-height) hit point
 
-  // "stand here" marker: where the player should be to make a clean contact
+  // "stand here" marker: a large, bright circle on the court showing where the
+  // player should stand to make a clean contact (only the player's current side
+  // of the ideal hit point is shown — driven from the logic layer).
+  const SWEET_COL = 0x6dff5a; // bright green, distinct from the orange hit point
   const sweet = new THREE.Group();
   const sweetRing = new THREE.Mesh(
-    new THREE.RingGeometry(0.30, 0.40, 28),
-    new THREE.MeshBasicMaterial({ color: 0x39d7ff, transparent: true, opacity: 0.55, side: THREE.DoubleSide }),
+    new THREE.RingGeometry(0.52, 0.70, 36),
+    new THREE.MeshBasicMaterial({ color: SWEET_COL, transparent: true, opacity: 0.75, side: THREE.DoubleSide }),
   );
   const sweetDot = new THREE.Mesh(
-    new THREE.CircleGeometry(0.09, 16),
-    new THREE.MeshBasicMaterial({ color: 0x39d7ff, transparent: true, opacity: 0.4 }),
+    new THREE.CircleGeometry(0.16, 24),
+    new THREE.MeshBasicMaterial({ color: SWEET_COL, transparent: true, opacity: 0.5 }),
   );
   // countdown ring: starts wide and shrinks onto the sweet ring as the ideal
   // contact instant approaches, so depth-over-time is read in-world
   const sweetCount = new THREE.Mesh(
-    new THREE.RingGeometry(0.30, 0.35, 28),
-    new THREE.MeshBasicMaterial({ color: 0x39d7ff, transparent: true, opacity: 0.8, side: THREE.DoubleSide }),
+    new THREE.RingGeometry(0.52, 0.62, 36),
+    new THREE.MeshBasicMaterial({ color: SWEET_COL, transparent: true, opacity: 0.85, side: THREE.DoubleSide }),
   );
   sweetCount.visible = false;
   sweet.add(sweetRing, sweetDot, sweetCount);
@@ -219,7 +222,7 @@ export function createBallEntity(scene) {
         const f = Math.max(0, Math.min(1, cdFrac));
         sweetCount.visible = true;
         sweetCount.scale.setScalar(1 + f * 1.6);
-        sweetCount.material.color.setHex(cdGood ? 0x50e678 : 0x39d7ff);
+        sweetCount.material.color.setHex(cdGood ? 0xb6ff4a : SWEET_COL);
         sweetCount.material.opacity = 0.5 + 0.4 * (1 - f);
       } else {
         sweetCount.visible = false;

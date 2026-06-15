@@ -233,8 +233,8 @@ pub extern "js" fn host_hide_gauge(h : Host, name : String) -> Unit =
 
 // charge bar: frac in [0,1] of the overcharge ceiling; over = in overcharge zone
 ///|
-pub extern "js" fn host_charge(h : Host, frac : Double, over : Bool) -> Unit =
-  "(h,f,o)=>h.ui.charge(f,o)"
+pub extern "js" fn host_charge(h : Host, frac : Double) -> Unit =
+  "(h,f)=>h.ui.charge(f)"
 
 ///|
 pub extern "js" fn host_hide_charge(h : Host) -> Unit = "(h)=>h.ui.hideCharge()"

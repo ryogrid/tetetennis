@@ -52,10 +52,16 @@ let charge_time : Double = 0.8 // seconds of hold to reach full charge
 let charge_max : Double = 1.25 // overcharge ceiling
 
 ///|
+let charge_gauge_move_eps : Double = 0.05 // below this speed the player counts as stopped (charge bar shows)
+
+///|
 let cpu_charge : Double = 0.375 // CPU swings at neutral power (0.85+0.40*0.375=1.0)
 
 ///|
-let safety_drop_y : Double = 0.7 // auto-swing once a low ball drops below this
+let safety_drop_y : Double = 0.4 // auto-swing only once a low ball drops below this
+// (kept below the normal strike band ~[0.55,1.15] so the anti-stall auto-swing no
+//  longer steals a deliberate hold-and-release at comfortable contact height; the
+//  `passed` guard in should_safety_hit still catches a ball escaping behind the player)
 
 ///|
 let safety_approach_rate : Double = 3.0 // ...unless still closing faster than this
@@ -542,7 +548,6 @@ fn show_sweet(self : Game, ms : MatchState, x : Double, y : Double, z : Double) 
 fn hide_sweet(self : Game, ms : MatchState) -> Unit {
   ms.has_sweet = false
   @ffi.host_hide_trail(self.host)
-  @ffi.host_hide_move_hint(self.host)
 }
 
 ///|
@@ -1050,7 +1055,14 @@ fn update_human_charge(self : Game, ms : MatchState, dt : Double) -> Unit {
   }
   if held {
     ph.charge = @vec.dmin(charge_max, ph.charge + dt / charge_time)
-    @ffi.host_charge(self.host, ph.charge / charge_max, ph.charge > 1.0)
+    // Show the charge bar only once the player has finished moving and stopped
+    // (T4). The charge still accumulates while moving; only the gauge is gated.
+    // The bar reflects elapsed press time only — no good-range / overcharge tint.
+    if @vec.hypot2(ph.vel_x, ph.vel_z) < charge_gauge_move_eps {
+      @ffi.host_charge(self.host, ph.charge / charge_max)
+    } else {
+      @ffi.host_hide_charge(self.host)
+    }
     if self.should_safety_hit(ms) {
       self.fire_charged_swing(ms, true)
     }
@@ -1454,9 +1466,12 @@ fn rally_step(self : Game, ms : MatchState, dt : Double) -> Unit {
         ms.sweet_hit_t = hp.t
         ms.sweet_hit_valid = true
         ms.sweet_hit_clock = 0.0
+        // Stand to the side of the hit point the player is currently on, so only
+        // the relevant forehand/backhand stance is shown (not both sides).
+        let stance_off = if ms.human.pos_x <= hp.x { -0.55 } else { 0.55 }
         self.show_sweet(
           ms,
-          @vec.clampd(hp.x - 0.55, @physics.player_x_min, @physics.player_x_max),
+          @vec.clampd(hp.x + stance_off, @physics.player_x_min, @physics.player_x_max),
           hp.y,
           @vec.dmin(@physics.player_z_max, hp.z + 0.15),
         )
@@ -1589,14 +1604,9 @@ pub fn frame_update(dt : Double) -> Unit {
     @ffi.host_hide_gauge(h, "power")
   }
 
-  // where-to-stand hint
-  if ms.has_sweet {
-    @ffi.host_move_hint(h, ms.sweet_x - ms.human.pos_x, ms.sweet_z - ms.human.pos_z)
-  } else {
-    @ffi.host_hide_move_hint(h)
-  }
+  // (the on-screen move-assist arrow has been removed)
 
-  // swing timing meter + recommended shot + countdown + height bar
+  // swing timing meter + recommended shot + countdown
   let ttc = time_to_contact(ms)
   match ttc {
     Some(t) =>
@@ -1637,23 +1647,7 @@ pub fn frame_update(dt : Double) -> Unit {
         @ffi.host_set_sweet(h, false, 0.0, 0.0, 0.0, false, 0.0, false)
       }
   }
-  // incoming-height bar
-  match ttc {
-    Some(t) =>
-      if t <= timing_window && b.active {
-        let hlo = 0.1
-        let hhi = 2.6
-        let y = b.py
-        let f = fn(v : Double) -> Double { @vec.clampd((v - hlo) / (hhi - hlo), 0.0, 1.0) }
-        @ffi.host_gauge(
-          h, "height", f(y), f(@physics.ideal_contact_h - 0.3),
-          f(@physics.ideal_contact_h + 0.3), @vec.dabs(y - @physics.ideal_contact_h) <= 0.3,
-        )
-      } else {
-        @ffi.host_hide_gauge(h, "height")
-      }
-    None => @ffi.host_hide_gauge(h, "height")
-  }
+  // (the vertical incoming-ball-height gauge has been removed)
 }
 
 // ---------------- slow-motion ----------------
