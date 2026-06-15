@@ -147,34 +147,6 @@ const css = `
   position: absolute; top: -22px; left: 50%; transform: translateX(-50%);
   font-size: 11px; color: #aaa; letter-spacing: 1px; white-space: nowrap;
 }
-#heightbar {
-  position: absolute; left: 22%; top: 50%; transform: translateY(-50%);
-  width: 26px; height: 190px; display: none;
-  background: rgba(10,10,18,.55); border: 1px solid rgba(255,255,255,.3);
-  border-radius: 13px;
-}
-#heightbar .hb-band {
-  position: absolute; left: 0; right: 0;
-  background: rgba(80,230,120,.30);
-  border-top: 1px solid rgba(80,230,120,.9);
-  border-bottom: 1px solid rgba(80,230,120,.9);
-}
-#heightbar .hb-dot {
-  position: absolute; left: 50%; width: 16px; height: 16px;
-  margin-left: -8px; margin-bottom: -8px; border-radius: 50%;
-  background: #d8f24b; box-shadow: 0 0 6px rgba(0,0,0,.5);
-}
-#heightbar .hb-dot.good { background: #50e678; box-shadow: 0 0 12px #50e678; }
-#heightbar .hb-label {
-  position: absolute; top: -22px; left: 50%; transform: translateX(-50%);
-  font-size: 11px; color: #aaa; letter-spacing: 1px; white-space: nowrap;
-}
-#movehint {
-  position: absolute; bottom: 24%; left: 50%; transform: translateX(-50%);
-  font-size: 38px; font-weight: 800; color: #39d7ff; display: none;
-  text-shadow: 0 2px 10px #000;
-}
-#movehint.here { color: #50e678; }
 #timingmeter {
   position: absolute; bottom: 15%; left: 50%; transform: translateX(-50%);
   width: 210px; height: 16px; display: none;
@@ -221,18 +193,26 @@ const css = `
 }
 #chargebar {
   position: absolute; bottom: 19%; left: 50%; transform: translateX(-50%);
-  width: 210px; height: 12px; display: none;
-  background: rgba(10,10,18,.55); border: 1px solid rgba(255,255,255,.3);
-  border-radius: 7px; overflow: hidden;
+  width: 210px; height: 15px; display: none;
+  background: rgba(10,10,18,.55); border: 1px solid rgba(255,255,255,.4);
+  border-radius: 8px; overflow: hidden;
+  box-shadow: 0 0 16px rgba(190,70,255,.6);
+  animation: cb-glow 0.7s ease-in-out infinite alternate;
 }
 #chargebar .cb-fill {
   position: absolute; left: 0; top: 0; bottom: 0; width: 0%;
-  background: linear-gradient(90deg, #4ad8ff, #ffe34d);
+  background: linear-gradient(90deg, #9b3bff, #ff3bd0, #ffd24a, #ff3bd0, #9b3bff);
+  background-size: 220% 100%;
+  animation: cb-sheen 0.55s linear infinite;
+  box-shadow: 0 0 12px rgba(255,90,225,.95);
 }
-#chargebar.over .cb-fill { background: linear-gradient(90deg, #ff8a3d, #ff3b3b); }
-#chargebar .cb-mark {
-  position: absolute; top: -2px; bottom: -2px; left: 80%; width: 2px;
-  background: rgba(255,255,255,.7);
+@keyframes cb-glow {
+  from { box-shadow: 0 0 10px rgba(160,60,255,.45); }
+  to   { box-shadow: 0 0 24px rgba(255,80,225,.9); }
+}
+@keyframes cb-sheen {
+  from { background-position: 0% 0; }
+  to   { background-position: 220% 0; }
 }
 #tc-bar { position: absolute; top: 12px; right: 12px; display: none; gap: 8px; }
 #tc-bar button {
@@ -251,8 +231,7 @@ export function createUI({ onVirtualKey, onMoveAxis } = {}) {
   let hudShown = false;
   let touchVisible = false;
   // per-name gauge "shown" state (toss / timing / height)
-  const gaugeShown = { toss: false, timing: false, height: false };
-  let moveHintShown = false;
+  const gaugeShown = { toss: false, timing: false };
   let recommendedShot = '';
 
   function div(id, parent, cls) {
@@ -308,12 +287,6 @@ export function createUI({ onVirtualKey, onMoveAxis } = {}) {
     '<div class="tg-label">TOSS</div><div class="tg-band"></div><div class="tg-dot"></div>';
   els.tgBand = els.tossgauge.querySelector('.tg-band');
   els.tgDot = els.tossgauge.querySelector('.tg-dot');
-  els.movehint = div('movehint', hud);
-  els.heightbar = div('heightbar', hud);
-  els.heightbar.innerHTML =
-    '<div class="hb-label">HEIGHT</div><div class="hb-band"></div><div class="hb-dot"></div>';
-  els.hbBand = els.heightbar.querySelector('.hb-band');
-  els.hbDot = els.heightbar.querySelector('.hb-dot');
   els.timingmeter = div('timingmeter', hud);
   els.timingmeter.innerHTML =
     '<div class="tm-label">HIT</div><div class="tm-band"></div><div class="tm-dot"></div>';
@@ -325,8 +298,7 @@ export function createUI({ onVirtualKey, onMoveAxis } = {}) {
   els.pmBand = els.powermeter.querySelector('.pm-band');
   els.pmDot = els.powermeter.querySelector('.pm-dot');
   els.chargebar = div('chargebar', hud);
-  // the mark sits at 80% = the start of the overcharge zone (full=100% of 1.25)
-  els.chargebar.innerHTML = '<i class="cb-fill"></i><span class="cb-mark"></span>';
+  els.chargebar.innerHTML = '<i class="cb-fill"></i>';
   els.cbFill = els.chargebar.querySelector('.cb-fill');
   els.shotbar.innerHTML =
     '<div id="sb-flat">Z Flat</div><div id="sb-topspin">X Topspin</div>' +
@@ -688,12 +660,6 @@ export function createUI({ onVirtualKey, onMoveAxis } = {}) {
       els.tgBand.style.height = `${((hi - lo) * 100).toFixed(1)}%`;
       els.tgDot.style.bottom = `${(f * 100).toFixed(1)}%`;
       els.tgDot.classList.toggle('sweet', !!good);
-    } else if (name === 'height') {
-      if (!gaugeShown.height) { els.heightbar.style.display = 'block'; gaugeShown.height = true; }
-      els.hbBand.style.bottom = `${(lo * 100).toFixed(1)}%`;
-      els.hbBand.style.height = `${((hi - lo) * 100).toFixed(1)}%`;
-      els.hbDot.style.bottom = `${(f * 100).toFixed(1)}%`;
-      els.hbDot.classList.toggle('good', !!good);
     } else if (name === 'timing') {
       if (!gaugeShown.timing) { els.timingmeter.style.display = 'block'; gaugeShown.timing = true; }
       els.tmBand.style.left = `${(lo * 100).toFixed(1)}%`;
@@ -713,51 +679,28 @@ export function createUI({ onVirtualKey, onMoveAxis } = {}) {
     if (!gaugeShown[name]) return;
     gaugeShown[name] = false;
     if (name === 'toss') els.tossgauge.style.display = 'none';
-    else if (name === 'height') els.heightbar.style.display = 'none';
     else if (name === 'timing') els.timingmeter.style.display = 'none';
     else if (name === 'power') els.powermeter.style.display = 'none';
   }
 
-  // hold-to-charge bar. frac is the charge over the overcharge ceiling [0,1];
-  // over=true tints it red once past full power.
+  // hold-to-charge bar. frac is the elapsed press time over the charge ceiling
+  // [0,1]. The bar only reflects how long the button has been held (no
+  // good-range / overcharge coloring); its distinct color + glow live in CSS.
   let chargeShown = false;
-  function charge(frac, over) {
+  function charge(frac) {
     if (!chargeShown) { els.chargebar.style.display = 'block'; chargeShown = true; }
     els.cbFill.style.width = `${Math.max(0, Math.min(1, frac)) * 100}%`;
-    els.chargebar.classList.toggle('over', !!over);
   }
   function hideCharge() {
     if (!chargeShown) return;
     chargeShown = false;
     els.chargebar.style.display = 'none';
-    els.chargebar.classList.remove('over');
   }
 
-  // ---------- move hint (FPV can't see a sweet spot behind the camera) ----------
-  // dx/dz: vector from the player to the sweet spot, court coords
-  // (+x screen right, +z toward the camera = backward).
-  const ARROWS = {
-    '-1,-1': '↖', '0,-1': '↑', '1,-1': '↗',
-    '-1,0': '←', '1,0': '→',
-    '-1,1': '↙', '0,1': '↓', '1,1': '↘',
-  };
-  function moveHint(dx, dz) {
-    const ux = Math.abs(dx) > 0.45 ? Math.sign(dx) : 0;
-    const uz = Math.abs(dz) > 0.45 ? Math.sign(dz) : 0;
-    const a = ARROWS[`${ux},${uz}`];
-    els.movehint.textContent = a || '◎'; // on the spot
-    els.movehint.classList.toggle('here', !a);
-    if (!moveHintShown) {
-      els.movehint.style.display = 'block';
-      moveHintShown = true;
-    }
-  }
-
-  function hideMoveHint() {
-    if (!moveHintShown) return;
-    els.movehint.style.display = 'none';
-    moveHintShown = false;
-  }
+  // The on-screen move-assist arrow has been removed; keep no-op stubs so any
+  // stale FFI binding stays harmless.
+  function moveHint() {}
+  function hideMoveHint() {}
 
   applyTouchVisibility();
   hideHUD();

@@ -5,6 +5,8 @@
 //   audio.sfxHit(speed), audio.sfxBounce(speed, surfaceId), audio.sfxCrowd(i)
 //   audio[name]()  for the no-arg cues (sfxToss, sfxFault, sfxNet, sfxOut,
 //                  sfxMenu, sfxConfirm, sfxReachAlert)
+import racketUrl from './sound/tennis-racket1.mp3?url';
+
 export function createAudio() {
   let ctx = null;
   let master = null;
@@ -13,6 +15,7 @@ export function createAudio() {
   let reverb = null;     // ConvolverNode (procedural IR)
   let reverbSend = null; // wet bus
   const samples = {};    // optional decoded hit samples by shot type
+  let hitBuffer = null;  // tennis-racket1.mp3, used for ALL hit sounds (serve/smash/stroke)
 
   // Procedural impulse response: decaying stereo noise.
   function makeReverbIR(sec, decay) {
@@ -42,7 +45,8 @@ export function createAudio() {
     reverbSend.gain.value = 0.18;
     reverbSend.connect(reverb);
 
-    loadSamples(); // optional; falls back to synth if absent
+    loadSamples();    // optional per-type samples; falls back to synth if absent
+    loadHitSample();  // the bundled racket sample, used for every hit
 
     const len = 2 * ctx.sampleRate;
     whiteBuf = ctx.createBuffer(1, len, ctx.sampleRate);
@@ -96,6 +100,17 @@ export function createAudio() {
     } catch { /* no samples bundled -> synth fallback */ }
   }
 
+  // Load the bundled racket-hit sample (self-hosted in src/sound). Every hit
+  // sound (serve / smash / stroke) plays this buffer; falls back to the synth
+  // if it can't be decoded.
+  async function loadHitSample() {
+    try {
+      const r = await fetch(racketUrl);
+      const arr = await r.arrayBuffer();
+      hitBuffer = await ctx.decodeAudioData(arr);
+    } catch { /* decode failed -> synth fallback */ }
+  }
+
   // per-shot tone shaping for the synth hit
   const SHOT = {
     flat:    { body: 220, bright: 1.00, ring: 0,  brush: 0.0, rate: 1.00 },
@@ -128,14 +143,28 @@ export function createAudio() {
       lp.connect(out); bus = lp;
     }
 
-    // if a recorded sample exists, play it (still panned/reverbed) and skip synth
-    if (samples[type]) {
+    // Play the racket sample for every hit (per-type override > bundled racket),
+    // still panned/reverbed. Tuned a bit "heavier": the pitch is dropped and the
+    // highs are rolled off so the impact sounds weightier.
+    const buf = samples[type] || hitBuffer;
+    if (buf) {
       const src = ctx.createBufferSource();
-      src.buffer = samples[type];
-      src.playbackRate.value = s.rate * jit * (jammed ? 0.85 : 1);
+      src.buffer = buf;
+      // 0.86 base detune lowers the pitch for a heavier body (jammed dips further).
+      src.playbackRate.value = s.rate * jit * (jammed ? 0.78 : 0.86);
+      // Low-pass to thicken. A jammed contact already routes through a 600 Hz
+      // lp via `bus`; a clean hit gets a gentler 2500 Hz roll-off here.
+      let dst = bus;
+      if (!jammed) {
+        const lp = ctx.createBiquadFilter();
+        lp.type = 'lowpass';
+        lp.frequency.value = 2500;
+        lp.connect(bus);
+        dst = lp;
+      }
       const g = ctx.createGain();
-      env(g, 0.5 + 0.5 * sNorm, 0.001, 0.25);
-      src.connect(g).connect(bus);
+      env(g, 0.55 + 0.5 * sNorm, 0.001, 0.26);
+      src.connect(g).connect(dst);
       src.start();
       return;
     }
