@@ -21,7 +21,7 @@ pull inputs `host_shot_held` (keyboard hold) and `host_is_down("TouchShot")` (to
 |---|---|---|
 | `charge_time` | 0.8 s | hold time to reach `c = 1.0` |
 | `charge_max` | 1.25 | overcharge ceiling |
-| `cpu_charge` | 0.375 | CPU power_mul = 0.85+0.40·0.375 = 1.0 (neutral) |
+| `charge_power_bonus` | 0.25 | full charge adds +25% pace over the 1.0 baseline |
 | `full_assist_charge` | 0.7 | auto-charge level under Assist=Full |
 | `safety_drop_y` | 0.7 m | low-ball trigger for a Safety Hit |
 | `safety_approach_rate` | 3 m/s | vertical safety suppressed while closing faster |
@@ -31,7 +31,8 @@ pull inputs `host_shot_held` (keyboard hold) and `host_is_down("TouchShot")` (to
 Flow:
 1. **Hold** a shot key (or the touch SHOT button) → start charging; `charge_type` is the
    held key, or a random type for touch. `charge` ramps to `charge_max`; the charge bar
-   (`host_charge`) shows it (red past 1.0).
+   (`host_charge`) shows it, with a white mark at the full-power line (`1.0/1.25 = 80%`) and
+   the fill turning warning-red in the overcharge zone past it.
 2. **Release** → `fire_charged_swing(safety=false)`: capture `swing_charge`, start the
    swing. Contact is attempted in the existing window (`swing_contact_t ± swing_window`).
 3. **Safety Hit** — `should_safety_hit` auto-fires (`safety=true`) when the ball is in
@@ -42,19 +43,28 @@ Flow:
 ## Power / Perfect / Overcharge in the stroke
 
 Threaded into `@shots.compute_stroke` via three optional args (defaults keep the function
-neutral, so existing tests and the CPU path are unchanged):
+neutral, so the CPU path and serves are unchanged). **Charge is a bonus, never a tax**
+(see `design/charge-mechanic/charge-rebalance.md`):
 
-- `power_mul = 0.85 + 0.40·min(charge, 1)` scales the launch speed.
+- `power_mul = 1.0 + 0.25·min(charge, 1)` scales the launch speed. **No-charge = 1.0** — the
+  same full baseline the CPU uses, so an un-charged stroke clears the net and lands in.
+  **Full charge = 1.25** (a +25% pace bonus). Over-full charge gives **no extra speed**
+  (`min(·,1)`).
 - `perfect_eligible` + the contact quality decide `perfect = q ≥ 0.90`. A Perfect Hit
   multiplies speed ×1.08 and spin ×1.12 and tightens aim (error ×0.6); `Stroke.perfect`
   is returned so the game layer plays the bell (`sfxPerfect`) and a gold cue.
-- `overcharge = max(0, charge − 1)` adds aim error `∝ overcharge·2.8 m` to both axes,
-  spraying the ball — going for maximum power raises out/net faults.
+- `overcharge = max(0, charge − 1)` is the **risk**: it keeps the lateral aim spray
+  (`∝ overcharge·2.8 m` on `tx`) **and**, after `solve_shot`, jitters the launch loft
+  (`vy ·= 1 + draw·overcharge·1.3`) — jitter up sails the ball **long (out)**, jitter down
+  flattens it **into the net**. The loft draw is consumed only when overcharged, so the
+  neutral RNG stream is unchanged.
 
 ## Tests
 
 `logic/shots/shots_test.mbt`:
-- full power is ~+47 % faster than a tap; a Perfect Hit on an ideal contact adds ~8 %.
-- overcharge lowers the in-rate (more faults) vs a clean hit.
+- a no-charge stroke reliably lands in **and** is clearly faster than the old 0.85 floor.
+- full charge is a modest bonus (~+25%) over no-charge; a Perfect Hit on an ideal contact
+  adds ~8 %.
+- overcharge lowers the in-rate and produces **both** out (long/wide) and net balls.
 
 Both pass bit-exactly on the native and JS backends.

@@ -80,6 +80,11 @@ let slice_charge_back_gain : Double = 0.6
 ///|
 let slice_charge_depth : Double = 2.0 // max extra depth toward the baseline (m)
 
+// Overcharge (charge past full) jitters the launch loft: up -> sails long (out),
+// down -> flatter, fails to clear the net. Scales with overcharge (0..0.25).
+///|
+let overcharge_loft_jitter : Double = 1.3
+
 // Smash (Appendix A.3): a high point in the forecourt hit Flat slams downward.
 ///|
 let smash_height : Double = 1.7 // contact height to qualify (m)
@@ -412,9 +417,17 @@ pub fn compute_stroke(
     out_vx = solved.vx * c - solved.vz * s
     out_vz = solved.vx * s + solved.vz * c
   }
+  // Overcharge loft jitter: only consumed when overcharged, so the neutral path
+  // (CPU, no-charge, volley) keeps the exact same RNG draws as before. Up sails
+  // long (out); down flattens into the net.
+  let mut out_vy = solved.vy
+  if eff_overcharge > 0.0 {
+    out_vy = solved.vy *
+      (1.0 + rng.draw() * eff_overcharge * overcharge_loft_jitter)
+  }
   Some({
     vx: out_vx,
-    vy: solved.vy,
+    vy: out_vy,
     vz: out_vz,
     sx: solved.sx,
     sy: solved.sy,
