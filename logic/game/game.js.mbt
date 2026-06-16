@@ -55,7 +55,7 @@ let charge_max : Double = 1.25 // overcharge ceiling
 let charge_gauge_move_eps : Double = 0.05 // below this speed the player counts as stopped (charge bar shows)
 
 ///|
-let cpu_charge : Double = 0.375 // CPU swings at neutral power (0.85+0.40*0.375=1.0)
+let charge_power_bonus : Double = 0.25 // full charge adds +25% pace over the 1.0 baseline
 
 ///|
 let safety_drop_y : Double = 0.4 // auto-swing only once a low ball drops below this
@@ -1674,7 +1674,10 @@ pub fn fixed_update(dt : Double) -> Unit {
   if ph.swinging && !ph.contact_done && ph.swing_t >= swing_contact_t - swing_window {
     let aim_x = @ffi.host_move_x(self.host)
     let aim_depth = -@ffi.host_move_z(self.host)
-    let power_mul = 0.85 + 0.40 * @vec.dmin(ph.swing_charge, 1.0)
+    // No-charge is a full, reliable shot (1.0, like the CPU); charge adds a
+    // bonus up to 1.0 + charge_power_bonus. Over-full charge gives no extra
+    // speed (min(.,1)) but raises out/net risk via overcharge below.
+    let power_mul = 1.0 + charge_power_bonus * @vec.dmin(ph.swing_charge, 1.0)
     let overcharge = @vec.dmax(0.0, ph.swing_charge - 1.0)
     let charge_cc = @vec.dmin(ph.swing_charge, 1.0)
     if self.attempt_contact(
@@ -1690,10 +1693,9 @@ pub fn fixed_update(dt : Double) -> Unit {
   let pc = ms.cpu
   if !is_practice_ms(ms) && pc.swinging && !pc.contact_done && pc.swing_t >= swing_contact_t {
     pc.contact_done = true
-    let cpu_power = 0.85 + 0.40 * @vec.dmin(cpu_charge, 1.0)
     self.attempt_contact(
       ms, @rules.C, pc.pending_type, pc.pending_aim_x, pc.pending_aim_depth,
-      power_mul=cpu_power,
+      power_mul=1.0, // CPU swings at the neutral baseline
     )
     |> ignore
   }

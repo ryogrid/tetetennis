@@ -58,7 +58,7 @@ The home screen offers two modes:
 | Action | Keys |
 |---|---|
 | Move | Arrow keys — you strafe facing forward; diagonals combine (e.g. up+left); movement has real acceleration and braking |
-| Stroke | **Hold** Z/J (flat), X/K (topspin), C/L (slice), V (drop) to charge, then **release** to hit. Release in the sweet spot for a **Perfect Hit**; a full charge **overcharges** (more power, more risk) |
+| Stroke | Press Z/J (flat), X/K (topspin), C/L (slice), V (drop) to hit — **no charge needed for a solid shot**. **Hold** to charge for extra pace (a bonus on top), and release in the sweet spot for a **Perfect Hit**. Holding *past* full (the red zone on the charge bar) is **over-charging**: it adds no more power, only the risk of sailing long or netting it |
 | Serve | Space to toss, then Z/X/C (flat / kick / slice) when the **power meter** is in the green band; overpowering it is fast but wild |
 | Aim | hold a direction **at the moment you release** — works for strokes and serves (left/right = sides, up = deep, down = short) |
 | Camera | **B** toggles between the default behind-the-player view and a high **bird's-eye** view from above and behind you |
@@ -96,8 +96,9 @@ with both hands):
 - **Cyan ring + arrow** — where to stand for a clean contact: the ring marks
   the spot on the court, the on-screen arrow points the way (it turns into a
   green ◎ when you are on the spot).
-- **Charge bar** — while you hold a stroke, a bar fills; it turns red in the
-  **overcharge** zone (max power, but risky). Release in the sweet spot for a
+- **Charge bar** — while you hold a stroke, a bar fills; a white mark shows the
+  full-power line, and filling past it (red) is the **overcharge** zone — no extra
+  power, just the risk of long/net errors. Release in the sweet spot for a
   Perfect Hit.
 - **Serve power meter** (during your serve) — a horizontal meter oscillates;
   hit when it is in the green band for a fast, accurate serve. Overpowering it

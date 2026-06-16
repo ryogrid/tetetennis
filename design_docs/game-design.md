@@ -138,10 +138,13 @@ Rally strokes are **hold-to-charge** (`logic/game/game.js.mbt:update_human_charg
 
 **Charge.** While a shot key is held, charge `c` builds 0→1.0 over
 `charge_time = 0.8 s` and can be pushed into **Overcharge** up to `charge_max = 1.25`. The
-launch speed is multiplied by `power = 0.85 + 0.40·min(c, 1)` — a quick tap is weak
-(0.85×), a full charge is strong (1.25×). Overcharge (`c > 1`) adds aim error
-`∝ (c − 1)·2.8 m` and shrinks the safety margin, so going for maximum power raises out/net
-faults. After contact, movement is nearly halted (`stiff_factor = 0.12`) for
+launch speed is multiplied by `power = 1.0 + 0.25·min(c, 1)` — **charge is a bonus, not a
+tax**: a no-charge tap is a **full, reliable shot** (1.0×, the same baseline the CPU uses, so
+it clears the net and lands in), and a full charge is a stronger version (1.25×). Overcharge
+(`c > 1`) is the **risk**: it keeps a lateral aim spray (`∝ (c − 1)·2.8 m` on the cross-court
+target) and, after the shot is solved, jitters the launch loft
+(`vy ·= 1 + draw·(c − 1)·1.3`) — too much charge can sail the ball **long (out)** or flatten
+it **into the net**. After contact, movement is nearly halted (`stiff_factor = 0.12`) for
 `stiff_dur = 0.35 s` (post-impact stiffness).
 
 **Release & Perfect Hit.** Releasing fires the swing, which makes contact in the existing
@@ -153,9 +156,10 @@ passed you horizontally, or dropped below `safety_drop_y = 0.7 m` while no longe
 faster than `safety_approach_rate = 3 m/s`) — it forgoes the Perfect bonus but keeps the
 rally alive. Releasing with the ball out of reach **whiffs** (a `0.25 s` cooldown).
 
-A **charge bar** (`host_charge`) shows the build-up and turns red in the overcharge zone.
-The CPU swings at neutral power (`cpu_charge` → `power = 1.0`); **Assist=Full** auto-charges
-and auto-releases at the sweet spot.
+A **charge bar** (`host_charge`) shows the build-up, with a mark at the full-power line
+(`1.0/1.25 = 80%`) and the fill turning red in the overcharge zone past it. The CPU swings at
+the neutral baseline (`power = 1.0`); **Assist=Full** auto-charges and auto-releases at the
+sweet spot.
 
 **Charge enhancements** (scaled by `cc = min(charge, 1)`, so overcharge caps the effect)
 amplify each shot's identity (`shots.mbt`):
