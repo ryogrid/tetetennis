@@ -414,14 +414,18 @@ export function createUI({ onVirtualKey, onMoveAxis } = {}) {
   shotBtn.addEventListener('pointerup', shotUp);
   shotBtn.addEventListener('pointercancel', shotUp);
 
-  // toggle + quit, top-right
+  // camera + toggle + quit, top-right
   els.tcBar = div('tc-bar', hud);
+  const cam = document.createElement('button');
+  cam.id = 'tc-cam';
+  cam.title = 'Toggle camera view (B)';
+  cam.innerHTML = '&#127909;'; // 🎥
   const toggle = document.createElement('button');
   toggle.id = 'tc-toggle';
   const quit = document.createElement('button');
   quit.id = 'tc-quit';
   quit.innerHTML = '&#10005;';
-  els.tcBar.append(toggle, quit);
+  els.tcBar.append(cam, toggle, quit);
   els.tcToggle = toggle;
 
   const stored = localStorage.getItem('touchControls');
@@ -443,6 +447,11 @@ export function createUI({ onVirtualKey, onMoveAxis } = {}) {
     touchVisible = !touchVisible;
     localStorage.setItem('touchControls', touchVisible ? 'on' : 'off');
     applyTouchVisibility();
+  });
+  cam.addEventListener('pointerdown', (e) => {
+    e.preventDefault();
+    onKey('KeyB', true);
+    onKey('KeyB', false);
   });
   quit.addEventListener('pointerdown', (e) => {
     e.preventDefault();

@@ -61,6 +61,7 @@ The home screen offers two modes:
 | Stroke | **Hold** Z/J (flat), X/K (topspin), C/L (slice), V (drop) to charge, then **release** to hit. Release in the sweet spot for a **Perfect Hit**; a full charge **overcharges** (more power, more risk) |
 | Serve | Space to toss, then Z/X/C (flat / kick / slice) when the **power meter** is in the green band; overpowering it is fast but wild |
 | Aim | hold a direction **at the moment you release** — works for strokes and serves (left/right = sides, up = deep, down = short) |
+| Camera | **B** toggles between the default behind-the-player view and a high **bird's-eye** view from above and behind you |
 | Pause | Esc opens a Resume/Quit pause menu (P or Esc resumes) |
 | Menus | Arrows + Enter, Esc = back |
 
@@ -78,8 +79,9 @@ with both hands):
     and hits your strokes during a rally. **Hold** it to charge and **release** to
     hit; the shot type is chosen **at random** each time, so just focus on timing
     and position.
-  - **Top-right**: `⌨` / `🎮` toggles the on-screen controls on/off (the
-    choice is remembered), `✕` quits to the menu.
+  - **Top-right**: `🎥` toggles the camera view (same as the **B** key),
+    `⌨` / `🎮` toggles the on-screen controls on/off (the choice is
+    remembered), `✕` quits to the menu.
 
 ### Reading the screen
 
