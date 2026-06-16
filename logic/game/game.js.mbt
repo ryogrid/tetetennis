@@ -258,6 +258,7 @@ struct Game {
   mut prac_feed : Int // practice: 0 stroke, 1 serve
   mut prac_shot : Int // practice: shot index
   mut prac_depth : Int // practice: 0 shallow, 1 deep, 2 random
+  mut camera_overhead : Bool // false = default eye-level view, true = bird's-eye
   mut paused : Bool
   mut time_scale : Double
   mut ms : MatchState?
@@ -1201,6 +1202,10 @@ fn process_bounce(self : Game, ms : MatchState, px : Double, pz : Double, speed 
 
 ///|
 fn camera_mode(self : Game) -> String {
+  // the player-toggled bird's-eye view overrides the serve/rally framing
+  if self.camera_overhead {
+    return "overhead"
+  }
   match self.ms {
     Some(ms) =>
       if (ms.point_state == PreServe || ms.point_state == Serving) &&
@@ -1507,6 +1512,11 @@ fn handle_match_input(self : Game) -> Unit {
     self.paused = true
     @ffi.host_show_pause(self.host)
     return
+  }
+  // B (or the on-screen camera button) toggles the bird's-eye view
+  if @ffi.host_was_pressed(h, "KeyB") {
+    self.camera_overhead = !self.camera_overhead
+    @ffi.host_sfx(self.host, "sfxMenu")
   }
   let shot = str_to_shot(@ffi.host_shot_key(h))
   let touch_shot = @ffi.host_was_pressed(h, "TouchShot")
@@ -2071,6 +2081,7 @@ pub fn game_init(host : @ffi.Host, seed : Int) -> Unit {
     prac_feed: 0,
     prac_shot: 0,
     prac_depth: 2, // default to random depth
+    camera_overhead: false,
     paused: false,
     time_scale: 1.0,
     ms: None,
