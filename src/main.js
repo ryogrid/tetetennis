@@ -9,6 +9,7 @@ import { createInput } from './input.js';
 import { createAudio } from './audio.js';
 import { createUI } from './ui.js';
 import { createRenderHost } from './render-host.js';
+import { createMinimap } from './minimap.js';
 import { registerPWA } from './pwa.js';
 
 const DT = 1 / 240; // fixed physics step (mirrors the MoonBit DT)
@@ -49,6 +50,7 @@ const ui = createUI({
 });
 const render = createRenderHost(scene);
 const cameraRig = createCameraRig(camera, render);
+const minimap = createMinimap();
 
 const host = {
   render,
@@ -97,5 +99,11 @@ function frame(now) {
   render.tick(sdt);
   input.endFrame();
   renderer.render(scene, camera);
+  minimap.update(
+    render.getBall(),
+    render.getPlayer(0),
+    render.getPlayer(1),
+    cameraRig.getMode() !== 'overhead',
+  );
 }
 requestAnimationFrame(frame);

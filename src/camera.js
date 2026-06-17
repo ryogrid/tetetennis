@@ -24,11 +24,14 @@ export function createCameraRig(camera, renderHost) {
   const desiredPos = new THREE.Vector3();
   const desiredLook = new THREE.Vector3();
   let serveLookX = 0;
+  let _mode = 'rally';
 
   return {
     // x of the target service box center; set when players are placed
     setServeLookX(x) { serveLookX = x; },
+    getMode() { return _mode; },
     update(dt, mode) {
+      _mode = mode;
       const player = renderHost.getPlayer(0); // human (side 0, +z)
       const ball = renderHost.getBall();
       const eyeX = player.pos.x;
