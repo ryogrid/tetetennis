@@ -18,7 +18,7 @@ const SZ = DRAW_H / (2 * COURT_HALF_LEN);      // pixels per meter (z)
 
 // Map court (x, z) → canvas pixel (x, y).  Top of canvas = far court (−z).
 function cx(cx) { return PAD + (cx + COURT_HALF_WIDTH) * SX; }
-function cy(cz) { return PAD + (COURT_HALF_LEN - cz) * SZ; }
+function cy(cz) { return PAD + (COURT_HALF_LEN + cz) * SZ; }
 
 export function createMinimap() {
   const canvas = document.createElement('canvas');

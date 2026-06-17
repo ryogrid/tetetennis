@@ -106,5 +106,6 @@ export function createRenderHost(scene) {
     getBall() {
       return ball ? ball.state : { active: false, pos: { x: 0, y: 0, z: 0 } };
     },
+    isActive() { return ball !== null; },
   };
 }

@@ -103,7 +103,7 @@ function frame(now) {
     render.getBall(),
     render.getPlayer(0),
     render.getPlayer(1),
-    cameraRig.getMode() !== 'overhead',
+    render.isActive() && cameraRig.getMode() !== 'overhead',
   );
 }
 requestAnimationFrame(frame);
