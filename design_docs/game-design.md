@@ -136,15 +136,12 @@ Rally strokes are **hold-to-charge** (`logic/game/game.js.mbt:update_human_charg
   (right) to charge and release to hit — the shot type is chosen **at random** at the
   start of each charge.
 
-**Charge.** While a shot key is held, charge `c` builds 0→1.0 over
-`charge_time = 0.8 s` and can be pushed into **Overcharge** up to `charge_max = 1.25`. The
-launch speed is multiplied by `power = 1.0 + 0.25·min(c, 1)` — **charge is a bonus, not a
-tax**: a no-charge tap is a **full, reliable shot** (1.0×, the same baseline the CPU uses, so
-it clears the net and lands in), and a full charge is a stronger version (1.25×). Overcharge
-(`c > 1`) is the **risk**: it keeps a lateral aim spray (`∝ (c − 1)·2.8 m` on the cross-court
-target) and, after the shot is solved, jitters the launch loft
-(`vy ·= 1 + draw·(c − 1)·1.3`) — too much charge can sail the ball **long (out)** or flatten
-it **into the net**. After contact, movement is nearly halted (`stiff_factor = 0.12`) for
+**Charge.** While a shot key is held, charge `c` builds 0→`charge_max = 1.25` over
+`charge_time = 0.8 s`. The launch speed is multiplied by `power = 1.0 + 0.25·c` —
+**charge is a bonus, not a tax**: a no-charge tap is a **full, reliable shot** (1.0×,
+the same baseline the CPU uses, so it clears the net and lands in), and holding longer
+gives progressively more power (up to 1.3125× at max charge) with no penalty.
+After contact, movement is nearly halted (`stiff_factor = 0.12`) for
 `stiff_dur = 0.35 s` (post-impact stiffness).
 
 **Release & Perfect Hit.** Releasing fires the swing, which makes contact in the existing
@@ -156,12 +153,11 @@ passed you horizontally, or dropped below `safety_drop_y = 0.7 m` while no longe
 faster than `safety_approach_rate = 3 m/s`) — it forgoes the Perfect bonus but keeps the
 rally alive. Releasing with the ball out of reach **whiffs** (a `0.25 s` cooldown).
 
-A **charge bar** (`host_charge`) shows the build-up, with a mark at the full-power line
-(`1.0/1.25 = 80%`) and the fill turning red in the overcharge zone past it. The CPU swings at
-the neutral baseline (`power = 1.0`); **Assist=Full** auto-charges and auto-releases at the
-sweet spot.
+A **charge bar** (`host_charge`) shows the build-up as a fraction of `charge_max`; longer
+charge = more power with no downside. The CPU swings at the neutral baseline (`power = 1.0`);
+**Assist=Full** auto-charges and auto-releases at the sweet spot.
 
-**Charge enhancements** (scaled by `cc = min(charge, 1)`, so overcharge caps the effect)
+**Charge enhancements** (scaled by `cc = clamp(charge, 0, 1)`)
 amplify each shot's identity (`shots.mbt`):
 
 - **Topspin** — spin ×`(1 + 0.6·cc)` and the cross-court target widens ×`(1 + 0.7·cc)`
@@ -240,7 +236,7 @@ drives a "SMASH!" cue.
 A **Flat or Slice** taken **out of the air** (the ball has not bounced, `ms.bounces == 0`)
 within `volley_forecourt = 7 m` of the net is a **Volley** (`game.js.mbt:attempt_contact`
 → `compute_stroke`): a block/punch with **restrained power** (×0.80, and charge barely
-matters — `power`/overcharge are neutralised), a **flatter** punch (θ capped at 12°), and
+matters — `power`/charge are neutralised), a **flatter** punch (θ capped at 12°), and
 **much tighter aim** (error ×0.4). It is the way to rush the net and *accurately* finish a
 weak ball, distinct from baseline power shots. A high forecourt flat still prefers the
 Smash (§6.6).
@@ -381,7 +377,7 @@ you can't see your own contact point from there, several on-court aids are rende
   it), since it can sit behind the camera.
 - **Gauges** — vertical **toss** and **height** gauges and a **timing** meter during the
   serve/strike, with coloured sweet-spot bands, plus a **charge bar** that fills while a
-  stroke is held and turns red in the overcharge zone (§6.2).
+  stroke is held, filling smoothly — longer charge = more power (§6.2).
 
 ## 11. UI
 
@@ -444,7 +440,7 @@ files to download (`src/audio.js`).
 
 This appendix previously listed the richer design that had not yet been built. **Those
 features are now all implemented** and documented in the body above — the Drop shot (§6.1),
-the charge / Perfect-Hit / Overcharge / Safety / Whiff mechanic and its topspin/slice
+the charge / Perfect-Hit / Safety / Whiff mechanic and its topspin/slice
 enhancements (§6.2), Smash (§6.6) and Volley (§6.7), the fast-ball jam + counter model
 (§6.5), the oscillating serve power meter (§7), the smarter AI — net-rush + net-tendency
 stat, serve-return positioning, probabilistic out-tolerance, and the lob/drop tactical
