@@ -128,6 +128,12 @@ const css = `
   position: absolute; bottom: 14px; right: 14px; font-size: 12px; color: #888;
   background: rgba(10,10,18,.7); padding: 8px 12px; border-radius: 6px; text-align: right;
 }
+#src-link {
+  position: absolute; bottom: 14px; left: 14px; font-size: 12px; color: #666;
+  background: rgba(10,10,18,.6); padding: 5px 10px; border-radius: 5px;
+  text-decoration: none; pointer-events: auto; transition: color .2s;
+}
+#src-link:hover { color: #e8f24b; }
 #touchui { position: absolute; inset: 0; pointer-events: none; display: none; }
 #stick {
   position: absolute; left: 22px; bottom: 22px; width: 176px; height: 176px;
@@ -340,6 +346,15 @@ export function createUI({ onVirtualKey, onMoveAxis } = {}) {
     'Release in the sweet spot for a Perfect Hit; longer charge = more power<br>' +
     'Serve: Space toss, then Z/X/C when the power meter is in the green band<br>' +
     'Aim: hold a direction at the moment you release';
+
+  // source-code link (bottom-left)
+  const srcLink = document.createElement('a');
+  srcLink.id = 'src-link';
+  srcLink.href = 'https://github.com/ryogrid/tetetennis';
+  srcLink.target = '_blank';
+  srcLink.rel = 'noopener';
+  srcLink.textContent = 'source code';
+  hud.appendChild(srcLink);
 
   // menu tap support (tap a card to select it, tap again to confirm).
   // Results screen taps pass index 0; menu_tap ignores the value there.
