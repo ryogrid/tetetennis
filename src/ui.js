@@ -237,16 +237,6 @@ const css = `
   animation: cb-sheen 0.55s linear infinite;
   box-shadow: 0 0 12px rgba(255,90,225,.95);
 }
-/* full-power line at 1.0/1.25 = 80%; past it is the overcharge "risk" zone */
-#chargebar .cb-mark {
-  position: absolute; top: 0; bottom: 0; left: 80%; width: 2px; z-index: 2;
-  background: rgba(255,255,255,.9); box-shadow: 0 0 5px rgba(255,255,255,.8);
-}
-#chargebar.over .cb-fill {
-  background: linear-gradient(90deg, #ff7a2a, #ff2a2a, #ffd24a, #ff2a2a, #ff7a2a);
-  background-size: 220% 100%;
-  box-shadow: 0 0 14px rgba(255,80,40,.95);
-}
 @keyframes cb-glow {
   from { box-shadow: 0 0 10px rgba(160,60,255,.45); }
   to   { box-shadow: 0 0 24px rgba(255,80,225,.9); }
@@ -339,7 +329,7 @@ export function createUI({ onVirtualKey, onMoveAxis } = {}) {
   els.pmBand = els.powermeter.querySelector('.pm-band');
   els.pmDot = els.powermeter.querySelector('.pm-dot');
   els.chargebar = div('chargebar', hud);
-  els.chargebar.innerHTML = '<i class="cb-fill"></i><i class="cb-mark"></i>';
+  els.chargebar.innerHTML = '<i class="cb-fill"></i>';
   els.cbFill = els.chargebar.querySelector('.cb-fill');
   els.shotbar.innerHTML =
     '<div id="sb-flat">Z Flat</div><div id="sb-topspin">X Topspin</div>' +
@@ -347,7 +337,7 @@ export function createUI({ onVirtualKey, onMoveAxis } = {}) {
   els.controls.innerHTML =
     'Move: Arrow keys<br>Shots: <b>hold</b> Z/X/C/V to charge, <b>release</b> to hit ' +
     '(Z flat &middot; X topspin &middot; C slice &middot; V drop)<br>' +
-    'Release in the sweet spot for a Perfect Hit; full charge overcharges (risky)<br>' +
+    'Release in the sweet spot for a Perfect Hit; longer charge = more power<br>' +
     'Serve: Space toss, then Z/X/C when the power meter is in the green band<br>' +
     'Aim: hold a direction at the moment you release';
 
@@ -776,14 +766,13 @@ export function createUI({ onVirtualKey, onMoveAxis } = {}) {
   }
 
   // hold-to-charge bar. frac is the elapsed press time over the charge ceiling
-  // [0,1]. The white mark at 80% is the full-power line; filling past it enters
-  // the overcharge "risk" zone (the fill turns warning-red via the `over` class).
+  // [0,1]. The bar fills smoothly; more charge = more power, no penalty.
   let chargeShown = false;
   function charge(frac) {
     const f = Math.max(0, Math.min(1, frac));
     if (!chargeShown) { els.chargebar.style.display = 'block'; chargeShown = true; }
     els.cbFill.style.width = `${f * 100}%`;
-    els.chargebar.classList.toggle('over', f > 0.8);
+
   }
   function hideCharge() {
     if (!chargeShown) return;

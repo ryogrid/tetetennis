@@ -117,7 +117,17 @@ Both backends (`moon test` native + `--target js`) must stay green; `moon check 
 and `npm run build` clean.
 
 ## 6. Out of scope / risks
-- `CHARGE_BONUS`, `LOFT_K`, and test thresholds are first estimates — tuned so no-charge is
-  dependable and overcharge is risky-but-usable.
+- `CHARGE_BONUS` and test thresholds are first estimates — tuned so no-charge is dependable.
 - The shared `solve_shot` solver is **not** modified (it also drives serves and the CPU); all
-  changes are in the human charge mapping, the overcharge handling, and the UI.
+  changes are in the human charge mapping and the UI.
+
+## 7. Overcharge removed (2026-06)
+
+Overcharge (charge past 1.0 causing aim spray and loft jitter) has been removed.
+- `power_mul = 1.0 + 0.25 · swing_charge` — no `min(·, 1)` cap; full charge (1.25) gives
+  1.3125× power instead of 1.25×.
+- `charge_cc = swing_charge` — internal clamp in `compute_stroke` already caps at 1.0 for
+  spin effects.
+- Overcharge penalty code paths (target scatter, loft jitter) removed from `shots.mbt`.
+- Charge bar UI simplified: no full-power mark, no red tint.
+- Overcharge tests removed from `shots_test.mbt`.

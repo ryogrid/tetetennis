@@ -49,7 +49,7 @@ pub let swing_dur : Double = 0.45
 let charge_time : Double = 0.8 // seconds of hold to reach full charge
 
 ///|
-let charge_max : Double = 1.25 // overcharge ceiling
+let charge_max : Double = 1.25 // maximum charge
 
 ///|
 let charge_gauge_move_eps : Double = 0.05 // below this speed the player counts as stopped (charge bar shows)
@@ -951,7 +951,6 @@ fn attempt_contact(
   aim_depth : Double,
   power_mul~ : Double = 1.0,
   perfect_eligible~ : Bool = false,
-  overcharge~ : Double = 0.0,
   charge_cc~ : Double = 0.0,
 ) -> Bool {
   let b = ms.ball
@@ -975,7 +974,7 @@ fn attempt_contact(
     (ty == @shots.Flat || ty == @shots.Slice)
   let res = @shots.compute_stroke(
     e.pos_x, e.pos_z, b.px, b.py, b.pz, b.vx, b.vy, b.vz, e.stats, ty, aim_x,
-    aim_depth, side, self.rng, power_mul~, perfect_eligible~, overcharge~,
+    aim_depth, side, self.rng, power_mul~, perfect_eligible~,
     charge_cc~, volley~,
   )
   match res {
@@ -1300,7 +1299,7 @@ fn update_human_charge(self : Game, ms : MatchState, dt : Double) -> Unit {
     ph.charge = @vec.dmin(charge_max, ph.charge + dt / charge_time)
     // Show the charge bar only once the player has finished moving and stopped
     // (T4). The charge still accumulates while moving; only the gauge is gated.
-    // The bar reflects elapsed press time only — no good-range / overcharge tint.
+    // The bar reflects the elapsed press time as a fraction of charge_max.
     if @vec.hypot2(ph.vel_x, ph.vel_z) < charge_gauge_move_eps {
       @ffi.host_charge(self.host, ph.charge / charge_max)
     } else {
@@ -1674,15 +1673,12 @@ pub fn fixed_update(dt : Double) -> Unit {
   if ph.swinging && !ph.contact_done && ph.swing_t >= swing_contact_t - swing_window {
     let aim_x = @ffi.host_move_x(self.host)
     let aim_depth = -@ffi.host_move_z(self.host)
-    // No-charge is a full, reliable shot (1.0, like the CPU); charge adds a
-    // bonus up to 1.0 + charge_power_bonus. Over-full charge gives no extra
-    // speed (min(.,1)) but raises out/net risk via overcharge below.
-    let power_mul = 1.0 + charge_power_bonus * @vec.dmin(ph.swing_charge, 1.0)
-    let overcharge = @vec.dmax(0.0, ph.swing_charge - 1.0)
-    let charge_cc = @vec.dmin(ph.swing_charge, 1.0)
+    // Charge adds a bonus on top of the full no-charge baseline.
+    let power_mul = 1.0 + charge_power_bonus * ph.swing_charge
+    let charge_cc = ph.swing_charge
     if self.attempt_contact(
         ms, @rules.P, ph.swing_type, aim_x, aim_depth, power_mul~,
-        perfect_eligible=(!ph.swing_no_perfect), overcharge~, charge_cc~,
+        perfect_eligible=(!ph.swing_no_perfect), charge_cc~,
       ) {
       ph.contact_done = true
     } else if ph.swing_t >= swing_contact_t + swing_window {

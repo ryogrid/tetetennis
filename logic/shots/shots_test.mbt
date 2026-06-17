@@ -191,6 +191,7 @@ test "drop shot: slower and lands shorter than a slice, and clears into court" {
 
 // Output launch speed of a stroke at a given charge power_mul / perfect flag,
 // from an ideal forecourt contact (q ~ 1) with a fixed seed.
+// (overcharge parameter removed; power_mul now scales linearly with charge.)
 ///|
 fn charged_stroke(
   power_mul : Double,
@@ -210,67 +211,15 @@ fn charged_stroke(
 test "charge is a bonus on top of the full no-charge baseline" {
   @assist.set_assist_level(Off)
   let (lo, _) = charged_stroke(1.0, false) // no charge = full baseline (1.0)
-  let (hi, _) = charged_stroke(1.25, false) // full charge = +25% bonus
-  assert_true(hi > lo * 1.15) // a bonus, not a requirement (was ~+47%)
-  assert_true(hi < lo * 1.35) // and a modest one (peak 1.25 over 1.0)
+  let (hi, _) = charged_stroke(1.3125, false) // full charge = +31% bonus at max
+  assert_true(hi > lo * 1.15) // a bonus, not a requirement
+  assert_true(hi < lo * 1.40) // and a modest one (peak 1.3125 over 1.0)
   // same power, same seed: a Perfect Hit on an ideal contact adds ~8% speed
   let (plain, plain_pf) = charged_stroke(1.0, false)
   let (perf, perf_pf) = charged_stroke(1.0, true)
   assert_true(!plain_pf)
   assert_true(perf_pf) // ideal contact (q ~ 1) qualifies for Perfect
   assert_true(perf > plain * 1.05)
-}
-
-// Fraction of topspin shots that land in the opponent court at a given
-// overcharge, hit from the baseline.
-///|
-fn overcharge_in_rate(oc : Double) -> Double {
-  let g = @rng.Gauss::new(555)
-  let mut inn = 0
-  let mut tot = 0
-  for _i = 0; _i < 200; _i = _i + 1 {
-    // aim deep (toward the baseline) so the overcharge spray pushes balls out
-    let r = compute_stroke(
-      0.0, 11.2, 0.5, @physics.ideal_contact_h, 11.0, 0.0, 2.0, 8.0, test_stats,
-      Topspin, 0.0, 1.0, @rules.P, g, power_mul=1.0, overcharge=oc,
-    )
-    match r {
-      Some(s) => {
-        tot = tot + 1
-        let b = @physics.make_ball()
-        b.px = 0.5
-        b.py = @physics.ideal_contact_h
-        b.pz = 11.0
-        b.vx = s.vx
-        b.vy = s.vy
-        b.vz = s.vz
-        b.sx = s.sx
-        b.sy = s.sy
-        b.sz = s.sz
-        b.activate()
-        match @physics.predict_landing(b, @physics.surface_hard) {
-          Some(l) =>
-            if l.z < 0.0 &&
-              -l.z <= @physics.court_half_len + 0.1 &&
-              @vec.dabs(l.x) <= @physics.court_half_width + 0.1 {
-              inn = inn + 1
-            }
-          None => ()
-        }
-      }
-      None => ()
-    }
-  }
-  inn.to_double() / (if tot == 0 { 1 } else { tot }).to_double()
-}
-
-///|
-test "overcharge sprays the ball: fewer land in than a clean hit" {
-  @assist.set_assist_level(Off)
-  let clean = overcharge_in_rate(0.0)
-  let over = overcharge_in_rate(0.25)
-  assert_true(clean > over) // overcharge lowers the in-rate (more faults)
-  assert_true(over < 0.99) // and produces real out/net errors
 }
 
 // In-rate of a demanding deep FLAT drive from the baseline at a given power_mul
@@ -327,65 +276,6 @@ test "no-charge is a reliable, full-strength shot" {
   let (newp, _) = charged_stroke(1.0, false)
   let (oldp, _) = charged_stroke(0.85, false)
   assert_true(newp > oldp * 1.1)
-}
-
-// Classify a flat drive's landing (hit by P toward -z) at a given overcharge,
-// counting in / out (long or wide on the far side) / net (rebounded back to the
-// hitter's side). Used to show overcharge raises BOTH out and net risk.
-///|
-fn overcharge_class_counts(oc : Double) -> (Int, Int, Int) {
-  let g = @rng.Gauss::new(909)
-  let mut cin = 0
-  let mut cout = 0
-  let mut cnet = 0
-  for _i = 0; _i < 400; _i = _i + 1 {
-    // a flat drive from mid-court (low net clearance) aimed deep
-    let r = compute_stroke(
-      0.0, 8.2, 0.5, @physics.ideal_contact_h, 8.0, 0.0, 2.0, 8.0, test_stats, Flat,
-      0.0, 1.0, @rules.P, g, power_mul=1.0, overcharge=oc,
-    )
-    match r {
-      Some(s) => {
-        let b = @physics.make_ball()
-        b.px = 0.5
-        b.py = @physics.ideal_contact_h
-        b.pz = 8.0
-        b.vx = s.vx
-        b.vy = s.vy
-        b.vz = s.vz
-        b.sx = s.sx
-        b.sy = s.sy
-        b.sz = s.sz
-        b.activate()
-        match @physics.predict_landing(b, @physics.surface_hard) {
-          Some(l) =>
-            if l.z >= 0.0 {
-              cnet = cnet + 1 // rebounded to the hitter's side = netted
-            } else if -l.z <= @physics.court_half_len + 0.1 &&
-              @vec.dabs(l.x) <= @physics.court_half_width + 0.1 {
-              cin = cin + 1
-            } else {
-              cout = cout + 1 // long or wide on the far side
-            }
-          None => ()
-        }
-      }
-      None => ()
-    }
-  }
-  (cin, cout, cnet)
-}
-
-///|
-test "overcharge raises both out and net risk" {
-  @assist.set_assist_level(Off)
-  let (in0, out0, net0) = overcharge_class_counts(0.0)
-  let (in1, out1, net1) = overcharge_class_counts(0.25)
-  ignore(out0)
-  assert_true(in1 < in0 - 30) // overcharge clearly lands fewer in
-  assert_true(out1 >= 10) // a real share sail long/wide (OUT)
-  assert_true(net1 >= 10) // and a real share are flattened into the NET
-  assert_true(net1 > net0) // both well above a clean hit (which rarely errs)
 }
 
 // Landing point of a single charged stroke from the baseline (fixed seed).
