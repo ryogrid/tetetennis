@@ -13,7 +13,8 @@ pub(all) enum ShotType {
 
 // (speed_mul, theta_min_deg, theta_max_deg) per shot type.
 // Drop's speed_mul is unused (the Drop branch sets an absolute touch speed,
-// like Lob); its high theta band lets a slow ball loft just over the net.
+// like Lob); its moderate theta band gives a low arc while backspin floats
+// the ball just over the net.
 ///|
 pub fn shot_def(t : ShotType) -> (Double, Double, Double) {
   match t {
@@ -21,7 +22,7 @@ pub fn shot_def(t : ShotType) -> (Double, Double, Double) {
     Topspin => (0.85, 10.0, 32.0)
     Slice => (0.76, 1.0, 16.0)
     Lob => (1.00, 28.0, 55.0)
-    Drop => (0.50, 26.0, 50.0)
+    Drop => (0.50, 26.0, 32.0)
   }
 }
 
