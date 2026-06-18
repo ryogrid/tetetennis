@@ -94,28 +94,10 @@ pub let ideal_contact_h : Double = 0.85
 ///|
 pub let ideal_contact_r : Double = 0.65
 
-// Global pace: scales every shot's base launch speed.
+// Topspin vertical kick on bounce: adds vy += proj * SPIN_BOUNCE_VERTICAL
+// where proj is the forward-direction projection of spin-induced surface force.
 ///|
-pub let pace : Double = 0.64
-
-// Runtime pace multiplier on top of pace (the assist axis lowers it). 1 = classic.
-///|
-let pace_factor : Ref[Double] = { val: 1.0 }
-
-///|
-pub fn set_pace_factor(f : Double) -> Unit {
-  pace_factor.val = f
-}
-
-///|
-pub fn get_pace_factor() -> Double {
-  pace_factor.val
-}
-
-///|
-pub fn eff_pace() -> Double {
-  pace * pace_factor.val
-}
+pub let spin_bounce_vertical : Double = 0.004
 
 // Surface bounce parameters. ey = vertical restitution at the ITF drop-test
 // impact speed, mu = sliding friction.
@@ -147,7 +129,7 @@ pub fn surface_by_id(id : String) -> Surface {
 // Character stat (0-100) -> physics mappings (old STATS_MAP).
 ///|
 pub fn max_flat_speed(pow : Double) -> Double {
-  (26.0 + 10.0 * pow / 100.0) * eff_pace()
+  18.0 + 7.0 * pow / 100.0
 }
 
 ///|
@@ -162,7 +144,7 @@ pub fn slice_rpm(slc : Double) -> Double {
 
 ///|
 pub fn serve_flat_speed(srv : Double) -> Double {
-  (40.0 + 16.0 * srv / 100.0) * eff_pace()
+  42.0 + 12.0 * srv / 100.0
 }
 
 // Serve power meter (Appendix A.4): meter value p in [0,1] maps to launch speed
@@ -170,22 +152,22 @@ pub fn serve_flat_speed(srv : Double) -> Double {
 // the global pace. The shot solver caps a flat serve that still lands in the box
 // at ~47 m/s, so the requested speed is an upper bound, not the launch speed.
 ///|
-pub let serve_speed_min : Double = 42.0
+pub let serve_speed_min : Double = 30.0
 
 ///|
-pub let serve_speed_max : Double = 78.0
+pub let serve_speed_max : Double = 54.0
 
 ///|
 pub fn serve_power_speed(srv : Double, p : Double) -> Double {
   let base = serve_speed_min + (serve_speed_max - serve_speed_min) * p
-  base * (0.82 + 0.36 * srv / 100.0) * eff_pace()
+  base * (0.82 + 0.36 * srv / 100.0)
 }
 
 // Overhead smash: a high forecourt flat slammed down. Much faster than a
 // groundstroke and only lightly quality-dependent.
 ///|
 pub fn smash_speed(pow : Double) -> Double {
-  (42.0 + 10.0 * pow / 100.0) * eff_pace()
+  34.0 + 8.0 * pow / 100.0
 }
 
 ///|
