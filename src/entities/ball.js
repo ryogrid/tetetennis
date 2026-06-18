@@ -88,7 +88,7 @@ export function createBallEntity(scene) {
     spin: { x: 0, y: 0, z: 0 },
   };
 
-  // past-position ring buffer for motion trail (last ~50 cm of flight)
+  // past-position ring buffer for motion trail (last ~1.5 m of flight)
   const hist = [];
 
   const mesh = new THREE.Mesh(
@@ -141,8 +141,8 @@ export function createBallEntity(scene) {
   const _cPost = new THREE.Color(0x39d7ff);
   const _cIdeal = new THREE.Color(0xff8a3d); // ideal (waist-height) hit point
 
-  // past-position motion trail: fading spheres behind the ball (~50 cm)
-  const PAST_CAP = 32;
+  // past-position motion trail: fading spheres behind the ball (~1.5 m)
+  const PAST_CAP = 64;
   const pastTrail = new THREE.InstancedMesh(
     new THREE.SphereGeometry(0.035, 8, 6),
     new THREE.MeshBasicMaterial({
@@ -215,7 +215,7 @@ export function createBallEntity(scene) {
       // motion trail: record visual position
       if (active) {
         hist.push({ x: px, y: Math.max(py, VISUAL_R), z: pz });
-        if (hist.length > 16) hist.shift();
+        if (hist.length > 32) hist.shift();
       } else {
         hist.length = 0;
       }
@@ -246,12 +246,12 @@ export function createBallEntity(scene) {
         pts.push({ x: state.pos.x, y: cy, z: state.pos.z });
 
         let px = state.pos.x, py = cy, pz = state.pos.z;
-        for (let i = hist.length - 1; i >= 0 && dist < 0.50 && pts.length < PAST_CAP; i--) {
+        for (let i = hist.length - 1; i >= 0 && dist < 1.50 && pts.length < PAST_CAP; i--) {
           const h = hist[i];
           const dx = px - h.x, dy = py - h.y, dz = pz - h.z;
           const seg = Math.sqrt(dx * dx + dy * dy + dz * dz);
           if (seg < 0.001) continue;
-          const rem = 0.50 - dist;
+          const rem = 1.50 - dist;
           if (seg <= rem) {
             if (seg > 0.04) {
               // interpolate intermediate points for smoothness
@@ -264,7 +264,7 @@ export function createBallEntity(scene) {
             pts.push({ x: h.x, y: h.y, z: h.z });
             dist += seg;
           } else {
-            // partial step to hit exactly 50 cm
+            // partial step to hit exactly 1.5 m
             const t = rem / seg;
             if (rem > 0.04) {
               const substeps = Math.min(Math.ceil(rem / 0.025), PAST_CAP - pts.length);
@@ -275,7 +275,7 @@ export function createBallEntity(scene) {
             } else {
               pts.push({ x: px - dx * t, y: py - dy * t, z: pz - dz * t });
             }
-            dist = 0.50;
+            dist = 1.50;
           }
           px = h.x; py = h.y; pz = h.z;
         }
