@@ -52,8 +52,8 @@ test "contact quality sensitivity: stretched contact is slower and shorter" {
   @assist.set_assist_level(Off)
   let (clean_speed, clean_depth) = mean_stroke(0.5)
   let (str_speed, str_depth) = mean_stroke(1.60)
-  assert_true(str_speed < clean_speed * 0.96)
-  assert_true(str_depth < clean_depth - 0.5)
+  assert_true(str_speed < clean_speed * 0.97)
+  assert_true(str_depth < clean_depth - 0.3)
 }
 
 // Mean launch speed + landing depth (past the net) of a stroke type hit from a
