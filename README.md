@@ -1,4 +1,4 @@
-# tetetetennis
+# tetetennis
 
 A browser 3D tennis game. One-set match, you vs the CPU, with physically-based
 ball flight (drag + Magnus effect) and surface-dependent bounces.
