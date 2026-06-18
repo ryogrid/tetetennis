@@ -1,6 +1,6 @@
 // Ball visuals: mesh, ground shadow blob (depth cue), landing ring decal,
-// "stand here" sweet-spot marker + countdown ring, and the predicted-path
-// trail. Adapted from old/src/entities/ball.js.
+// "stand here" sweet-spot marker + countdown ring, predicted-path trail,
+// and past-position motion trail. Adapted from old/src/entities/ball.js.
 //
 // The physics state object is gone: the MoonBit logic drives the visuals via
 // explicit args. setBall(active, px,py,pz, sx,sy,sz) positions the mesh/shadow
@@ -88,6 +88,9 @@ export function createBallEntity(scene) {
     spin: { x: 0, y: 0, z: 0 },
   };
 
+  // past-position ring buffer for motion trail (last ~50 cm of flight)
+  const hist = [];
+
   const mesh = new THREE.Mesh(
     new THREE.SphereGeometry(VISUAL_R, 24, 18),
     new THREE.MeshStandardMaterial({
@@ -138,6 +141,30 @@ export function createBallEntity(scene) {
   const _cPost = new THREE.Color(0x39d7ff);
   const _cIdeal = new THREE.Color(0xff8a3d); // ideal (waist-height) hit point
 
+  // past-position motion trail: fading spheres behind the ball (~50 cm)
+  const PAST_CAP = 32;
+  const pastTrail = new THREE.InstancedMesh(
+    new THREE.SphereGeometry(0.035, 8, 6),
+    new THREE.MeshBasicMaterial({
+      color: 0xc8e030,
+      transparent: true,
+      opacity: 0.55,
+      depthWrite: false,
+    }),
+    PAST_CAP,
+  );
+  pastTrail.instanceColor = new THREE.InstancedBufferAttribute(
+    new Float32Array(PAST_CAP * 3), 3,
+  );
+  pastTrail.count = 0;
+  pastTrail.visible = false;
+  pastTrail.frustumCulled = false;
+  scene.add(pastTrail);
+  const _mPast = new THREE.Matrix4();
+  const _cBall = new THREE.Color(0xc8e030);
+  const _cDark = new THREE.Color(0x141605);
+  const _cTmp = new THREE.Color();
+
   // "stand here" marker: a large, bright circle on the court showing where the
   // player should stand to make a clean contact (only the player's current side
   // of the ideal hit point is shown — driven from the logic layer).
@@ -185,6 +212,13 @@ export function createBallEntity(scene) {
       const h = Math.min(py / 8, 1);
       blob.material.opacity = 0.30 + 0.25 * (1 - h);
       blob.scale.setScalar(1 + h * 0.9);
+      // motion trail: record visual position
+      if (active) {
+        hist.push({ x: px, y: Math.max(py, VISUAL_R), z: pz });
+        if (hist.length > 16) hist.shift();
+      } else {
+        hist.length = 0;
+      }
     },
     // per-frame cosmetic advance: spin tumble + ring/sweet pulse
     tick(dt) {
@@ -203,6 +237,67 @@ export function createBallEntity(scene) {
       }
       if (sweet.visible) {
         sweet.scale.setScalar(1 + 0.07 * Math.sin(ringT * 5));
+      }
+      // --- past-position motion trail ---
+      if (state.active && hist.length >= 1) {
+        const pts = [];
+        let dist = 0;
+        const cy = Math.max(state.pos.y, VISUAL_R);
+        pts.push({ x: state.pos.x, y: cy, z: state.pos.z });
+
+        let px = state.pos.x, py = cy, pz = state.pos.z;
+        for (let i = hist.length - 1; i >= 0 && dist < 0.50 && pts.length < PAST_CAP; i--) {
+          const h = hist[i];
+          const dx = px - h.x, dy = py - h.y, dz = pz - h.z;
+          const seg = Math.sqrt(dx * dx + dy * dy + dz * dz);
+          if (seg < 0.001) continue;
+          const rem = 0.50 - dist;
+          if (seg <= rem) {
+            if (seg > 0.04) {
+              // interpolate intermediate points for smoothness
+              const steps = Math.min(Math.ceil(seg / 0.025), PAST_CAP - pts.length);
+              for (let s = 1; s <= steps && pts.length < PAST_CAP; s++) {
+                const t = s / (steps + 1);
+                pts.push({ x: px - dx * t, y: py - dy * t, z: pz - dz * t });
+              }
+            }
+            pts.push({ x: h.x, y: h.y, z: h.z });
+            dist += seg;
+          } else {
+            // partial step to hit exactly 50 cm
+            const t = rem / seg;
+            if (rem > 0.04) {
+              const substeps = Math.min(Math.ceil(rem / 0.025), PAST_CAP - pts.length);
+              for (let s = 1; s <= substeps && pts.length < PAST_CAP; s++) {
+                const tt = (t * s) / substeps;
+                pts.push({ x: px - dx * tt, y: py - dy * tt, z: pz - dz * tt });
+              }
+            } else {
+              pts.push({ x: px - dx * t, y: py - dy * t, z: pz - dz * t });
+            }
+            dist = 0.50;
+          }
+          px = h.x; py = h.y; pz = h.z;
+        }
+
+        const n = Math.min(pts.length, PAST_CAP);
+        for (let i = 0; i < n; i++) {
+          const frac = n > 1 ? i / (n - 1) : 0; // 0 = newest, 1 = oldest
+          const sc = 0.90 - frac * 0.78; // newest ~0.90, oldest ~0.12
+          _mPast.makeScale(sc, sc, sc);
+          _mPast.setPosition(pts[i].x, pts[i].y, pts[i].z);
+          pastTrail.setMatrixAt(i, _mPast);
+          _cTmp.lerpColors(_cBall, _cDark, frac);
+          pastTrail.setColorAt(i, _cTmp);
+        }
+        pastTrail.count = n;
+        pastTrail.instanceMatrix.needsUpdate = true;
+        pastTrail.instanceColor.needsUpdate = true;
+        pastTrail.visible = n > 0;
+      } else if (!state.active) {
+        pastTrail.visible = false;
+        pastTrail.count = 0;
+        hist.length = 0;
       }
     },
     showLanding(x, z) {
@@ -252,7 +347,7 @@ export function createBallEntity(scene) {
       trail.count = 0;
     },
     dispose() {
-      scene.remove(mesh, blob, ring, sweet, trail);
+      scene.remove(mesh, blob, ring, sweet, trail, pastTrail);
       mesh.geometry.dispose();
       mesh.material.dispose();
       blob.geometry.dispose();
@@ -261,6 +356,8 @@ export function createBallEntity(scene) {
       ring.material.dispose();
       trail.geometry.dispose();
       trail.material.dispose();
+      pastTrail.geometry.dispose();
+      pastTrail.material.dispose();
       sweetRing.geometry.dispose();
       sweetRing.material.dispose();
       sweetDot.geometry.dispose();
