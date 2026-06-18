@@ -1556,6 +1556,11 @@ pub fn fixed_update(dt : Double) -> Unit {
   // human movement (+ optional positioning magnetism)
   let mut hx = @ffi.host_move_x(self.host)
   let mut hz = @ffi.host_move_z(self.host)
+  // While charging, d-pad controls aim only — no movement
+  if ms.human.charging {
+    hx = 0.0
+    hz = 0.0
+  }
   if (ms.point_state == PreServe || ms.point_state == Serving) && server(ms) == @rules.P {
     hz = 0.0 // slide along the baseline only
   }
