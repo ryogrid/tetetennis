@@ -118,6 +118,233 @@ function kf(t, times, values) {
   return values[values.length - 1];
 }
 
+// ---- per-shot-type swing keyframes (normalised time n, contact at 0.4) ----
+
+// Forehand: unit-turn → left arm tracks ball → tucks during swing
+function fhLeftArm(n) {
+  // shoulderL pitch: extend forward to track, then tuck in
+  const sp = kf(n, [0, 0.25, 0.4, 0.7, 1], [0.25, 1.1, 0.6, 0.3, 0.25]);
+  const sy = kf(n, [0, 0.25, 0.4, 1], [-0.18, -0.7, -0.2, -0.18]);
+  const sr = kf(n, [0, 0.4, 1], [0, -0.15, 0]);
+  const ep = kf(n, [0, 0.25, 0.4, 1], [0.9, 0.35, 1.55, 0.9]);
+  return { shoulderL: [sp, sy, sr], elbowL: [ep, 0, 0] };
+}
+
+function fhFlatPose(n) {
+  return {
+    hips: [
+      kf(n, [0, 0.3, 0.4, 0.7, 1], [0.10, 0.15, 0.30, 0.20, 0.12]),
+      kf(n, [0, 0.3, 0.4, 0.75, 1], [-0.3, -1.1, 0.35, 1.2, 0.85]),
+      0,
+    ],
+    shoulderR: [
+      kf(n, [0, 0.3, 0.4, 0.7, 1], [-0.2, -0.55, -0.35, -0.2, 0.1]),
+      kf(n, [0, 0.3, 0.4, 0.7, 1], [0, -1.2, 0.15, 1.5, 1.1]),
+      kf(n, [0, 0.3, 0.4, 0.7, 1], [0.25, 0.7, 1.45, 1.0, 0.5]),
+    ],
+    elbowR: [kf(n, [0, 0.3, 0.4, 0.8, 1], [0.6, 1.1, 0.2, 0.7, 0.6]), 0, 0],
+    racket: [kf(n, [0, 0.3, 0.4, 1], [0.3, 0.9, 0.05, 0.4]), 0, 0],
+    kneeBend: kf(n, [0, 0.3, 0.4, 0.8, 1], [0.3, 0.55, 0.35, 0.2, 0.22]),
+    baseY: 0.83 - kf(n, [0, 0.3, 0.4, 0.8, 1], [0.02, 0.09, 0.03, 0, 0.01]),
+  };
+}
+
+function fhTopspinPose(n) {
+  // Deeper knee bend on load, steeper low→high swing, windshield-wiper finish
+  return {
+    hips: [
+      kf(n, [0, 0.3, 0.4, 0.75, 1], [0.10, 0.12, 0.32, 0.18, 0.12]),
+      kf(n, [0, 0.3, 0.4, 0.75, 1], [-0.3, -1.2, 0.3, 1.4, 0.85]),
+      0,
+    ],
+    shoulderR: [
+      kf(n, [0, 0.3, 0.4, 0.75, 1], [-0.4, -0.65, -0.85, -0.6, 0.1]), // lower takeback, steeper rise
+      kf(n, [0, 0.3, 0.4, 0.75, 1], [0, -1.2, 0.1, 1.6, 1.1]),
+      kf(n, [0, 0.3, 0.4, 0.75, 1], [0.25, 0.5, 1.6, 0.8, 0.4]), // more roll at contact
+    ],
+    elbowR: [kf(n, [0, 0.3, 0.4, 0.75, 1], [0.6, 0.95, 0.15, 1.0, 0.55]), 0, 0],
+    racket: [kf(n, [0, 0.3, 0.4, 1], [0.3, 0.75, -0.1, 0.25]), 0, 0],
+    kneeBend: kf(n, [0, 0.3, 0.4, 0.8, 1], [0.3, 0.65, 0.40, 0.18, 0.22]),
+    baseY: 0.83 - kf(n, [0, 0.3, 0.4, 0.8, 1], [0.01, 0.10, 0.05, 0, 0.01]),
+  };
+}
+
+function fhSlicePose(n) {
+  // High→low swing, open stance (less rotation), knife-through follow-through
+  return {
+    hips: [
+      kf(n, [0, 0.3, 0.4, 0.65, 1], [0.10, 0.18, 0.28, 0.22, 0.12]),
+      kf(n, [0, 0.3, 0.4, 0.65, 1], [-0.2, -0.9, 0.2, 0.8, 0.6]), // less coil, less follow
+      0,
+    ],
+    shoulderR: [
+      kf(n, [0, 0.3, 0.4, 0.65, 1], [0.1, -0.15, 0.05, 0.2, 0.2]), // starts higher, high→low
+      kf(n, [0, 0.3, 0.4, 0.65, 1], [0, -0.9, 0.05, 1.0, 0.8]),
+      kf(n, [0, 0.3, 0.4, 0.65, 1], [0.25, 0.8, 1.2, 0.7, 0.4]),
+    ],
+    elbowR: [kf(n, [0, 0.3, 0.4, 0.65, 1], [0.6, 1.2, 0.3, 0.6, 0.6]), 0, 0],
+    racket: [kf(n, [0, 0.3, 0.4, 1], [0.3, 1.1, 0.15, 0.35]), 0, 0],
+    kneeBend: kf(n, [0, 0.3, 0.4, 0.7, 1], [0.25, 0.45, 0.30, 0.22, 0.22]),
+    baseY: 0.83 - kf(n, [0, 0.3, 0.4, 0.7, 1], [0.01, 0.06, 0.02, 0, 0.01]),
+  };
+}
+
+function fhDropPose(n) {
+  // Short takeback, soft abbreviated follow-through, minimal lower body
+  return {
+    hips: [
+      kf(n, [0, 0.3, 0.4, 0.6, 1], [0.10, 0.14, 0.22, 0.16, 0.12]),
+      kf(n, [0, 0.3, 0.4, 0.6, 1], [-0.15, -0.7, 0.15, 0.6, 0.4]),
+      0,
+    ],
+    shoulderR: [
+      kf(n, [0, 0.3, 0.4, 0.6, 1], [0.0, -0.25, -0.1, 0.05, 0.2]),
+      kf(n, [0, 0.3, 0.4, 0.6, 1], [0, -0.7, 0.05, 0.8, 0.6]),
+      kf(n, [0, 0.3, 0.4, 0.6, 1], [0.2, 0.5, 1.0, 0.7, 0.4]),
+    ],
+    elbowR: [kf(n, [0, 0.3, 0.4, 0.6, 1], [0.6, 1.0, 0.25, 0.5, 0.65]), 0, 0],
+    racket: [kf(n, [0, 0.3, 0.4, 1], [0.3, 0.7, 0.1, 0.35]), 0, 0],
+    kneeBend: kf(n, [0, 0.3, 0.4, 0.6, 1], [0.22, 0.35, 0.28, 0.22, 0.22]),
+    baseY: 0.83 - kf(n, [0, 0.3, 0.4, 0.6, 1], [0.01, 0.04, 0.02, 0, 0]),
+  };
+}
+
+// ---- backhand (double-handed) keyframes ----
+// Left arm tracks right arm to simulate both hands on the racket.
+
+function bhFlatPose(n) {
+  return {
+    hips: [
+      kf(n, [0, 0.3, 0.4, 0.75, 1], [0.10, 0.13, 0.28, 0.18, 0.12]),
+      kf(n, [0, 0.3, 0.4, 0.75, 1], [0.3, 1.2, -0.3, -1.1, -0.7]), // mirror: coil left, uncoil
+      0,
+    ],
+    shoulderR: [
+      kf(n, [0, 0.3, 0.4, 0.75, 1], [-0.2, -0.5, -0.3, 0.05, 0.2]),
+      kf(n, [0, 0.3, 0.4, 0.75, 1], [0, 1.3, -0.1, -1.2, -0.9]), // across body (negative yaw in FH mirror)
+      kf(n, [0, 0.3, 0.4, 0.75, 1], [0.25, 0.5, 1.1, 0.8, 0.4]),
+    ],
+    elbowR: [kf(n, [0, 0.3, 0.4, 0.75, 1], [0.6, 1.0, 0.15, 0.6, 0.55]), 0, 0],
+    // Left arm (non-dominant) follows the right — double-handed grip
+    shoulderL: [
+      kf(n, [0, 0.3, 0.4, 0.75, 1], [-0.2, -0.45, -0.35, 0.0, 0.15]),
+      kf(n, [0, 0.3, 0.4, 0.75, 1], [-0.2, 1.3, -0.05, -1.15, -0.85]), // reaches across to grip
+      kf(n, [0, 0.3, 0.4, 0.75, 1], [-0.2, 0.35, 0.75, 0.55, 0.15]),
+    ],
+    elbowL: [kf(n, [0, 0.3, 0.4, 0.75, 1], [0.6, 0.95, 0.1, 0.55, 0.65]), 0, 0],
+    racket: [kf(n, [0, 0.3, 0.4, 1], [0.3, 0.85, -0.05, 0.3]), 0, 0],
+    kneeBend: kf(n, [0, 0.3, 0.4, 0.8, 1], [0.3, 0.55, 0.35, 0.2, 0.22]),
+    baseY: 0.83 - kf(n, [0, 0.3, 0.4, 0.8, 1], [0.02, 0.09, 0.03, 0, 0.01]),
+  };
+}
+
+function bhTopspinPose(n) {
+  return {
+    hips: [
+      kf(n, [0, 0.3, 0.4, 0.75, 1], [0.10, 0.12, 0.30, 0.16, 0.12]),
+      kf(n, [0, 0.3, 0.4, 0.75, 1], [0.3, 1.3, -0.25, -1.3, -0.7]),
+      0,
+    ],
+    shoulderR: [
+      kf(n, [0, 0.3, 0.4, 0.75, 1], [-0.35, -0.6, -0.75, -0.35, 0.2]),
+      kf(n, [0, 0.3, 0.4, 0.75, 1], [0, 1.3, -0.05, -1.4, -0.9]),
+      kf(n, [0, 0.3, 0.4, 0.75, 1], [0.25, 0.45, 1.3, 0.7, 0.3]),
+    ],
+    elbowR: [kf(n, [0, 0.3, 0.4, 0.75, 1], [0.6, 0.9, 0.1, 0.85, 0.5]), 0, 0],
+    shoulderL: [
+      kf(n, [0, 0.3, 0.4, 0.75, 1], [-0.35, -0.55, -0.78, -0.3, 0.15]),
+      kf(n, [0, 0.3, 0.4, 0.75, 1], [-0.2, 1.3, -0.02, -1.35, -0.85]),
+      kf(n, [0, 0.3, 0.4, 0.75, 1], [-0.2, 0.3, 0.9, 0.5, 0.1]),
+    ],
+    elbowL: [kf(n, [0, 0.3, 0.4, 0.75, 1], [0.6, 0.85, 0.05, 0.7, 0.6]), 0, 0],
+    racket: [kf(n, [0, 0.3, 0.4, 1], [0.3, 0.7, -0.15, 0.2]), 0, 0],
+    kneeBend: kf(n, [0, 0.3, 0.4, 0.8, 1], [0.3, 0.65, 0.38, 0.18, 0.22]),
+    baseY: 0.83 - kf(n, [0, 0.3, 0.4, 0.8, 1], [0.01, 0.10, 0.04, 0, 0.01]),
+  };
+}
+
+function bhSlicePose(n) {
+  return {
+    hips: [
+      kf(n, [0, 0.3, 0.4, 0.65, 1], [0.10, 0.16, 0.26, 0.20, 0.12]),
+      kf(n, [0, 0.3, 0.4, 0.65, 1], [0.2, 1.0, -0.15, -0.7, -0.5]),
+      0,
+    ],
+    shoulderR: [
+      kf(n, [0, 0.3, 0.4, 0.65, 1], [0.05, -0.1, 0.1, 0.3, 0.2]),
+      kf(n, [0, 0.3, 0.4, 0.65, 1], [0, 1.0, 0, -0.8, -0.6]),
+      kf(n, [0, 0.3, 0.4, 0.65, 1], [0.2, 0.6, 1.0, 0.6, 0.4]),
+    ],
+    elbowR: [kf(n, [0, 0.3, 0.4, 0.65, 1], [0.6, 1.2, 0.25, 0.55, 0.6]), 0, 0],
+    shoulderL: [
+      kf(n, [0, 0.3, 0.4, 0.65, 1], [0.05, -0.05, 0.05, 0.3, 0.2]),
+      kf(n, [0, 0.3, 0.4, 0.65, 1], [-0.15, 1.0, 0.02, -0.75, -0.55]),
+      kf(n, [0, 0.3, 0.4, 0.65, 1], [-0.15, 0.4, 0.7, 0.4, 0.15]),
+    ],
+    elbowL: [kf(n, [0, 0.3, 0.4, 0.65, 1], [0.6, 1.1, 0.2, 0.5, 0.65]), 0, 0],
+    racket: [kf(n, [0, 0.3, 0.4, 1], [0.3, 1.05, 0.2, 0.35]), 0, 0],
+    kneeBend: kf(n, [0, 0.3, 0.4, 0.65, 1], [0.25, 0.45, 0.28, 0.22, 0.22]),
+    baseY: 0.83 - kf(n, [0, 0.3, 0.4, 0.65, 1], [0.01, 0.06, 0.02, 0, 0.01]),
+  };
+}
+
+// ---- improved serve keyframes ----
+
+function servePose(n) {
+  // n=0..1 mapped over ~1.1s active animation.
+  // Phases: routine→toss+trophy→knee-drive+contact→follow-through→recovery
+  return {
+    hips: [
+      kf(n, [0, 0.30, 0.50, 0.62, 1], [0.08, -0.08, -0.30, 0.18, 0.08]),
+      0, 0,
+    ],
+    shoulderL: [
+      // left arm: rises for toss, then drops
+      kf(n, [0, 0.30, 0.50, 1], [0.3, 2.4, 2.7, 0.5]),
+      0, -0.1,
+    ],
+    elbowL: [
+      kf(n, [0, 0.30, 1], [0.3, 0.05, 0.3]),
+      0, 0,
+    ],
+    shoulderR: [
+      kf(n, [0, 0.30, 0.50, 0.62, 0.85, 1], [0.35, 1.8, 2.4, 3.05, 1.4, 0.7]),
+      0, 0.25,
+    ],
+    elbowR: [
+      kf(n, [0, 0.30, 0.50, 0.62, 1], [0.4, 1.5, 1.85, 0.05, 0.5]),
+      0, 0,
+    ],
+    racket: [
+      kf(n, [0, 0.45, 0.62, 1], [0.5, 0.9, 0.05, 0.3]),
+      0, 0,
+    ],
+    kneeBend: kf(n, [0, 0.45, 0.62, 1], [0.2, 0.70, 0.08, 0.22]),
+    baseY: 0.83 - kf(n, [0, 0.45, 0.58, 0.66, 1], [0.01, 0.14, 0.04, -0.05, 0.02]),
+  };
+}
+
+// ---- swing pose dispatch ----
+// Returns {joints, baseY} for the given swing state, or null if swing done.
+function getSwingPose(swing) {
+  const n = swing.t / SWING_DUR;
+  if (!swing.fh) {
+    // Backhand (double-handed) — left arm tracks right
+    switch (swing.type) {
+      case 'topspin': return bhTopspinPose(n);
+      case 'slice': return bhSlicePose(n);
+      default: return bhFlatPose(n); // flat, drop, lob, default
+    }
+  }
+  // Forehand
+  switch (swing.type) {
+    case 'topspin': return fhTopspinPose(n);
+    case 'slice': return fhSlicePose(n);
+    case 'drop': return fhDropPose(n);
+    default: return fhFlatPose(n); // flat, default
+  }
+}
+
 // side: 0 = human (+z, faces -z), 1 = cpu (-z, rotated PI).
 // reach: horizontal reach radius for the human zone circle (ignored for cpu).
 export function createPlayerRig({ side, color, reach, scene }) {
@@ -197,39 +424,42 @@ export function createPlayerRig({ side, color, reach, scene }) {
       let baseY = 0.83;
 
       if (this.swing) {
-        const n = this.swing.t / SWING_DUR; // contact at 0.4
-        const m = this.swing.fh ? 1 : -1;
-        t.hips[0] = kf(n, [0, 0.3, 0.4, 0.7, 1], [0.1, 0.15, 0.3, 0.2, 0.12]);
-        t.hips[1] = m * kf(n, [0, 0.3, 0.4, 0.75, 1], [-0.3, -1.1, 0.35, 1.2, 0.85]);
-        t.shoulderR = [
-          kf(n, [0, 0.3, 0.4, 0.7, 1], [-0.2, -0.55, -0.35, -0.2, 0.1]),
-          m * kf(n, [0, 0.3, 0.4, 0.7, 1], [0, -1.2, 0.15, 1.5, 1.1]),
-          kf(n, [0, 0.3, 0.4, 0.7, 1], [0.25, 0.7, 1.45, 1.0, 0.5]),
-        ];
-        t.elbowR = [kf(n, [0, 0.3, 0.4, 0.8, 1], [0.6, 1.1, 0.2, 0.7, 0.6]), 0, 0];
-        t.racket = [kf(n, [0, 0.3, 0.4, 1], [0.3, 0.9, 0.05, 0.4]), 0, 0];
-        // load the legs into the shot, then push up through contact
-        const bend = kf(n, [0, 0.3, 0.4, 0.8, 1], [0.3, 0.55, 0.35, 0.2, 0.22]);
-        t.kneeR[0] = bend; t.kneeL[0] = bend;
-        baseY = 0.83 - kf(n, [0, 0.3, 0.4, 0.8, 1], [0.02, 0.09, 0.03, 0, 0.01]);
+        const pose = getSwingPose(this.swing);
+        if (pose) {
+          t.hips[0] = pose.hips[0];
+          t.hips[1] = pose.hips[1];
+          t.shoulderR = [pose.shoulderR[0], pose.shoulderR[1], pose.shoulderR[2]];
+          t.elbowR = [pose.elbowR[0], 0, 0];
+          t.racket = [pose.racket[0], 0, 0];
+          t.kneeR[0] = pose.kneeBend;
+          t.kneeL[0] = pose.kneeBend;
+          baseY = pose.baseY;
+          // Left arm: forehand tracking or backhand double-grip
+          if (pose.shoulderL) {
+            t.shoulderL = pose.shoulderL;
+            if (pose.elbowL) t.elbowL = pose.elbowL;
+          } else if (this.swing.fh) {
+            // Forehand: left arm tracks ball then tucks
+            const n = this.swing.t / SWING_DUR;
+            const la = fhLeftArm(n);
+            t.shoulderL = la.shoulderL;
+            t.elbowL = la.elbowL;
+          }
+        }
       }
 
       if (this.serveAnimSt) {
         const n = Math.min(this.serveAnimSt.t / 1.1, 1);
-        // toss arm (left) rises, hitting arm trophy -> overhead extension
-        t.shoulderL = [kf(n, [0, 0.3, 0.55, 1], [0.3, 2.3, 2.6, 0.6]), 0, -0.1];
-        t.elbowL = [kf(n, [0, 0.3, 1], [0.3, 0.05, 0.3]), 0, 0];
-        t.shoulderR = [
-          kf(n, [0, 0.35, 0.55, 0.62, 0.85, 1], [0.4, 1.9, 2.3, 3.05, 1.6, 0.8]),
-          0, 0.25,
-        ];
-        t.elbowR = [kf(n, [0, 0.35, 0.55, 0.62, 1], [0.4, 1.6, 1.8, 0.05, 0.5]), 0, 0];
-        t.racket = [kf(n, [0, 0.5, 0.62, 1], [0.5, 0.8, 0.05, 0.3]), 0, 0];
-        // deep knee bend + back arch in the trophy, drive up into the contact
-        t.hips[0] = kf(n, [0, 0.45, 0.62, 1], [0, -0.35, 0.18, 0.06]);
-        const bend = kf(n, [0, 0.45, 0.62, 1], [0.15, 0.65, 0.05, 0.2]);
-        t.kneeR[0] = bend; t.kneeL[0] = bend;
-        baseY = 0.83 - kf(n, [0, 0.45, 0.58, 0.66, 1], [0, 0.12, 0.02, -0.06, 0.02]);
+        const sp = servePose(n);
+        t.hips[0] = sp.hips[0];
+        t.shoulderL = sp.shoulderL;
+        t.elbowL = sp.elbowL;
+        t.shoulderR = sp.shoulderR;
+        t.elbowR = sp.elbowR;
+        t.racket = sp.racket;
+        t.kneeR[0] = sp.kneeBend;
+        t.kneeL[0] = sp.kneeBend;
+        baseY = sp.baseY;
       }
 
       // smooth-apply the base pose. The filter state lives in this._sm (NOT
