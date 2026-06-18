@@ -420,7 +420,7 @@ pub fn solve_shot(
   let net_margin = if is_drive { 0.05 } else { 0.25 }
 
   // apex for control shots
-  let apex = if theta_max_deg > 30.0 { 5.0 } else { 1.8 }
+  let apex = @vec.dmax(1.8, @vec.dmin(5.0, 1.8 + (theta_max_deg - 10.0) * 0.07))
 
   if is_drive {
     solve_drive(from_x, from_y, from_z, target_x, target_z, speed, spin_rad_s, net_margin, side_sign)
