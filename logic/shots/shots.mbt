@@ -248,13 +248,13 @@ pub fn compute_stroke(
       spin_rpm = -@physics.slice_rpm(stats.slc) * (0.5 + 0.5 * q)
     }
     Lob => {
-      speed = (15.0 + 4.0 * stats.pow / 100.0) * @physics.eff_pace()
+      speed = 10.0 + 4.0 * stats.pow / 100.0
       spin_rpm = 500.0
     }
     Drop => {
       // slowest stroke: a backspin touch that floats just over the net and
       // checks on the bounce. Speed scales with slice skill, not power.
-      speed = (12.0 + 4.0 * stats.slc / 100.0) * @physics.eff_pace()
+      speed = 8.0 + 2.5 * stats.slc / 100.0
       spin_rpm = -@physics.slice_rpm(stats.slc) * (0.55 + 0.45 * q) * 0.9
     }
   }
@@ -399,6 +399,7 @@ pub fn compute_stroke(
     y_spin_rad_s=y_spin,
     theta_min_deg=def_theta_min,
     theta_max_deg=def_theta_max,
+    drive=typ == Flat, // speed-priority for flat/smash, control for spin shots
   )
   let mut out_vx = solved.vx
   let mut out_vz = solved.vz

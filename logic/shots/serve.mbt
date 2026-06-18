@@ -204,6 +204,7 @@ pub fn compute_serve(
     y_spin_rad_s=y_spin,
     theta_min_deg=def_theta_min,
     theta_max_deg=def_theta_max,
+    drive=true,
   )
 
   // Side spin curves the ball laterally, which the 2D solver cannot see. One
@@ -241,6 +242,7 @@ pub fn compute_serve(
           y_spin_rad_s=y_spin,
           theta_min_deg=def_theta_min,
           theta_max_deg=def_theta_max,
+          drive=true,
         )
       }
       None => ()

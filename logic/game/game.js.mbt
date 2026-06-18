@@ -601,7 +601,6 @@ fn refresh_score(self : Game, ms : MatchState) -> Unit {
 
 ///|
 fn start_match(self : Game) -> Unit {
-  @physics.set_pace_factor(if @assist.assist_on() { 0.85 } else { 1.0 })
   let surface_id = surface_ids[self.sel_surface]
   let surface = @physics.surface_by_id(surface_id)
   let char_p = @shots.characters[self.sel_player]

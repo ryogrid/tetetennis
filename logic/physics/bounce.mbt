@@ -49,4 +49,17 @@ pub fn apply_bounce(b : Ball, surface : Surface) -> Unit {
     b.sz = b.sz - k * dx
     b.sy = b.sy * 0.6
   }
+  // Topspin vertical kick: ω×ŷ projected onto travel direction gives
+  // positive for topspin, negative for backspin. Topspin makes the ball
+  // kick up off the court (heavy ball effect).
+  let h_speed = @vec.hypot2(b.vx, b.vz)
+  if h_speed > 1.0e-4 {
+    let dx = b.vx / h_speed
+    let dz = b.vz / h_speed
+    // ω×ŷ = (-ωz, 0, ωx). Project onto horizontal direction.
+    let proj = -b.sz * dx + b.sx * dz
+    if proj > 0.0 {
+      b.vy = b.vy + proj * spin_bounce_vertical
+    }
+  }
 }
