@@ -230,7 +230,7 @@ pub fn predict_landing(b : Ball, surface : Surface, max_t~ : Double = 5.0) -> La
   None
 }
 
-// First descending point at/just above waist height after the first bounce on
+// First rising point above min contact height after the first bounce on
 // `side_z_sign`'s side.
 ///|
 pub fn predict_hit_point(
@@ -255,8 +255,8 @@ pub fn predict_hit_point(
       }
     }
     if bounced_on_side &&
-      sim.vy < 0.0 &&
-      sim.py <= ideal_contact_h + 0.1 &&
+      sim.vy > 0.0 &&
+      sim.py >= 0.4 &&
       @vec.dsign(sim.pz) == side_z_sign {
       return Some({
         x: sim.px,
