@@ -97,18 +97,24 @@ let serve_sweet_hi : Double = 0.88
 
 ///|
 enum AppState {
-  MenuMode // top-level MATCH vs PRACTICE select (home screen)
-  MenuChar
-  MenuOpp
-  MenuSurface
-  MenuDifficulty
-  MenuGames
-  MenuAssist
-  MenuPracFeed // practice: stroke vs serve feed
-  MenuPracShot // practice: shot type of the fed ball
-  MenuPracDepth // practice: feed depth (stroke feeds only)
+  MenuSetup // screen 1: MATCH/PRACTICE mode + mode-dependent settings as rows
+  MenuPlayers // screen 2: pick your player + opponent (rich character cards)
   Match
   Results
+} derive(Eq)
+
+// One configurable row on the setup screen. The row list is mode-dependent
+// (see Game::setup_rows); ←/→ changes the focused row's value in place.
+///|
+enum RowKind {
+  Mode
+  Surface
+  Difficulty
+  Games
+  Assist
+  Feed
+  Shot
+  Depth
 } derive(Eq)
 
 // Practice-mode feed configuration (design/practice-mode). Present on a
@@ -248,7 +254,8 @@ struct Game {
   host : @ffi.Host
   rng : @rng.Gauss
   mut state : AppState
-  mut menu_idx : Int
+  mut setup_row : Int // focused row on the MenuSetup screen
+  mut players_sel : Int // MenuPlayers focus: 0 = you, 1 = opponent
   mut sel_player : Int
   mut sel_opp : Int
   mut sel_surface : Int
@@ -392,137 +399,89 @@ fn names_c() -> String {
 
 // ---------------- menu navigation ----------------
 
+// The ordered list of rows shown on the setup screen for the current mode.
+// MATCH: mode + surface + difficulty + games + assist.
+// PRACTICE: mode + surface + feed + shot (+ depth, stroke feeds only) + assist.
 ///|
-fn show_mode_menu(self : Game) -> Unit {
-  @ffi.host_show_mode_select(self.host, self.menu_idx)
+fn setup_rows(self : Game) -> Array[RowKind] {
+  if self.is_practice {
+    if self.prac_feed == 0 {
+      [Mode, Surface, Feed, Shot, Depth, Assist]
+    } else {
+      [Mode, Surface, Feed, Shot, Assist]
+    }
+  } else {
+    [Mode, Surface, Difficulty, Games, Assist]
+  }
 }
 
 ///|
-fn confirm_mode(self : Game) -> Unit {
-  @ffi.host_sfx(self.host, "sfxConfirm")
-  self.is_practice = self.menu_idx == 1
-  self.state = MenuChar
-  self.menu_idx = self.sel_player
-  self.show_char_menu()
-}
-
-///|
-fn show_char_menu(self : Game) -> Unit {
-  @ffi.host_show_char_select(self.host, "SELECT YOUR PLAYER", self.menu_idx, "")
-}
-
-///|
-fn show_opp_menu(self : Game) -> Unit {
-  @ffi.host_show_char_select(
-    self.host, "SELECT OPPONENT", self.menu_idx, "You: " + char_name(self.sel_player),
+fn show_setup(self : Game) -> Unit {
+  @ffi.host_show_setup(
+    self.host,
+    self.is_practice,
+    self.setup_row,
+    self.sel_surface,
+    self.sel_difficulty,
+    games_idx_of(self.sel_games),
+    assist_idx(),
+    self.prac_feed,
+    self.prac_shot,
+    self.prac_depth,
   )
 }
 
 ///|
-fn confirm_char(self : Game) -> Unit {
-  @ffi.host_sfx(self.host, "sfxConfirm")
-  self.sel_player = self.menu_idx
-  self.state = MenuOpp
-  self.menu_idx = 0
-  self.show_opp_menu()
+fn show_players(self : Game) -> Unit {
+  @ffi.host_show_players(self.host, self.players_sel, self.sel_player, self.sel_opp)
 }
 
+// Change the focused row's value by `dir` (+1 / -1), wrapping. Mode/Feed are
+// toggles (any direction flips). Assist is applied + persisted live.
 ///|
-fn confirm_opp(self : Game) -> Unit {
-  @ffi.host_sfx(self.host, "sfxConfirm")
-  self.sel_opp = self.menu_idx
-  self.state = MenuSurface
-  self.menu_idx = 2 // default hard
-  @ffi.host_show_surface_select(self.host, self.menu_idx)
-}
-
-///|
-fn confirm_surface(self : Game) -> Unit {
-  @ffi.host_sfx(self.host, "sfxConfirm")
-  self.sel_surface = self.menu_idx
-  if self.is_practice {
-    self.state = MenuPracFeed
-    self.menu_idx = self.prac_feed
-    @ffi.host_show_practice_feed(self.host, self.menu_idx)
-  } else {
-    self.state = MenuDifficulty
-    self.menu_idx = 1 // default normal
-    @ffi.host_show_difficulty_select(self.host, self.menu_idx)
+fn setup_change(self : Game, dir : Int) -> Unit {
+  let rows = self.setup_rows()
+  match rows[self.setup_row] {
+    Mode => {
+      self.is_practice = !self.is_practice
+      // the row list changed length; keep focus in range
+      let n = self.setup_rows().length()
+      if self.setup_row >= n {
+        self.setup_row = n - 1
+      }
+    }
+    Surface => self.sel_surface = (self.sel_surface + dir + 3) % 3
+    Difficulty => self.sel_difficulty = (self.sel_difficulty + dir + 3) % 3
+    Games => {
+      let i = (games_idx_of(self.sel_games) + dir + 3) % 3
+      self.sel_games = games_options[i]
+    }
+    Assist => {
+      let lvl = level_from_idx((assist_idx() + dir + 3) % 3)
+      @assist.set_assist_level(lvl)
+      @ffi.host_save_assist(self.host, level_str(lvl))
+    }
+    Feed => {
+      self.prac_feed = 1 - self.prac_feed
+      if self.prac_shot >= self.prac_shot_count() {
+        self.prac_shot = 0
+      }
+    }
+    Shot => {
+      let c = self.prac_shot_count()
+      self.prac_shot = (self.prac_shot + dir + c) % c
+    }
+    Depth => self.prac_depth = (self.prac_depth + dir + 3) % 3
   }
-}
-
-///|
-fn confirm_prac_feed(self : Game) -> Unit {
-  @ffi.host_sfx(self.host, "sfxConfirm")
-  self.prac_feed = self.menu_idx
-  self.state = MenuPracShot
-  // the shot list differs by feed kind; keep the prior index if still valid
-  if self.prac_shot >= self.prac_shot_count() {
-    self.prac_shot = 0
-  }
-  self.menu_idx = self.prac_shot
-  @ffi.host_show_practice_shot(self.host, self.menu_idx, self.prac_feed)
-}
-
-///|
-fn confirm_prac_shot(self : Game) -> Unit {
-  @ffi.host_sfx(self.host, "sfxConfirm")
-  self.prac_shot = self.menu_idx
-  if self.prac_feed == 0 {
-    // stroke feed: choose the bounce depth next
-    self.state = MenuPracDepth
-    self.menu_idx = self.prac_depth
-    @ffi.host_show_practice_depth(self.host, self.menu_idx)
-  } else {
-    // serve feed: depth doesn't apply -> straight to assist
-    self.state = MenuAssist
-    self.menu_idx = assist_idx()
-    @ffi.host_show_assist_select(self.host, self.menu_idx)
-  }
-}
-
-///|
-fn confirm_prac_depth(self : Game) -> Unit {
-  @ffi.host_sfx(self.host, "sfxConfirm")
-  self.prac_depth = self.menu_idx
-  self.state = MenuAssist
-  self.menu_idx = assist_idx()
-  @ffi.host_show_assist_select(self.host, self.menu_idx)
-}
-
-///|
-fn confirm_difficulty(self : Game) -> Unit {
-  @ffi.host_sfx(self.host, "sfxConfirm")
-  self.sel_difficulty = self.menu_idx
-  self.state = MenuGames
-  self.menu_idx = games_idx_of(self.sel_games)
-  @ffi.host_show_games_select(self.host, self.menu_idx)
-}
-
-///|
-fn confirm_games(self : Game) -> Unit {
-  @ffi.host_sfx(self.host, "sfxConfirm")
-  self.sel_games = games_options[self.menu_idx]
-  self.state = MenuAssist
-  self.menu_idx = assist_idx()
-  @ffi.host_show_assist_select(self.host, self.menu_idx)
-}
-
-///|
-fn confirm_assist(self : Game) -> Unit {
-  @ffi.host_sfx(self.host, "sfxConfirm")
-  let lvl = level_from_idx(self.menu_idx)
-  @assist.set_assist_level(lvl)
-  @ffi.host_save_assist(self.host, level_str(lvl))
-  self.start_match()
+  @ffi.host_sfx(self.host, "sfxMenu")
+  self.show_setup()
 }
 
 ///|
 fn back_to_home(self : Game) -> Unit {
-  self.is_practice = false
-  self.state = MenuMode
-  self.menu_idx = 0
-  self.show_mode_menu()
+  self.state = MenuSetup
+  self.setup_row = 0
+  self.show_setup()
 }
 
 // ---------------- match setup ----------------
@@ -1220,23 +1179,6 @@ fn camera_mode(self : Game) -> String {
 // ---------------- input ----------------
 
 ///|
-fn handle_menu_nav(self : Game, count : Int) -> Bool {
-  let mut moved = false
-  if @ffi.host_was_pressed(self.host, "ArrowLeft") {
-    self.menu_idx = (self.menu_idx + count - 1) % count
-    moved = true
-  }
-  if @ffi.host_was_pressed(self.host, "ArrowRight") {
-    self.menu_idx = (self.menu_idx + 1) % count
-    moved = true
-  }
-  if moved {
-    @ffi.host_sfx(self.host, "sfxMenu")
-  }
-  moved
-}
-
-///|
 fn confirm_pressed(self : Game) -> Bool {
   @ffi.host_was_pressed(self.host, "Enter") || @ffi.host_was_pressed(self.host, "Space")
 }
@@ -1352,132 +1294,58 @@ pub fn handle_input() -> Unit {
   let self = g()
   let h = self.host
   match self.state {
-    MenuMode => {
-      if self.handle_menu_nav(2) {
-        self.show_mode_menu()
+    MenuSetup => {
+      let n = self.setup_rows().length()
+      if @ffi.host_was_pressed(h, "ArrowUp") {
+        self.setup_row = (self.setup_row + n - 1) % n
+        @ffi.host_sfx(h, "sfxMenu")
+        self.show_setup()
+      } else if @ffi.host_was_pressed(h, "ArrowDown") {
+        self.setup_row = (self.setup_row + 1) % n
+        @ffi.host_sfx(h, "sfxMenu")
+        self.show_setup()
+      }
+      if @ffi.host_was_pressed(h, "ArrowLeft") {
+        self.setup_change(-1)
+      } else if @ffi.host_was_pressed(h, "ArrowRight") {
+        self.setup_change(1)
       }
       if self.confirm_pressed() {
-        self.confirm_mode()
+        @ffi.host_sfx(h, "sfxConfirm")
+        self.state = MenuPlayers
+        self.players_sel = 0
+        self.show_players()
       }
     }
-    MenuChar => {
-      if self.handle_menu_nav(@shots.characters.length()) {
-        self.show_char_menu()
+    MenuPlayers => {
+      let nc = @shots.characters.length()
+      if @ffi.host_was_pressed(h, "ArrowUp") || @ffi.host_was_pressed(h, "ArrowDown") {
+        self.players_sel = 1 - self.players_sel
+        @ffi.host_sfx(h, "sfxMenu")
+        self.show_players()
       }
-      if @ffi.host_was_pressed(h, "Escape") {
-        self.state = MenuMode
-        self.menu_idx = if self.is_practice { 1 } else { 0 }
-        self.show_mode_menu()
-      } else if self.confirm_pressed() {
-        self.confirm_char()
+      let dir = if @ffi.host_was_pressed(h, "ArrowLeft") {
+        -1
+      } else if @ffi.host_was_pressed(h, "ArrowRight") {
+        1
+      } else {
+        0
       }
-    }
-    MenuOpp => {
-      if self.handle_menu_nav(@shots.characters.length()) {
-        self.show_opp_menu()
-      }
-      if @ffi.host_was_pressed(h, "Escape") {
-        self.state = MenuChar
-        self.menu_idx = self.sel_player
-        self.show_char_menu()
-      } else if self.confirm_pressed() {
-        self.confirm_opp()
-      }
-    }
-    MenuSurface => {
-      if self.handle_menu_nav(3) {
-        @ffi.host_show_surface_select(h, self.menu_idx)
-      }
-      if @ffi.host_was_pressed(h, "Escape") {
-        self.state = MenuOpp
-        self.menu_idx = self.sel_opp
-        self.show_opp_menu()
-      } else if self.confirm_pressed() {
-        self.confirm_surface()
-      }
-    }
-    MenuDifficulty => {
-      if self.handle_menu_nav(3) {
-        @ffi.host_show_difficulty_select(h, self.menu_idx)
-      }
-      if @ffi.host_was_pressed(h, "Escape") {
-        self.state = MenuSurface
-        self.menu_idx = self.sel_surface
-        @ffi.host_show_surface_select(h, self.menu_idx)
-      } else if self.confirm_pressed() {
-        self.confirm_difficulty()
-      }
-    }
-    MenuGames => {
-      if self.handle_menu_nav(3) {
-        @ffi.host_show_games_select(h, self.menu_idx)
-      }
-      if @ffi.host_was_pressed(h, "Escape") {
-        self.state = MenuDifficulty
-        self.menu_idx = self.sel_difficulty
-        @ffi.host_show_difficulty_select(h, self.menu_idx)
-      } else if self.confirm_pressed() {
-        self.confirm_games()
-      }
-    }
-    MenuPracFeed => {
-      if self.handle_menu_nav(2) {
-        @ffi.host_show_practice_feed(h, self.menu_idx)
-      }
-      if @ffi.host_was_pressed(h, "Escape") {
-        self.state = MenuSurface
-        self.menu_idx = self.sel_surface
-        @ffi.host_show_surface_select(h, self.menu_idx)
-      } else if self.confirm_pressed() {
-        self.confirm_prac_feed()
-      }
-    }
-    MenuPracShot => {
-      if self.handle_menu_nav(self.prac_shot_count()) {
-        @ffi.host_show_practice_shot(h, self.menu_idx, self.prac_feed)
-      }
-      if @ffi.host_was_pressed(h, "Escape") {
-        self.state = MenuPracFeed
-        self.menu_idx = self.prac_feed
-        @ffi.host_show_practice_feed(h, self.menu_idx)
-      } else if self.confirm_pressed() {
-        self.confirm_prac_shot()
-      }
-    }
-    MenuPracDepth => {
-      if self.handle_menu_nav(3) {
-        @ffi.host_show_practice_depth(h, self.menu_idx)
-      }
-      if @ffi.host_was_pressed(h, "Escape") {
-        self.state = MenuPracShot
-        self.menu_idx = self.prac_shot
-        @ffi.host_show_practice_shot(h, self.menu_idx, self.prac_feed)
-      } else if self.confirm_pressed() {
-        self.confirm_prac_depth()
-      }
-    }
-    MenuAssist => {
-      if self.handle_menu_nav(3) {
-        @ffi.host_show_assist_select(h, self.menu_idx)
-      }
-      if @ffi.host_was_pressed(h, "Escape") {
-        if self.is_practice {
-          if self.prac_feed == 0 {
-            self.state = MenuPracDepth
-            self.menu_idx = self.prac_depth
-            @ffi.host_show_practice_depth(h, self.menu_idx)
-          } else {
-            self.state = MenuPracShot
-            self.menu_idx = self.prac_shot
-            @ffi.host_show_practice_shot(h, self.menu_idx, self.prac_feed)
-          }
+      if dir != 0 {
+        if self.players_sel == 0 {
+          self.sel_player = (self.sel_player + dir + nc) % nc
         } else {
-          self.state = MenuGames
-          self.menu_idx = games_idx_of(self.sel_games)
-          @ffi.host_show_games_select(h, self.menu_idx)
+          self.sel_opp = (self.sel_opp + dir + nc) % nc
         }
+        @ffi.host_sfx(h, "sfxMenu")
+        self.show_players()
+      }
+      if @ffi.host_was_pressed(h, "Escape") {
+        self.state = MenuSetup
+        self.show_setup()
       } else if self.confirm_pressed() {
-        self.confirm_assist()
+        @ffi.host_sfx(h, "sfxConfirm")
+        self.start_match()
       }
     }
     Results =>
@@ -2024,54 +1892,72 @@ pub fn get_time_scale(dt : Double) -> Double {
 // ---------------- menu tap ----------------
 
 ///|
-pub fn menu_tap(idx : Int) -> Unit {
+// Touch/click bridge. The JS UI tags each interactive element with a string
+// `action` and an integer `arg` (a row index, a character index, or 0):
+//   setup screen: "row" K (focus row K) · "dec"/"inc" K (change row K's value) · "go"
+//   players screen: "you"/"opp" I (pick character I) · "go" (start) · "back"
+//   results screen: any tap returns to setup.
+pub fn menu_cmd(action : String, arg : Int) -> Unit {
   let self = g()
-  if self.state == Results {
-    self.back_to_home()
-    return
-  }
-  let count = match self.state {
-    MenuMode | MenuPracFeed => 2
-    MenuPracDepth => 3
-    MenuPracShot => self.prac_shot_count()
-    MenuSurface | MenuDifficulty | MenuGames | MenuAssist => 3
-    MenuChar | MenuOpp => @shots.characters.length()
-    _ => return
-  }
-  if idx < 0 || idx >= count {
-    return
-  }
-  if idx == self.menu_idx {
-    match self.state {
-      MenuMode => self.confirm_mode()
-      MenuChar => self.confirm_char()
-      MenuOpp => self.confirm_opp()
-      MenuSurface => self.confirm_surface()
-      MenuDifficulty => self.confirm_difficulty()
-      MenuGames => self.confirm_games()
-      MenuAssist => self.confirm_assist()
-      MenuPracFeed => self.confirm_prac_feed()
-      MenuPracShot => self.confirm_prac_shot()
-      MenuPracDepth => self.confirm_prac_depth()
-      _ => ()
+  match self.state {
+    Results => self.back_to_home()
+    MenuSetup => {
+      let n = self.setup_rows().length()
+      match action {
+        "row" =>
+          if arg >= 0 && arg < n {
+            self.setup_row = arg
+            @ffi.host_sfx(self.host, "sfxMenu")
+            self.show_setup()
+          }
+        "dec" =>
+          if arg >= 0 && arg < n {
+            self.setup_row = arg
+            self.setup_change(-1)
+          }
+        "inc" =>
+          if arg >= 0 && arg < n {
+            self.setup_row = arg
+            self.setup_change(1)
+          }
+        "go" => {
+          @ffi.host_sfx(self.host, "sfxConfirm")
+          self.state = MenuPlayers
+          self.players_sel = 0
+          self.show_players()
+        }
+        _ => ()
+      }
     }
-  } else {
-    self.menu_idx = idx
-    @ffi.host_sfx(self.host, "sfxMenu")
-    match self.state {
-      MenuMode => self.show_mode_menu()
-      MenuChar => self.show_char_menu()
-      MenuOpp => self.show_opp_menu()
-      MenuSurface => @ffi.host_show_surface_select(self.host, self.menu_idx)
-      MenuDifficulty => @ffi.host_show_difficulty_select(self.host, self.menu_idx)
-      MenuGames => @ffi.host_show_games_select(self.host, self.menu_idx)
-      MenuAssist => @ffi.host_show_assist_select(self.host, self.menu_idx)
-      MenuPracFeed => @ffi.host_show_practice_feed(self.host, self.menu_idx)
-      MenuPracShot =>
-        @ffi.host_show_practice_shot(self.host, self.menu_idx, self.prac_feed)
-      MenuPracDepth => @ffi.host_show_practice_depth(self.host, self.menu_idx)
-      _ => ()
+    MenuPlayers => {
+      let nc = @shots.characters.length()
+      match action {
+        "you" =>
+          if arg >= 0 && arg < nc {
+            self.players_sel = 0
+            self.sel_player = arg
+            @ffi.host_sfx(self.host, "sfxMenu")
+            self.show_players()
+          }
+        "opp" =>
+          if arg >= 0 && arg < nc {
+            self.players_sel = 1
+            self.sel_opp = arg
+            @ffi.host_sfx(self.host, "sfxMenu")
+            self.show_players()
+          }
+        "go" => {
+          @ffi.host_sfx(self.host, "sfxConfirm")
+          self.start_match()
+        }
+        "back" => {
+          self.state = MenuSetup
+          self.show_setup()
+        }
+        _ => ()
+      }
     }
+    Match => ()
   }
 }
 
@@ -2082,8 +1968,9 @@ pub fn game_init(host : @ffi.Host, seed : Int) -> Unit {
   let self : Game = {
     host,
     rng: @rng.Gauss::new(seed),
-    state: MenuMode,
-    menu_idx: 0,
+    state: MenuSetup,
+    setup_row: 0,
+    players_sel: 0,
     sel_player: 0,
     sel_opp: 0,
     sel_surface: 2,
@@ -2106,5 +1993,5 @@ pub fn game_init(host : @ffi.Host, seed : Int) -> Unit {
     "full" => @assist.set_assist_level(Full)
     _ => ()
   }
-  self.show_mode_menu()
+  self.show_setup()
 }
