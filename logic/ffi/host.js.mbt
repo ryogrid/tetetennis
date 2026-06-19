@@ -220,6 +220,16 @@ pub extern "js" fn host_flash_shot(h : Host, ty : String) -> Unit = "(h,t)=>h.ui
 pub extern "js" fn host_serve_speed_toast(h : Host, kmh : Double) -> Unit =
   "(h,k)=>h.ui.serveSpeedToast(k)"
 
+// serve type + speed combined (shown when the user serves)
+///|
+pub extern "js" fn host_serve_info(h : Host, ty : String, kmh : Double) -> Unit =
+  "(h,t,k)=>h.ui.serveInfo(t,k)"
+
+// hitting-point quality 0..100 (non-serve hits), shown on the left
+///|
+pub extern "js" fn host_hit_quality(h : Host, q : Int) -> Unit =
+  "(h,q)=>h.ui.hitQuality(q)"
+
 ///|
 pub extern "js" fn host_set_recommended_shot(h : Host, ty : String) -> Unit =
   "(h,t)=>h.ui.setRecommendedShot(t)"

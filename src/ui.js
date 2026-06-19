@@ -320,6 +320,44 @@ const css = `
   background: rgba(18,18,28,.6); color: #ccc;
   border: 1px solid rgba(255,255,255,.25); font-size: 17px;
 }
+/* the camera/view button carries a visible caption + a one-time attract pulse
+   so its role is discoverable */
+#tc-cam {
+  display: flex; flex-direction: column; align-items: center; justify-content: center;
+  height: 44px; line-height: 1; gap: 1px; padding: 2px 0; font-size: 16px;
+}
+#tc-cam .tc-cap { font-size: 8px; letter-spacing: 1px; color: #bcd; font-weight: 700; }
+#tc-cam.attract {
+  border-color: #50e678; color: #eaffea;
+  animation: cam-pulse 1s ease-in-out infinite;
+}
+@keyframes cam-pulse {
+  from { box-shadow: 0 0 4px rgba(80,230,120,.4); }
+  to   { box-shadow: 0 0 16px 3px rgba(80,230,120,.9); }
+}
+/* hitting-point quality (0..100) — vertical gauge on the left, non-serve hits */
+#hitquality {
+  position: absolute; left: 18px; top: 50%; transform: translateY(-50%);
+  width: 56px; display: flex; flex-direction: column; align-items: center; gap: 4px;
+  opacity: 0; transition: opacity .25s; text-align: center;
+}
+#hitquality .hq-label { font-size: 10px; letter-spacing: 1px; color: #9aa; }
+#hitquality .hq-num { font-size: 26px; font-weight: 800; color: #fff; line-height: 1; }
+#hitquality .hq-bar {
+  width: 12px; height: 90px; border-radius: 6px; overflow: hidden; position: relative;
+  background: rgba(10,10,18,.55); border: 1px solid rgba(255,255,255,.35);
+}
+#hitquality .hq-fill {
+  position: absolute; left: 0; right: 0; bottom: 0; height: 0%;
+  background: #50e678; transition: height .2s, background .2s;
+}
+/* desktop: anchor the setup screen to the top so PRACTICE's extra rows extend
+   downward (scrolling if the window is short) instead of recentering/overflowing */
+@media (hover: hover) and (pointer: fine) {
+  .screen[data-screen="setup"] {
+    justify-content: flex-start; padding-top: 6vh; overflow-y: auto;
+  }
+}
 `;
 
 export function createUI({ onVirtualKey, onMoveAxis } = {}) {
@@ -403,6 +441,12 @@ export function createUI({ onVirtualKey, onMoveAxis } = {}) {
   els.chargebar = div('chargebar', hud);
   els.chargebar.innerHTML = '<i class="cb-fill"></i>';
   els.cbFill = els.chargebar.querySelector('.cb-fill');
+  els.hitquality = div('hitquality', hud);
+  els.hitquality.innerHTML =
+    '<div class="hq-label">CONTACT</div><div class="hq-num">0</div>' +
+    '<div class="hq-bar"><i class="hq-fill"></i></div>';
+  els.hqNum = els.hitquality.querySelector('.hq-num');
+  els.hqFill = els.hitquality.querySelector('.hq-fill');
   els.shotbar.innerHTML =
     '<div id="sb-flat">Z Flat</div><div id="sb-topspin">X Topspin</div>' +
     '<div id="sb-slice">C Slice</div><div id="sb-drop">V Drop</div>';
@@ -502,7 +546,8 @@ export function createUI({ onVirtualKey, onMoveAxis } = {}) {
   const cam = document.createElement('button');
   cam.id = 'tc-cam';
   cam.title = 'Toggle camera view (B)';
-  cam.innerHTML = '&#127909;'; // 🎥
+  cam.innerHTML = '<span class="tc-ico">&#127909;</span><span class="tc-cap">VIEW</span>'; // 🎥
+  els.cam = cam;
   const toggle = document.createElement('button');
   toggle.id = 'tc-toggle';
   const quit = document.createElement('button');
@@ -533,6 +578,7 @@ export function createUI({ onVirtualKey, onMoveAxis } = {}) {
   });
   cam.addEventListener('pointerdown', (e) => {
     e.preventDefault();
+    dismissCamHint();
     onKey('KeyB', true);
     onKey('KeyB', false);
   });
@@ -709,10 +755,28 @@ export function createUI({ onVirtualKey, onMoveAxis } = {}) {
 
   // ---------- hud ----------
 
+  // one-time discoverability nudge for the camera/view button: a pulse + a
+  // short toast on the first match, until the user finds it (persisted).
+  let camHintTimer = null;
+  function dismissCamHint() {
+    if (els.cam) els.cam.classList.remove('attract');
+    if (camHintTimer) { clearTimeout(camHintTimer); camHintTimer = null; }
+    try { localStorage.setItem('camHintSeen', '1'); } catch { /* ignore */ }
+  }
+  function maybeShowCamHint() {
+    let seen = false;
+    try { seen = localStorage.getItem('camHintSeen') === '1'; } catch { /* ignore */ }
+    if (seen || !els.cam) return;
+    els.cam.classList.add('attract');
+    toast('🎥 VIEW (B): change camera angle', 2600);
+    camHintTimer = setTimeout(dismissCamHint, 6000);
+  }
+
   function showHUD() {
     hudShown = true;
     els.scoreboard.style.display = 'block';
     applyTouchVisibility();
+    maybeShowCamHint();
   }
 
   function hideHUD() {
@@ -723,6 +787,7 @@ export function createUI({ onVirtualKey, onMoveAxis } = {}) {
     hideGauge('toss');
     hideGauge('timing');
     hideGauge('height');
+    hideHitQuality();
     hideMoveHint();
     setRecommendedShot('');
     applyTouchVisibility();
@@ -809,6 +874,31 @@ export function createUI({ onVirtualKey, onMoveAxis } = {}) {
     toast(`Serve: ${Math.round(kmh)} km/h`, 1600);
   }
 
+  // serve type + speed combined, shown when the user serves
+  function serveInfo(ty, kmh) {
+    toast(`${ty} SERVE · ${Math.round(kmh)} km/h`, 1700);
+  }
+
+  // hitting-point quality 0..100 on the left, on non-serve hits. Colour ramps
+  // red → amber → green; auto-hides shortly after the hit.
+  let hqTimer = null;
+  function hitQuality(q) {
+    const v = Math.max(0, Math.min(100, Math.round(q)));
+    const hue = 120 * (v / 100); // 0 = red, 120 = green
+    const col = `hsl(${hue}, 85%, 55%)`;
+    els.hqNum.textContent = v;
+    els.hqNum.style.color = col;
+    els.hqFill.style.height = `${v}%`;
+    els.hqFill.style.background = col;
+    els.hitquality.style.opacity = 1;
+    if (hqTimer) clearTimeout(hqTimer);
+    hqTimer = setTimeout(() => { els.hitquality.style.opacity = 0; }, 1100);
+  }
+  function hideHitQuality() {
+    if (hqTimer) clearTimeout(hqTimer);
+    els.hitquality.style.opacity = 0;
+  }
+
   // ---------- unified gauges (toss / timing / height) ----------
   // frac/lo/hi in [0,1]. toss + height are VERTICAL (measured from the bottom);
   // timing is the HORIZONTAL meter (left-to-right). good => the dot snaps green.
@@ -873,8 +963,9 @@ export function createUI({ onVirtualKey, onMoveAxis } = {}) {
     showPause, hidePause,
     showResults, hideMenu,
     showHUD, hideHUD, updateScore, practiceHud,
-    banner, toast, flashShot, serveSpeedToast, setRecommendedShot,
+    banner, toast, flashShot, serveSpeedToast, serveInfo, setRecommendedShot,
     gauge, hideGauge, charge, hideCharge,
+    hitQuality, hideHitQuality,
     moveHint, hideMoveHint,
   };
 }

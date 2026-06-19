@@ -98,12 +98,15 @@ function frame(now) {
   logic.frameUpdate(sdt);
   render.tick(sdt);
   input.endFrame();
+  // behind-player view → dim the human so the incoming ball stays visible
+  const behind = render.isActive() && cameraRig.getMode() !== 'overhead';
+  render.setHumanTransparent(behind);
   renderer.render(scene, camera);
   minimap.update(
     render.getBall(),
     render.getPlayer(0),
     render.getPlayer(1),
-    render.isActive() && cameraRig.getMode() !== 'overhead',
+    behind,
   );
 }
 requestAnimationFrame(frame);

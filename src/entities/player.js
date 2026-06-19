@@ -103,7 +103,17 @@ function buildRig(color) {
     joints['knee' + side] = knee;
   }
 
-  return { root, joints };
+  // Collect every body/racket material so the rig can be dimmed to translucent
+  // (behind-player camera). Captured here, before the reach-zone / hit-point
+  // rings are added in createPlayerRig, so those overlays are never dimmed.
+  const bodyMats = [];
+  root.traverse((o) => {
+    if (o.material) {
+      bodyMats.push({ mat: o.material, op: o.material.opacity, tr: o.material.transparent });
+    }
+  });
+
+  return { root, joints, bodyMats };
 }
 
 // piecewise-linear keyframe interpolation
@@ -485,7 +495,7 @@ function getSwingPose(swing) {
 // side: 0 = human (+z, faces -z), 1 = cpu (-z, rotated PI).
 // reach: horizontal reach radius for the human zone circle (ignored for cpu).
 export function createPlayerRig({ side, color, reach, scene }) {
-  const { root, joints } = buildRig(color);
+  const { root, joints, bodyMats } = buildRig(color);
   const isHuman = side === 0;
   if (!isHuman) root.rotation.y = Math.PI;
   scene.add(root);
@@ -633,6 +643,18 @@ export function createPlayerRig({ side, color, reach, scene }) {
       if (this._reachMat) this._reachMat.color.setHex(hex);
     },
 
+    // Dim the whole body + racket to translucent (behind-player camera) so the
+    // incoming ball and effects stay visible through the player; restore on
+    // overhead view. Overlays (reach zone, hit-point rings) are untouched.
+    setTransparent(on) {
+      if (this._transparent === on) return;
+      this._transparent = on;
+      for (const b of bodyMats) {
+        b.mat.transparent = on || b.tr;
+        b.mat.opacity = on ? b.op * 0.35 : b.op;
+      }
+    },
+
     dispose() {
       scene.remove(root);
       root.traverse((o) => {
@@ -654,6 +676,20 @@ export function createPlayerRig({ side, color, reach, scene }) {
     circle.position.y = 0.012;
     root.add(circle);
     p._reachMat = circMat;
+
+    // Best hit-point markers: a hollow green ring on each side of the player at
+    // waist/contact height. The hole is ~2x the ball diameter (ball Ø ≈ 0.10 m)
+    // so the player can judge where to meet the ball. Standing in the rig root,
+    // they follow the player; the torus plane (normal +z) faces the incoming
+    // ball. Green harmonises with the on-court sweet-spot marker.
+    const hitMat = new THREE.MeshBasicMaterial({
+      color: 0x49e08a, transparent: true, opacity: 0.6, side: THREE.DoubleSide,
+    });
+    for (const sx of [-1, 1]) {
+      const hoop = new THREE.Mesh(new THREE.TorusGeometry(0.10, 0.02, 10, 28), hitMat);
+      hoop.position.set(sx * 0.55, 0.95, 0);
+      root.add(hoop);
+    }
   }
 
   return p;

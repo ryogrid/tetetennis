@@ -335,6 +335,28 @@ fn serve_flash_str(t : @shots.ServeType) -> String {
   }
 }
 
+// Uppercase display label for a groundstroke's shot type (smash-style toast).
+///|
+fn stroke_label(t : @shots.ShotType) -> String {
+  match t {
+    Flat => "FLAT"
+    Topspin => "TOPSPIN"
+    Slice => "SLICE"
+    Lob => "LOB"
+    Drop => "DROP"
+  }
+}
+
+// Uppercase display label for a serve type.
+///|
+fn serve_label(t : @shots.ServeType) -> String {
+  match t {
+    ServeKick => "KICK"
+    ServeSlice => "SLICE"
+    ServeFlat => "FLAT"
+  }
+}
+
 ///|
 fn stroke_to_serve(t : @shots.ShotType) -> @shots.ServeType {
   match t {
@@ -855,13 +877,16 @@ fn execute_serve(
   ms.ball_stamp = ms.ball_stamp + 1
   let speed = @vec.hypot3(res.vx, res.vy, res.vz)
   @ffi.host_sfx_hit(self.host, speed, "serve", b.px / 5.5, false)
-  @ffi.host_serve_speed_toast(self.host, speed * 3.6)
   match @physics.predict_landing(b, ms.surface) {
     Some(l) => @ffi.host_show_landing(self.host, l.x, l.z)
     None => ()
   }
   if sv == @rules.P {
     @ffi.host_flash_shot(self.host, serve_flash_str(ty))
+    // user's serve: show serve type + speed together
+    @ffi.host_serve_info(self.host, serve_label(ty), speed * 3.6)
+  } else {
+    @ffi.host_serve_speed_toast(self.host, speed * 3.6)
   }
 }
 
@@ -1006,11 +1031,18 @@ fn attempt_contact(
       )
       if side == @rules.P {
         @ffi.host_flash_shot(self.host, shot_type_str(r.shot_type))
+        // hitting-point quality (0..100) feedback on the left of the screen
+        @ffi.host_hit_quality(self.host, (r.q * 100.0).to_int())
         if r.perfect {
           @ffi.host_sfx(self.host, "sfxPerfect")
         }
+        // smash-style label: SMASH / VOLLEY / the groundstroke's shot type
         if r.smash {
           @ffi.host_toast(self.host, "SMASH!", 700)
+        } else if r.volley {
+          @ffi.host_toast(self.host, "VOLLEY", 700)
+        } else {
+          @ffi.host_toast(self.host, stroke_label(r.shot_type), 700)
         }
       }
       match @physics.predict_landing(b, ms.surface) {
@@ -2022,7 +2054,7 @@ pub fn game_init(host : @ffi.Host, seed : Int) -> Unit {
     prac_feed: 0,
     prac_shot: 0,
     prac_depth: 2, // default to random depth
-    camera_overhead: false,
+    camera_overhead: true, // default to the bird's-eye view
     paused: false,
     time_scale: 1.0,
     ms: None,

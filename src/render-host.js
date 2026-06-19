@@ -86,6 +86,11 @@ export function createRenderHost(scene) {
     setReachColor(inReach) {
       if (players[0]) players[0].setReachZoneColor(inReach ? REACH_HOT : REACH_IDLE);
     },
+    // dim the human rig to translucent (behind-player camera) so the ball stays
+    // visible through it; opaque again in overhead view.
+    setHumanTransparent(on) {
+      if (players[0]) players[0].setTransparent(on);
+    },
     setOpenCourt(show, x, z) {
       openCourt.visible = !!show;
       if (show) { openCourt.position.x = x; openCourt.position.z = z; }
