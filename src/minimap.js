@@ -104,14 +104,14 @@ export function createMinimap() {
     ctx.clearRect(0, 0, W, H);
     drawCourt();
 
-    // CPU player (red — draw under the ball)
+    // Both players in light blue (水色); the YOU/OPP labels + court halves keep
+    // them distinguishable, and the user's dot is drawn slightly larger.
+    const AQUA = '#5fd3ff';
     if (p1 && p1.pos) {
-      dot(p1.pos.x, p1.pos.z, '#e84a4a', 3.5);
+      dot(p1.pos.x, p1.pos.z, AQUA, 3.5);
     }
-
-    // Human player (blue)
     if (p0 && p0.pos) {
-      dot(p0.pos.x, p0.pos.z, '#4da6ff', 3.5);
+      dot(p0.pos.x, p0.pos.z, AQUA, 4.5);
     }
 
     // Ball (bright yellow — topmost, only when active)
