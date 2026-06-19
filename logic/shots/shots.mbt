@@ -94,6 +94,28 @@ let smash_theta_min : Double = -14.0
 ///|
 let smash_theta_max : Double = 2.0
 
+// Choose the swing motion for animation at swing-start, mirroring the smash/volley
+// contact criteria so the rendered motion matches the shot's physics judgment.
+// `volley_forecourt` lives in the game layer, so it is passed in.
+///|
+pub fn swing_motion(
+  bounces : Int,
+  ball_y : Double,
+  ball_z : Double,
+  ty : ShotType,
+  volley_forecourt : Double,
+) -> String {
+  if ty == Flat && ball_y >= smash_height && @vec.dabs(ball_z) < smash_forecourt {
+    "smash"
+  } else if bounces == 0 &&
+    @vec.dabs(ball_z) < volley_forecourt &&
+    (ty == Flat || ty == Slice) {
+    "volley"
+  } else {
+    ""
+  }
+}
+
 // Fast-ball jam / counter (Appendix A.3).
 ///|
 let jam_threshold : Double = 26.0 // incoming pace (m/s) above which jamming starts
