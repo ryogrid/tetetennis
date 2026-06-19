@@ -650,7 +650,13 @@ export function createPlayerRig({ side, color, reach, scene }) {
       if (this._transparent === on) return;
       this._transparent = on;
       for (const b of bodyMats) {
-        b.mat.transparent = on || b.tr;
+        const wantTransparent = on || b.tr;
+        // toggling `transparent` at runtime needs needsUpdate so the renderer
+        // re-evaluates the blending state it cached on first render (otherwise a
+        // material first drawn opaque, e.g. starting in overhead, never picks up
+        // the change when we later switch to the behind-player view).
+        if (b.mat.transparent !== wantTransparent) b.mat.needsUpdate = true;
+        b.mat.transparent = wantTransparent;
         b.mat.opacity = on ? b.op * 0.35 : b.op;
       }
     },
