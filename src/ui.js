@@ -188,15 +188,18 @@ const css = `
 #shotbar div.flash { background: #e8f24b; color: #111; }
 #shotbar div.recommend { border-color: #50e678; box-shadow: 0 0 8px rgba(80,230,120,.85); }
 #controls {
-  position: absolute; bottom: 14px; right: 14px; font-size: 12px; color: #888;
+  position: absolute; bottom: 44px; right: 14px; font-size: 12px; color: #888;
   background: rgba(10,10,18,.7); padding: 8px 12px; border-radius: 6px; text-align: right;
 }
+/* source-code link: sits just below the controls box, right-aligned so its
+   text's right edge meets the controls box's right edge. Muted teal on a faint
+   bluish panel so it reads as distinct from the (grey) instructions. */
 #src-link {
-  position: absolute; bottom: 14px; left: 14px; font-size: 12px; color: #666;
-  background: rgba(10,10,18,.6); padding: 5px 10px; border-radius: 5px;
-  text-decoration: none; pointer-events: auto; transition: color .2s;
+  position: absolute; bottom: 14px; right: 14px; font-size: 11px; color: #6fb6cf;
+  background: rgba(14,22,36,.5); padding: 4px 0; border-radius: 4px;
+  text-decoration: none; pointer-events: auto; transition: color .2s; letter-spacing: .3px;
 }
-#src-link:hover { color: #e8f24b; }
+#src-link:hover { color: #aee6ff; }
 #touchui { position: absolute; inset: 0; pointer-events: none; display: none; }
 #stick {
   position: absolute; left: 22px; bottom: 22px; width: 176px; height: 176px;
@@ -457,7 +460,7 @@ export function createUI({ onVirtualKey, onMoveAxis } = {}) {
     'Serve: Space toss, then Z/X/C when the power meter is in the green band<br>' +
     'Aim: hold a direction at the moment you release';
 
-  // source-code link (bottom-left)
+  // source-code link (bottom-right, just below the controls box)
   const srcLink = document.createElement('a');
   srcLink.id = 'src-link';
   srcLink.href = 'https://github.com/ryogrid/tetetennis';
