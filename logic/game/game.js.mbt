@@ -426,14 +426,17 @@ fn names_c() -> String {
 // PRACTICE: mode + surface + feed + shot (+ depth, stroke feeds only) + assist.
 ///|
 fn setup_rows(self : Game) -> Array[RowKind] {
+  // Rows common to both modes (Mode, Surface, Assist) come first, in the same
+  // order, so toggling MATCH/PRACTICE never shifts them; mode-specific rows
+  // follow.
   if self.is_practice {
     if self.prac_feed == 0 {
-      [Mode, Surface, Feed, Shot, Depth, Assist]
+      [Mode, Surface, Assist, Feed, Shot, Depth]
     } else {
-      [Mode, Surface, Feed, Shot, Assist]
+      [Mode, Surface, Assist, Feed, Shot]
     }
   } else {
-    [Mode, Surface, Difficulty, Games, Assist]
+    [Mode, Surface, Assist, Difficulty, Games]
   }
 }
 

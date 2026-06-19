@@ -637,24 +637,24 @@ export function createUI({ onVirtualKey, onMoveAxis } = {}) {
     els.menu.style.display = 'flex';
     els.menu.dataset.screen = 'setup';
     const surfaceOpts = SURFACE_IDS.map((id, i) => ({ name: surfaceLabel(i), desc: '' }));
+    // Rows common to both modes come first in the same order (MODE, SURFACE,
+    // ASSIST) so toggling MATCH/PRACTICE doesn't move them; mode-specific rows
+    // follow. Indices must match the MoonBit setup_rows() order exactly.
     const rows = [
       // MODE is always chips (binary, reads as a clear toggle on any device)
       optRow('MODE', 0, row, MODE_OPTIONS, isPractice ? 1 : 0, true),
       optRow('SURFACE', 1, row, surfaceOpts, surface, isDesktop),
+      optRow('ASSIST', 2, row, ASSIST_OPTIONS, assist, isDesktop),
     ];
     if (isPractice) {
-      rows.push(optRow('FEED', 2, row, FEED_OPTIONS, feed, isDesktop));
-      rows.push(optRow('BALL TYPE', 3, row, feed === 1 ? SERVE_SHOTS : STROKE_SHOTS, shot, isDesktop));
-      let i = 4;
+      rows.push(optRow('FEED', 3, row, FEED_OPTIONS, feed, isDesktop));
+      rows.push(optRow('BALL TYPE', 4, row, feed === 1 ? SERVE_SHOTS : STROKE_SHOTS, shot, isDesktop));
       if (feed === 0) {
-        rows.push(optRow('FEED DEPTH', 4, row, DEPTH_OPTIONS, depth, isDesktop));
-        i = 5;
+        rows.push(optRow('FEED DEPTH', 5, row, DEPTH_OPTIONS, depth, isDesktop));
       }
-      rows.push(optRow('ASSIST', i, row, ASSIST_OPTIONS, assist, isDesktop));
     } else {
-      rows.push(optRow('DIFFICULTY', 2, row, DIFFICULTIES, difficulty, isDesktop));
-      rows.push(optRow('GAMES', 3, row, GAMES_OPTIONS, gamesIdx, isDesktop));
-      rows.push(optRow('ASSIST', 4, row, ASSIST_OPTIONS, assist, isDesktop));
+      rows.push(optRow('DIFFICULTY', 3, row, DIFFICULTIES, difficulty, isDesktop));
+      rows.push(optRow('GAMES', 4, row, GAMES_OPTIONS, gamesIdx, isDesktop));
     }
     const nav = isDesktop
       ? '&uarr;/&darr; row &middot; &larr;/&rarr; or click an option &middot; Enter &rarr; players'
