@@ -195,8 +195,8 @@ const css = `
    text's right edge meets the controls box's right edge. Muted teal on a faint
    bluish panel so it reads as distinct from the (grey) instructions. */
 #src-link {
-  position: absolute; bottom: 14px; right: 14px; font-size: 11px; color: #6fb6cf;
-  background: rgba(14,22,36,.5); padding: 4px 0; border-radius: 4px;
+  position: absolute; bottom: 14px; right: 6px; font-size: 11px; color: #6fb6cf;
+  background: rgba(14,22,36,.5); padding: 4px 8px; border-radius: 4px;
   text-decoration: none; pointer-events: auto; transition: color .2s; letter-spacing: .3px;
 }
 #src-link:hover { color: #aee6ff; }
