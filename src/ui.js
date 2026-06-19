@@ -107,6 +107,9 @@ const css = `
 .sarrow { color: #888; font-size: 14px; cursor: pointer; padding: 0 4px; user-select: none; }
 .srow.sel .sarrow { color: #e8f24b; }
 .sval { min-width: 150px; text-align: center; }
+/* desktop: lay a row's options out horizontally */
+.srow.chips { grid-template-columns: 120px 1fr; }
+.srow.chips .srow-val { flex-wrap: wrap; gap: 8px; }
 .dot { display: inline-block; width: 11px; height: 11px; border-radius: 50%; margin-right: 7px; vertical-align: middle; }
 .mchip {
   padding: 3px 14px; border-radius: 7px; border: 2px solid #333; color: #888;
@@ -131,6 +134,22 @@ const css = `
 .cards.compact .card { width: 132px; padding: 9px; }
 .cards.compact .card .desc { min-height: 30px; font-size: 10px; }
 .cards.compact .statradar { width: 120px; height: 110px; }
+/* phones: compact both setup screens so everything (incl. START) fits with no
+   vertical scroll, and let the character rows scroll horizontally if needed */
+@media (pointer: coarse) {
+  .screen { justify-content: flex-start; gap: 8px; padding: 10px 0; overflow-y: auto; }
+  .title { font-size: 26px; letter-spacing: 2px; }
+  .setup { gap: 6px; min-width: 0; width: 92vw; max-width: 460px; }
+  .srow { padding: 6px 12px; }
+  .srow-desc { min-height: 0; }
+  .psection { padding: 4px 8px; gap: 2px; max-width: 100vw; }
+  .psection .cards { overflow-x: auto; max-width: 100vw; padding: 6px 0; }
+  .cards.compact .card { width: 108px; padding: 7px; flex: 0 0 auto; }
+  .cards.compact .card h3 { font-size: 16px; }
+  .cards.compact .card .desc { display: none; }
+  .cards.compact .statradar { width: 92px; height: 86px; }
+  .startbtn { margin-top: 0; padding: 8px 22px; }
+}
 .matchstats { border-collapse: collapse; margin: 6px 0; font-size: 14px; color: #cdd; }
 .matchstats th, .matchstats td { padding: 3px 14px; text-align: center; }
 .matchstats th { color: #888; font-weight: 600; font-size: 12px; }
@@ -309,6 +328,9 @@ export function createUI({ onVirtualKey, onMoveAxis } = {}) {
   let menuTapHandler = null;
   let hudShown = false;
   let touchVisible = false;
+  // Mouse-class device? Used to pick the setup-screen layout: desktops lay every
+  // option out horizontally (click to pick); phones keep the ◂ value ▸ toggle.
+  const isDesktop = window.matchMedia('(hover: hover) and (pointer: fine)').matches;
   // per-name gauge "shown" state (toss / timing / height)
   const gaugeShown = { toss: false, timing: false };
   let recommendedShot = '';
@@ -405,8 +427,8 @@ export function createUI({ onVirtualKey, onMoveAxis } = {}) {
   els.menu.addEventListener('pointerdown', (e) => {
     if (!menuTapHandler) return;
     const el = e.target.closest('[data-cmd]');
-    if (el) menuTapHandler(el.dataset.cmd, parseInt(el.dataset.arg || '0', 10));
-    else if (els.menu.dataset.screen === 'results') menuTapHandler('results', 0);
+    if (el) menuTapHandler(el.dataset.cmd, parseInt(el.dataset.arg || '0', 10), parseInt(el.dataset.arg2 || '0', 10));
+    else if (els.menu.dataset.screen === 'results') menuTapHandler('results', 0, 0);
   });
 
   // ---------- on-screen controls (two-handed phone grip) ----------
@@ -534,61 +556,66 @@ export function createUI({ onVirtualKey, onMoveAxis } = {}) {
   // ----- screen 1: consolidated setup (mode + mode-dependent settings) -----
   // Row indices below MUST match Game::setup_rows in logic/game/game.js.mbt.
 
-  function surfaceValue(idx) {
+  function surfaceLabel(idx) {
     const t = SURFACE_THEMES[SURFACE_IDS[idx]];
     return `<span class="dot" style="background:#${t.court.toString(16).padStart(6, '0')}"></span>${t.label}`;
   }
 
-  // a value row: ◂ value ▸ with a label, highlighted + described when focused
-  function setupRow(label, rowIdx, focusedRow, valueHtml, desc) {
-    const sel = rowIdx === focusedRow;
-    return `<div class="srow${sel ? ' sel' : ''}" data-cmd="row" data-arg="${rowIdx}">
-      <div class="srow-label">${label}</div>
-      <div class="srow-val">
-        <span class="sarrow" data-cmd="dec" data-arg="${rowIdx}">&#9666;</span>
-        <span class="sval">${valueHtml}</span>
-        <span class="sarrow" data-cmd="inc" data-arg="${rowIdx}">&#9656;</span>
-      </div>
-      <div class="srow-desc">${sel ? desc : ''}</div>
-    </div>`;
+  // one selectable option chip (desktop layout / the MODE row): tapping it sets
+  // row `rowIdx` to value `optIdx` directly.
+  function optChip(rowIdx, optIdx, label, active) {
+    return `<span class="mchip${active ? ' on' : ''}" data-cmd="set" data-arg="${rowIdx}" data-arg2="${optIdx}">${label}</span>`;
   }
 
-  // the mode row renders two chips; tapping the inactive one toggles the mode
-  function modeRow(rowIdx, focusedRow, isPractice) {
-    const sel = rowIdx === focusedRow;
-    const chip = (name, active) =>
-      `<span class="mchip${active ? ' on' : ''}"${active ? '' : ` data-cmd="inc" data-arg="${rowIdx}"`}>${name}</span>`;
-    return `<div class="srow mode${sel ? ' sel' : ''}" data-cmd="row" data-arg="${rowIdx}">
-      <div class="srow-label">MODE</div>
-      <div class="srow-val">${chip('MATCH', !isPractice)}${chip('PRACTICE', isPractice)}</div>
-      <div class="srow-desc">${sel ? MODE_OPTIONS[isPractice ? 1 : 0].desc : ''}</div>
+  // a setup row. `options` is [{name, desc}] (name may be HTML). When `chips`,
+  // every option is laid out horizontally (click to pick); otherwise the value
+  // is shown between ◂ ▸ arrows that step through the options.
+  function optRow(label, rowIdx, focusedRow, options, sel, chips) {
+    const selRow = rowIdx === focusedRow;
+    const desc = options[sel] ? (options[sel].desc || '') : '';
+    const val = chips
+      ? options.map((o, i) => optChip(rowIdx, i, o.name, i === sel)).join('')
+      : `<span class="sarrow" data-cmd="dec" data-arg="${rowIdx}">&#9666;</span>` +
+        `<span class="sval">${options[sel].name}</span>` +
+        `<span class="sarrow" data-cmd="inc" data-arg="${rowIdx}">&#9656;</span>`;
+    return `<div class="srow${selRow ? ' sel' : ''}${chips ? ' chips' : ''}" data-cmd="row" data-arg="${rowIdx}">
+      <div class="srow-label">${label}</div>
+      <div class="srow-val">${val}</div>
+      <div class="srow-desc">${selRow ? desc : ''}</div>
     </div>`;
   }
 
   function showSetup(isPractice, row, surface, difficulty, gamesIdx, assist, feed, shot, depth) {
     els.menu.style.display = 'flex';
     els.menu.dataset.screen = 'setup';
-    const rows = [modeRow(0, row, isPractice), setupRow('SURFACE', 1, row, surfaceValue(surface), '')];
+    const surfaceOpts = SURFACE_IDS.map((id, i) => ({ name: surfaceLabel(i), desc: '' }));
+    const rows = [
+      // MODE is always chips (binary, reads as a clear toggle on any device)
+      optRow('MODE', 0, row, MODE_OPTIONS, isPractice ? 1 : 0, true),
+      optRow('SURFACE', 1, row, surfaceOpts, surface, isDesktop),
+    ];
     if (isPractice) {
-      rows.push(setupRow('FEED', 2, row, FEED_OPTIONS[feed].name, FEED_OPTIONS[feed].desc));
-      const shots = feed === 1 ? SERVE_SHOTS : STROKE_SHOTS;
-      rows.push(setupRow('BALL TYPE', 3, row, shots[shot].name, shots[shot].desc));
+      rows.push(optRow('FEED', 2, row, FEED_OPTIONS, feed, isDesktop));
+      rows.push(optRow('BALL TYPE', 3, row, feed === 1 ? SERVE_SHOTS : STROKE_SHOTS, shot, isDesktop));
       let i = 4;
       if (feed === 0) {
-        rows.push(setupRow('FEED DEPTH', 4, row, DEPTH_OPTIONS[depth].name, DEPTH_OPTIONS[depth].desc));
+        rows.push(optRow('FEED DEPTH', 4, row, DEPTH_OPTIONS, depth, isDesktop));
         i = 5;
       }
-      rows.push(setupRow('ASSIST', i, row, ASSIST_OPTIONS[assist].name, ASSIST_OPTIONS[assist].desc));
+      rows.push(optRow('ASSIST', i, row, ASSIST_OPTIONS, assist, isDesktop));
     } else {
-      rows.push(setupRow('DIFFICULTY', 2, row, DIFFICULTIES[difficulty].name, DIFFICULTIES[difficulty].desc));
-      rows.push(setupRow('GAMES', 3, row, GAMES_OPTIONS[gamesIdx].name, GAMES_OPTIONS[gamesIdx].desc));
-      rows.push(setupRow('ASSIST', 4, row, ASSIST_OPTIONS[assist].name, ASSIST_OPTIONS[assist].desc));
+      rows.push(optRow('DIFFICULTY', 2, row, DIFFICULTIES, difficulty, isDesktop));
+      rows.push(optRow('GAMES', 3, row, GAMES_OPTIONS, gamesIdx, isDesktop));
+      rows.push(optRow('ASSIST', 4, row, ASSIST_OPTIONS, assist, isDesktop));
     }
+    const nav = isDesktop
+      ? '&uarr;/&darr; row &middot; &larr;/&rarr; or click an option &middot; Enter &rarr; players'
+      : '&uarr;/&darr; row &middot; &larr;/&rarr; change &middot; Enter &rarr; players &middot; or tap';
     els.menu.innerHTML =
       `<div class="title">GAME SETUP</div>` +
       `<div class="setup">${rows.join('')}</div>` +
       `<div class="startbtn" data-cmd="go" data-arg="0">ENTER &rarr; PLAYERS</div>` +
-      `<div class="hint">&uarr;/&darr; row &middot; &larr;/&rarr; change &middot; Enter &rarr; players &middot; or tap</div>`;
+      `<div class="hint">${nav}</div>`;
   }
 
   // ----- screen 2: pick your player + opponent (rich cards) -----
@@ -613,6 +640,10 @@ export function createUI({ onVirtualKey, onMoveAxis } = {}) {
       `<div class="startbtn" data-cmd="go" data-arg="0">START &#9654;</div>` +
       `</div>` +
       `<div class="hint">&uarr;/&darr; you/opp &middot; &larr;/&rarr; pick &middot; Enter start &middot; Esc back &middot; or tap</div>`;
+    // keep the focused section's chosen card in view when the card row scrolls
+    // horizontally (narrow screens). No-op when nothing overflows (desktop).
+    const active = els.menu.querySelector('.psection.focused .card.sel');
+    if (active) active.scrollIntoView({ inline: 'center', block: 'nearest' });
   }
 
   function showResults(win, lose, games, playerWon, difficulty, stats) {
