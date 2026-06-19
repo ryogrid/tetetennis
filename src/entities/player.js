@@ -172,42 +172,60 @@ function fhTopspinPose(n) {
 }
 
 function fhSlicePose(n) {
-  // High→low swing, open stance (less rotation), knife-through follow-through
+  // Continental grip: racket set high (~shoulder), chop high→low under the ball,
+  // and finish side-on by pulling the left arm back (chest opens) so the body
+  // never squares up to the net.
   return {
     hips: [
       kf(n, [0, 0.3, 0.4, 0.65, 1], [0.10, 0.18, 0.28, 0.22, 0.12]),
-      kf(n, [0, 0.3, 0.4, 0.65, 1], [-0.2, -0.9, 0.2, 0.8, 0.6]), // less coil, less follow
+      kf(n, [0, 0.3, 0.4, 0.65, 1], [-0.2, -0.8, 0.10, 0.30, 0.25]), // restrained opening — stay sideways
       0,
     ],
     shoulderR: [
-      kf(n, [0, 0.3, 0.4, 0.65, 1], [0.1, -0.15, 0.05, 0.2, 0.2]), // starts higher, high→low
-      kf(n, [0, 0.3, 0.4, 0.65, 1], [0, -0.9, 0.05, 1.0, 0.8]),
+      kf(n, [0, 0.3, 0.4, 0.65, 1], [0.3, 0.5, 0.05, -0.2, -0.1]), // set high → chop down
+      kf(n, [0, 0.3, 0.4, 0.65, 1], [0, -0.9, 0.05, 0.9, 0.7]),
       kf(n, [0, 0.3, 0.4, 0.65, 1], [0.25, 0.8, 1.2, 0.7, 0.4]),
     ],
     elbowR: [kf(n, [0, 0.3, 0.4, 0.65, 1], [0.6, 1.2, 0.3, 0.6, 0.6]), 0, 0],
-    racket: [kf(n, [0, 0.3, 0.4, 1], [0.3, 1.1, 0.15, 0.35]), 0, 0],
+    // left arm pulls back/behind on the finish — chest-opening counterbalance
+    shoulderL: [
+      kf(n, [0, 0.3, 0.4, 0.65, 1], [0.2, 0.1, 0.0, -0.3, -0.4]),
+      kf(n, [0, 0.3, 0.4, 0.65, 1], [-0.1, 0.3, 0.5, 0.9, 1.0]),
+      0,
+    ],
+    elbowL: [kf(n, [0, 0.3, 0.4, 1], [0.8, 0.5, 0.35, 0.3]), 0, 0],
+    racket: [kf(n, [0, 0.3, 0.4, 1], [0.3, 1.1, 0.2, 0.35]), 0, 0], // face slightly open at contact
     kneeBend: kf(n, [0, 0.3, 0.4, 0.7, 1], [0.25, 0.45, 0.30, 0.22, 0.22]),
     baseY: 0.83 - kf(n, [0, 0.3, 0.4, 0.7, 1], [0.01, 0.06, 0.02, 0, 0.01]),
   };
 }
 
 function fhDropPose(n) {
-  // Short takeback, soft abbreviated follow-through, minimal lower body
+  // Disguised as a normal drive through the takeback, then the swing is checked
+  // (寸止め): the speed dies at contact with almost no follow-through — a soft,
+  // open-faced touch. Values hold nearly constant after n=0.4 (the freeze).
   return {
     hips: [
-      kf(n, [0, 0.3, 0.4, 0.6, 1], [0.10, 0.14, 0.22, 0.16, 0.12]),
-      kf(n, [0, 0.3, 0.4, 0.6, 1], [-0.15, -0.7, 0.15, 0.6, 0.4]),
+      kf(n, [0, 0.25, 0.4, 1], [0.10, 0.15, 0.22, 0.18]), // full-looking coil, then no rotation-through
+      kf(n, [0, 0.25, 0.4, 1], [-0.3, -1.0, -0.1, 0.0]),
       0,
     ],
     shoulderR: [
-      kf(n, [0, 0.3, 0.4, 0.6, 1], [0.0, -0.25, -0.1, 0.05, 0.2]),
-      kf(n, [0, 0.3, 0.4, 0.6, 1], [0, -0.7, 0.05, 0.8, 0.6]),
-      kf(n, [0, 0.3, 0.4, 0.6, 1], [0.2, 0.5, 1.0, 0.7, 0.4]),
+      kf(n, [0, 0.25, 0.4, 1], [-0.2, -0.4, -0.15, -0.05]),
+      kf(n, [0, 0.25, 0.4, 1], [0, -0.85, 0.0, 0.05]),
+      kf(n, [0, 0.25, 0.4, 1], [0.25, 0.7, 0.6, 0.55]), // no big wrap — checked
     ],
-    elbowR: [kf(n, [0, 0.3, 0.4, 0.6, 1], [0.6, 1.0, 0.25, 0.5, 0.65]), 0, 0],
-    racket: [kf(n, [0, 0.3, 0.4, 1], [0.3, 0.7, 0.1, 0.35]), 0, 0],
-    kneeBend: kf(n, [0, 0.3, 0.4, 0.6, 1], [0.22, 0.35, 0.28, 0.22, 0.22]),
-    baseY: 0.83 - kf(n, [0, 0.3, 0.4, 0.6, 1], [0.01, 0.04, 0.02, 0, 0]),
+    elbowR: [kf(n, [0, 0.25, 0.4, 1], [0.6, 1.0, 0.6, 0.6]), 0, 0], // soft, no whip
+    // left arm points at the ball (disguise) then settles — no rising finish
+    shoulderL: [
+      kf(n, [0, 0.25, 0.4, 1], [0.3, 1.1, 0.7, 0.6]),
+      kf(n, [0, 0.25, 0.4, 1], [-0.18, -0.6, -0.3, -0.2]),
+      0,
+    ],
+    elbowL: [kf(n, [0, 0.25, 0.4, 1], [0.9, 0.4, 0.8, 0.9]), 0, 0],
+    racket: [kf(n, [0, 0.25, 0.4, 1], [0.3, 0.9, 0.3, 0.3]), 0, 0], // cocked like a drive → open soft face, held
+    kneeBend: kf(n, [0, 0.25, 0.4, 1], [0.22, 0.4, 0.3, 0.28]),
+    baseY: 0.83 - kf(n, [0, 0.25, 0.4, 1], [0.01, 0.05, 0.03, 0.02]),
   };
 }
 
@@ -271,27 +289,57 @@ function bhTopspinPose(n) {
 }
 
 function bhSlicePose(n) {
+  // One-handed slice action: racket set high, chop high→low, and the left
+  // (non-dominant) arm releases the grip and pulls back so the body stays side-on.
   return {
     hips: [
       kf(n, [0, 0.3, 0.4, 0.65, 1], [0.10, 0.16, 0.26, 0.20, 0.12]),
-      kf(n, [0, 0.3, 0.4, 0.65, 1], [0.2, 1.0, -0.15, -0.7, -0.5]),
+      kf(n, [0, 0.3, 0.4, 0.65, 1], [0.2, 0.95, -0.1, -0.35, -0.3]), // restrained opening — stay sideways
       0,
     ],
     shoulderR: [
-      kf(n, [0, 0.3, 0.4, 0.65, 1], [0.05, -0.1, 0.1, 0.3, 0.2]),
+      kf(n, [0, 0.3, 0.4, 0.65, 1], [0.3, 0.45, 0.1, -0.15, -0.05]), // set high → chop down
       kf(n, [0, 0.3, 0.4, 0.65, 1], [0, 1.0, 0, -0.8, -0.6]),
       kf(n, [0, 0.3, 0.4, 0.65, 1], [0.2, 0.6, 1.0, 0.6, 0.4]),
     ],
     elbowR: [kf(n, [0, 0.3, 0.4, 0.65, 1], [0.6, 1.2, 0.25, 0.55, 0.6]), 0, 0],
+    // left arm releases and pulls back behind on the finish (one-handed slice)
     shoulderL: [
-      kf(n, [0, 0.3, 0.4, 0.65, 1], [0.05, -0.05, 0.05, 0.3, 0.2]),
-      kf(n, [0, 0.3, 0.4, 0.65, 1], [-0.15, 1.0, 0.02, -0.75, -0.55]),
-      kf(n, [0, 0.3, 0.4, 0.65, 1], [-0.15, 0.4, 0.7, 0.4, 0.15]),
+      kf(n, [0, 0.3, 0.4, 0.65, 1], [0.05, 0.0, 0.0, -0.3, -0.4]),
+      kf(n, [0, 0.3, 0.4, 0.65, 1], [-0.15, 0.5, 0.2, -0.8, -1.0]),
+      0,
     ],
-    elbowL: [kf(n, [0, 0.3, 0.4, 0.65, 1], [0.6, 1.1, 0.2, 0.5, 0.65]), 0, 0],
+    elbowL: [kf(n, [0, 0.3, 0.4, 1], [0.6, 0.5, 0.4, 0.3]), 0, 0],
     racket: [kf(n, [0, 0.3, 0.4, 1], [0.3, 1.05, 0.2, 0.35]), 0, 0],
     kneeBend: kf(n, [0, 0.3, 0.4, 0.65, 1], [0.25, 0.45, 0.28, 0.22, 0.22]),
     baseY: 0.83 - kf(n, [0, 0.3, 0.4, 0.65, 1], [0.01, 0.06, 0.02, 0, 0.01]),
+  };
+}
+
+function bhDropPose(n) {
+  // Backhand drop: disguised two-handed takeback like a drive, then checked at
+  // contact (寸止め) — values hold nearly constant after n=0.4 (the freeze).
+  return {
+    hips: [
+      kf(n, [0, 0.25, 0.4, 1], [0.10, 0.13, 0.20, 0.16]),
+      kf(n, [0, 0.25, 0.4, 1], [0.3, 1.0, 0.0, -0.05]),
+      0,
+    ],
+    shoulderR: [
+      kf(n, [0, 0.25, 0.4, 1], [-0.2, -0.45, -0.15, -0.05]),
+      kf(n, [0, 0.25, 0.4, 1], [0, 0.95, 0.0, -0.05]),
+      kf(n, [0, 0.25, 0.4, 1], [0.25, 0.5, 0.6, 0.55]),
+    ],
+    elbowR: [kf(n, [0, 0.25, 0.4, 1], [0.6, 1.0, 0.6, 0.6]), 0, 0],
+    shoulderL: [
+      kf(n, [0, 0.25, 0.4, 1], [-0.2, -0.45, -0.2, -0.1]),
+      kf(n, [0, 0.25, 0.4, 1], [-0.2, 1.0, 0.0, -0.05]),
+      kf(n, [0, 0.25, 0.4, 1], [-0.2, 0.4, 0.5, 0.45]),
+    ],
+    elbowL: [kf(n, [0, 0.25, 0.4, 1], [0.6, 0.95, 0.55, 0.6]), 0, 0],
+    racket: [kf(n, [0, 0.25, 0.4, 1], [0.3, 0.85, 0.3, 0.3]), 0, 0], // open soft face, held
+    kneeBend: kf(n, [0, 0.25, 0.4, 1], [0.22, 0.4, 0.3, 0.28]),
+    baseY: 0.83 - kf(n, [0, 0.25, 0.4, 1], [0.01, 0.05, 0.03, 0.02]),
   };
 }
 
@@ -421,7 +469,8 @@ function getSwingPose(swing) {
     switch (swing.type) {
       case 'topspin': return bhTopspinPose(n);
       case 'slice': return bhSlicePose(n);
-      default: return bhFlatPose(n); // flat, drop, lob, default
+      case 'drop': return bhDropPose(n);
+      default: return bhFlatPose(n); // flat, lob, default
     }
   }
   // Forehand
