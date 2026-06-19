@@ -136,43 +136,29 @@ pub extern "js" fn host_serve_look_x(h : Host, x : Double) -> Unit =
 // The card display data lives in the JS UI keyed by index (same order as the
 // MoonBit lists); MoonBit passes the selected index + the screen.
 
+// Screen 1: the consolidated setup screen. `is_practice` picks the mode; the
+// rest are the current selections (the JS UI owns the label arrays). `row` is
+// the focused row index within the mode-dependent row list.
 ///|
-pub extern "js" fn host_show_char_select(h : Host, title : String, idx : Int, subtitle : String) -> Unit =
-  "(h,t,i,s)=>h.ui.showCharSelect(t,i,s)"
+pub extern "js" fn host_show_setup(
+  h : Host,
+  is_practice : Bool,
+  row : Int,
+  surface : Int,
+  difficulty : Int,
+  games_idx : Int,
+  assist : Int,
+  feed : Int,
+  shot : Int,
+  depth : Int,
+) -> Unit =
+  "(h,p,r,su,d,g,a,f,sh,de)=>h.ui.showSetup(p,r,su,d,g,a,f,sh,de)"
 
+// Screen 2: pick your player + opponent. `sel` is the focused section
+// (0 = you, 1 = opponent); player/opp are the chosen character indices.
 ///|
-pub extern "js" fn host_show_surface_select(h : Host, idx : Int) -> Unit =
-  "(h,i)=>h.ui.showSurfaceSelect(i)"
-
-///|
-pub extern "js" fn host_show_difficulty_select(h : Host, idx : Int) -> Unit =
-  "(h,i)=>h.ui.showDifficultySelect(i)"
-
-///|
-pub extern "js" fn host_show_assist_select(h : Host, idx : Int) -> Unit =
-  "(h,i)=>h.ui.showAssistSelect(i)"
-
-///|
-pub extern "js" fn host_show_games_select(h : Host, idx : Int) -> Unit =
-  "(h,i)=>h.ui.showGamesSelect(i)"
-
-// practice-mode screens (design/practice-mode)
-///|
-pub extern "js" fn host_show_mode_select(h : Host, idx : Int) -> Unit =
-  "(h,i)=>h.ui.showModeSelect(i)"
-
-///|
-pub extern "js" fn host_show_practice_feed(h : Host, idx : Int) -> Unit =
-  "(h,i)=>h.ui.showPracticeFeed(i)"
-
-// kind: 0 stroke (5 shot types) / 1 serve (3 serve types)
-///|
-pub extern "js" fn host_show_practice_shot(h : Host, idx : Int, kind : Int) -> Unit =
-  "(h,i,k)=>h.ui.showPracticeShot(i,k)"
-
-///|
-pub extern "js" fn host_show_practice_depth(h : Host, idx : Int) -> Unit =
-  "(h,i)=>h.ui.showPracticeDepth(i)"
+pub extern "js" fn host_show_players(h : Host, sel : Int, player : Int, opp : Int) -> Unit =
+  "(h,s,p,o)=>h.ui.showPlayers(s,p,o)"
 
 // practice HUD: a single read-out line replacing the scoreboard
 ///|

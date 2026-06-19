@@ -19,7 +19,7 @@
         "fixed_update:fixedUpdate",
         "frame_update:frameUpdate",
         "get_time_scale:getTimeScale",
-        "menu_tap:menuTap"
+        "menu_cmd:menuCmd"
       ]
     }
   }

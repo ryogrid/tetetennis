@@ -73,7 +73,7 @@ const host = {
 
 const seed = (Math.random() * 0x7fffffff) | 0;
 logic.init(host, seed);
-ui.setMenuTapHandler((idx) => logic.menuTap(idx));
+ui.setMenuTapHandler((action, arg) => logic.menuCmd(action, arg));
 
 window.__host = host; // for debugging / e2e checks
 window.__cam = camera;

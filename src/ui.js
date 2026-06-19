@@ -89,6 +89,48 @@ const css = `
 .swatch { width: 150px; height: 100px; border-radius: 10px; border: 3px solid #333; }
 .swatch-label { text-align: center; margin-top: 8px; font-size: 16px; }
 .hint { font-size: 13px; color: #777; }
+/* screen 1: setup rows */
+.setup { display: flex; flex-direction: column; gap: 8px; min-width: 460px; }
+.srow {
+  display: grid; grid-template-columns: 120px 1fr; align-items: center;
+  column-gap: 14px; padding: 8px 14px; border-radius: 10px;
+  border: 3px solid #333; background: #15151f; cursor: pointer;
+  transition: border-color .12s, background .12s;
+}
+.srow.sel { border-color: #e8f24b; background: #1d1d2a; }
+.srow-label { font-size: 13px; font-weight: 700; letter-spacing: 1px; color: #aab; }
+.srow-val {
+  display: flex; align-items: center; justify-content: center; gap: 12px;
+  font-size: 17px; font-weight: 700; color: #fff;
+}
+.srow-desc { grid-column: 2; font-size: 11px; color: #999; min-height: 13px; text-align: center; }
+.sarrow { color: #888; font-size: 14px; cursor: pointer; padding: 0 4px; user-select: none; }
+.srow.sel .sarrow { color: #e8f24b; }
+.sval { min-width: 150px; text-align: center; }
+.dot { display: inline-block; width: 11px; height: 11px; border-radius: 50%; margin-right: 7px; vertical-align: middle; }
+.mchip {
+  padding: 3px 14px; border-radius: 7px; border: 2px solid #333; color: #888;
+  font-size: 14px; cursor: pointer;
+}
+.mchip.on { border-color: #50e678; background: rgba(80,230,120,.18); color: #e8ffe8; }
+.startbtn {
+  pointer-events: auto; margin-top: 4px; padding: 9px 26px; border-radius: 8px;
+  background: rgba(80,230,120,.18); border: 1px solid rgba(80,230,120,.7);
+  color: #e8ffe8; font-size: 15px; letter-spacing: 1px; cursor: pointer;
+}
+.startrow { display: flex; gap: 14px; }
+.startbtn.back { background: rgba(255,255,255,.06); border-color: #555; color: #bbb; }
+/* screen 2: player sections */
+.screen[data-screen="players"] { gap: 12px; }
+.psection {
+  display: flex; flex-direction: column; align-items: center; gap: 4px;
+  padding: 8px 12px; border-radius: 12px; border: 2px solid transparent;
+}
+.psection.focused { border-color: #e8f24b; background: rgba(232,242,75,.05); }
+.psection-label { font-size: 13px; font-weight: 700; letter-spacing: 2px; color: #aab; }
+.cards.compact .card { width: 132px; padding: 9px; }
+.cards.compact .card .desc { min-height: 30px; font-size: 10px; }
+.cards.compact .statradar { width: 120px; height: 110px; }
 .matchstats { border-collapse: collapse; margin: 6px 0; font-size: 14px; color: #cdd; }
 .matchstats th, .matchstats td { padding: 3px 14px; text-align: center; }
 .matchstats th { color: #888; font-weight: 600; font-size: 12px; }
@@ -356,13 +398,15 @@ export function createUI({ onVirtualKey, onMoveAxis } = {}) {
   srcLink.textContent = 'source code';
   hud.appendChild(srcLink);
 
-  // menu tap support (tap a card to select it, tap again to confirm).
-  // Results screen taps pass index 0; menu_tap ignores the value there.
+  // menu tap support: each interactive element carries a string `data-cmd` and
+  // an integer `data-arg` (a row/character index, or 0). The logic layer (via
+  // menu_cmd) decides what each command does per screen. Results screen taps
+  // send a no-arg command to dismiss.
   els.menu.addEventListener('pointerdown', (e) => {
     if (!menuTapHandler) return;
-    const card = e.target.closest('[data-idx]');
-    if (card) menuTapHandler(parseInt(card.dataset.idx, 10));
-    else if (els.menu.dataset.screen === 'results') menuTapHandler(0);
+    const el = e.target.closest('[data-cmd]');
+    if (el) menuTapHandler(el.dataset.cmd, parseInt(el.dataset.arg || '0', 10));
+    else if (els.menu.dataset.screen === 'results') menuTapHandler('results', 0);
   });
 
   // ---------- on-screen controls (two-handed phone grip) ----------
@@ -476,112 +520,99 @@ export function createUI({ onVirtualKey, onMoveAxis } = {}) {
 
   // ---------- menus ----------
 
-  function showCharSelect(title, idx, subtitle) {
+  // one character card (name + archetype + desc + radar). `cmd` is the tap
+  // action ("you"/"opp") tagged on the element with the character index.
+  function charCard(c, i, selected, cmd) {
+    return `<div class="card${selected ? ' sel' : ''}" data-cmd="${cmd}" data-arg="${i}">
+      <h3 style="color:#${c.color.toString(16).padStart(6, '0')}">${c.name}</h3>
+      <div class="arch">${c.archetype}</div>
+      <div class="desc">${c.desc}</div>
+      ${statBars(c.stats)}
+    </div>`;
+  }
+
+  // ----- screen 1: consolidated setup (mode + mode-dependent settings) -----
+  // Row indices below MUST match Game::setup_rows in logic/game/game.js.mbt.
+
+  function surfaceValue(idx) {
+    const t = SURFACE_THEMES[SURFACE_IDS[idx]];
+    return `<span class="dot" style="background:#${t.court.toString(16).padStart(6, '0')}"></span>${t.label}`;
+  }
+
+  // a value row: ◂ value ▸ with a label, highlighted + described when focused
+  function setupRow(label, rowIdx, focusedRow, valueHtml, desc) {
+    const sel = rowIdx === focusedRow;
+    return `<div class="srow${sel ? ' sel' : ''}" data-cmd="row" data-arg="${rowIdx}">
+      <div class="srow-label">${label}</div>
+      <div class="srow-val">
+        <span class="sarrow" data-cmd="dec" data-arg="${rowIdx}">&#9666;</span>
+        <span class="sval">${valueHtml}</span>
+        <span class="sarrow" data-cmd="inc" data-arg="${rowIdx}">&#9656;</span>
+      </div>
+      <div class="srow-desc">${sel ? desc : ''}</div>
+    </div>`;
+  }
+
+  // the mode row renders two chips; tapping the inactive one toggles the mode
+  function modeRow(rowIdx, focusedRow, isPractice) {
+    const sel = rowIdx === focusedRow;
+    const chip = (name, active) =>
+      `<span class="mchip${active ? ' on' : ''}"${active ? '' : ` data-cmd="inc" data-arg="${rowIdx}"`}>${name}</span>`;
+    return `<div class="srow mode${sel ? ' sel' : ''}" data-cmd="row" data-arg="${rowIdx}">
+      <div class="srow-label">MODE</div>
+      <div class="srow-val">${chip('MATCH', !isPractice)}${chip('PRACTICE', isPractice)}</div>
+      <div class="srow-desc">${sel ? MODE_OPTIONS[isPractice ? 1 : 0].desc : ''}</div>
+    </div>`;
+  }
+
+  function showSetup(isPractice, row, surface, difficulty, gamesIdx, assist, feed, shot, depth) {
     els.menu.style.display = 'flex';
-    els.menu.dataset.screen = 'select';
+    els.menu.dataset.screen = 'setup';
+    const rows = [modeRow(0, row, isPractice), setupRow('SURFACE', 1, row, surfaceValue(surface), '')];
+    if (isPractice) {
+      rows.push(setupRow('FEED', 2, row, FEED_OPTIONS[feed].name, FEED_OPTIONS[feed].desc));
+      const shots = feed === 1 ? SERVE_SHOTS : STROKE_SHOTS;
+      rows.push(setupRow('BALL TYPE', 3, row, shots[shot].name, shots[shot].desc));
+      let i = 4;
+      if (feed === 0) {
+        rows.push(setupRow('FEED DEPTH', 4, row, DEPTH_OPTIONS[depth].name, DEPTH_OPTIONS[depth].desc));
+        i = 5;
+      }
+      rows.push(setupRow('ASSIST', i, row, ASSIST_OPTIONS[assist].name, ASSIST_OPTIONS[assist].desc));
+    } else {
+      rows.push(setupRow('DIFFICULTY', 2, row, DIFFICULTIES[difficulty].name, DIFFICULTIES[difficulty].desc));
+      rows.push(setupRow('GAMES', 3, row, GAMES_OPTIONS[gamesIdx].name, GAMES_OPTIONS[gamesIdx].desc));
+      rows.push(setupRow('ASSIST', 4, row, ASSIST_OPTIONS[assist].name, ASSIST_OPTIONS[assist].desc));
+    }
     els.menu.innerHTML =
-      `<div class="title">${title}</div>` +
-      (subtitle ? `<div class="subtitle">${subtitle}</div>` : '') +
-      `<div class="cards">` +
-      CHARACTERS.map((c, i) =>
-        `<div class="card${i === idx ? ' sel' : ''}" id="card${i}" data-idx="${i}">
-          <h3 style="color:#${c.color.toString(16).padStart(6, '0')}">${c.name}</h3>
-          <div class="arch">${c.archetype}</div>
-          <div class="desc">${c.desc}</div>
-          ${statBars(c.stats)}
-        </div>`).join('') +
-      `</div><div class="hint">&larr; &rarr; select &middot; Enter confirm &middot; or tap (tap again to confirm)</div>`;
+      `<div class="title">GAME SETUP</div>` +
+      `<div class="setup">${rows.join('')}</div>` +
+      `<div class="startbtn" data-cmd="go" data-arg="0">ENTER &rarr; PLAYERS</div>` +
+      `<div class="hint">&uarr;/&darr; row &middot; &larr;/&rarr; change &middot; Enter &rarr; players &middot; or tap</div>`;
   }
 
-  function showSurfaceSelect(idx) {
+  // ----- screen 2: pick your player + opponent (rich cards) -----
+
+  function playerSection(label, cmd, selIdx, focused) {
+    return `<div class="psection${focused ? ' focused' : ''}">
+      <div class="psection-label">${label}</div>
+      <div class="cards compact">` +
+      CHARACTERS.map((c, i) => charCard(c, i, i === selIdx, cmd)).join('') +
+      `</div></div>`;
+  }
+
+  function showPlayers(sel, player, opp) {
     els.menu.style.display = 'flex';
-    els.menu.dataset.screen = 'select';
+    els.menu.dataset.screen = 'players';
     els.menu.innerHTML =
-      `<div class="title">SELECT SURFACE</div><div class="cards">` +
-      SURFACE_IDS.map((s, i) => {
-        const t = SURFACE_THEMES[s];
-        return `<div class="card${i === idx ? ' sel' : ''}" data-idx="${i}">
-          <div class="swatch" style="background:#${t.court.toString(16).padStart(6, '0')}"></div>
-          <div class="swatch-label">${t.label}</div>
-        </div>`;
-      }).join('') +
-      `</div><div class="hint">&larr; &rarr; select &middot; Enter confirm &middot; Esc back &middot; or tap (tap again to confirm)</div>`;
-  }
-
-  function showDifficultySelect(idx) {
-    els.menu.style.display = 'flex';
-    els.menu.dataset.screen = 'select';
-    els.menu.innerHTML =
-      `<div class="title">SELECT DIFFICULTY</div><div class="cards">` +
-      DIFFICULTIES.map((l, i) =>
-        `<div class="card${i === idx ? ' sel' : ''}" data-idx="${i}">
-          <h3>${l.name.toUpperCase()}</h3>
-          <div class="desc">${l.desc}</div>
-        </div>`).join('') +
-      `</div><div class="hint">&larr; &rarr; select &middot; Enter confirm &middot; Esc back &middot; or tap (tap again to confirm)</div>`;
-  }
-
-  function showGamesSelect(idx) {
-    els.menu.style.display = 'flex';
-    els.menu.dataset.screen = 'select';
-    els.menu.innerHTML =
-      `<div class="title">SET LENGTH</div><div class="cards">` +
-      GAMES_OPTIONS.map((o, i) =>
-        `<div class="card${i === idx ? ' sel' : ''}" data-idx="${i}">
-          <h3>${o.name.toUpperCase()}</h3>
-          <div class="desc">${o.desc}</div>
-        </div>`).join('') +
-      `</div><div class="hint">&larr; &rarr; select &middot; Enter confirm &middot; Esc back &middot; or tap (tap again to confirm)</div>`;
-  }
-
-  // generic card-list screen for the simple name/desc selectors
-  function cardListScreen(title, options, idx, withEsc, subtitle) {
-    els.menu.style.display = 'flex';
-    els.menu.dataset.screen = 'select';
-    const hint = withEsc
-      ? '&larr; &rarr; select &middot; Enter confirm &middot; Esc back &middot; or tap (tap again to confirm)'
-      : '&larr; &rarr; select &middot; Enter confirm &middot; or tap (tap again to confirm)';
-    els.menu.innerHTML =
-      `<div class="title">${title}</div>` +
-      (subtitle ? `<div class="subtitle">${subtitle}</div>` : '') +
-      `<div class="cards">` +
-      options.map((o, i) =>
-        `<div class="card${i === idx ? ' sel' : ''}" data-idx="${i}">
-          <h3>${o.name.toUpperCase()}</h3>
-          <div class="desc">${o.desc}</div>
-        </div>`).join('') +
-      `</div><div class="hint">${hint}</div>`;
-  }
-
-  function showModeSelect(idx) {
-    cardListScreen('SELECT MODE', MODE_OPTIONS, idx, false);
-  }
-
-  function showPracticeFeed(idx) {
-    cardListScreen('CPU FEEDS', FEED_OPTIONS, idx, true);
-  }
-
-  function showPracticeShot(idx, kind) {
-    cardListScreen('BALL TYPE', kind === 1 ? SERVE_SHOTS : STROKE_SHOTS, idx, true);
-  }
-
-  function showPracticeDepth(idx) {
-    cardListScreen('FEED DEPTH', DEPTH_OPTIONS, idx, true);
-  }
-
-  function showAssistSelect(idx) {
-    els.menu.style.display = 'flex';
-    els.menu.dataset.screen = 'select';
-    els.menu.innerHTML =
-      `<div class="title">ASSIST (FOR YOU)</div>` +
-      `<div class="subtitle">Help for the player &mdash; independent of opponent strength</div>` +
-      `<div class="cards">` +
-      ASSIST_OPTIONS.map((o, i) =>
-        `<div class="card${i === idx ? ' sel' : ''}" data-idx="${i}">
-          <h3>${o.name.toUpperCase()}</h3>
-          <div class="desc">${o.desc}</div>
-        </div>`).join('') +
-      `</div><div class="hint">&larr; &rarr; select &middot; Enter confirm &middot; Esc back &middot; or tap (tap again to confirm)</div>`;
+      `<div class="title">SELECT PLAYERS</div>` +
+      playerSection('YOU', 'you', player, sel === 0) +
+      playerSection('OPPONENT', 'opp', opp, sel === 1) +
+      `<div class="startrow">` +
+      `<div class="startbtn back" data-cmd="back" data-arg="0">&larr; BACK</div>` +
+      `<div class="startbtn" data-cmd="go" data-arg="0">START &#9654;</div>` +
+      `</div>` +
+      `<div class="hint">&uarr;/&darr; you/opp &middot; &larr;/&rarr; pick &middot; Enter start &middot; Esc back &middot; or tap</div>`;
   }
 
   function showResults(win, lose, games, playerWon, difficulty, stats) {
@@ -805,8 +836,7 @@ export function createUI({ onVirtualKey, onMoveAxis } = {}) {
 
   return {
     setMenuTapHandler(fn) { menuTapHandler = fn; },
-    showCharSelect, showSurfaceSelect, showDifficultySelect, showGamesSelect, showAssistSelect,
-    showModeSelect, showPracticeFeed, showPracticeShot, showPracticeDepth,
+    showSetup, showPlayers,
     showPause, hidePause,
     showResults, hideMenu,
     showHUD, hideHUD, updateScore, practiceHud,
