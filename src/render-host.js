@@ -75,9 +75,9 @@ export function createRenderHost(scene) {
       const p = players[side];
       if (p) p.setPlayer(x, z, vx, vz);
     },
-    startSwing(side, type, fh) {
+    startSwing(side, type, fh, motion) {
       const p = players[side];
-      if (p) p.startSwing(type, fh);
+      if (p) p.startSwing(type, fh, motion);
     },
     serveAnim(side, on) {
       const p = players[side];

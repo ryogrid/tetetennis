@@ -926,7 +926,8 @@ fn start_feed(self : Game, ms : MatchState, p : Practice) -> Unit {
       ms.ball_stamp = ms.ball_stamp + 1
       let fh = (b.px - cpu.pos_x) * -1.0 >= 0.0 // CPU faces +z
       cpu.start_swing(ty, fh) |> ignore
-      @ffi.host_start_swing(self.host, 1, shot_type_str(ty), fh)
+      let motion = @shots.swing_motion(ms.bounces, b.py, b.pz, ty, volley_forecourt)
+      @ffi.host_start_swing(self.host, 1, shot_type_str(ty), fh, motion)
       @ffi.host_sfx_hit(
         self.host, @vec.hypot3(r.vx, r.vy, r.vz), shot_type_str(r.shot_type),
         b.px / 5.5, r.mishit,
@@ -1322,7 +1323,10 @@ fn fire_charged_swing(self : Game, ms : MatchState, safety : Bool) -> Unit {
   ph.charging = false
   ms.last_shot_pref = Some(ph.charge_type)
   ph.start_swing(ph.charge_type, fh) |> ignore
-  @ffi.host_start_swing(self.host, 0, shot_type_str(ph.charge_type), fh)
+  let motion = @shots.swing_motion(
+    ms.bounces, b.py, b.pz, ph.charge_type, volley_forecourt,
+  )
+  @ffi.host_start_swing(self.host, 0, shot_type_str(ph.charge_type), fh, motion)
   @ffi.host_hide_charge(self.host)
 }
 
@@ -1624,7 +1628,10 @@ pub fn fixed_update(dt : Double) -> Unit {
         ms.cpu.pending_type = mv.swing_type
         ms.cpu.pending_aim_x = mv.swing_aim_x
         ms.cpu.pending_aim_depth = mv.swing_aim_depth
-        @ffi.host_start_swing(self.host, 1, shot_type_str(mv.swing_type), fh)
+        let motion = @shots.swing_motion(
+          ms.bounces, b.py, b.pz, mv.swing_type, volley_forecourt,
+        )
+        @ffi.host_start_swing(self.host, 1, shot_type_str(mv.swing_type), fh, motion)
       }
     }
     ms.cpu.update(dt, mv.x, mv.z)
@@ -1662,7 +1669,10 @@ pub fn fixed_update(dt : Double) -> Unit {
               ms.human.swing_charge = full_assist_charge
               ms.human.swing_no_perfect = false
               ms.human.start_swing(t, fh) |> ignore
-              @ffi.host_start_swing(self.host, 0, shot_type_str(t), fh)
+              let motion = @shots.swing_motion(
+                ms.bounces, b.py, b.pz, t, volley_forecourt,
+              )
+              @ffi.host_start_swing(self.host, 0, shot_type_str(t), fh, motion)
               ms.last_shot_pref = None
             }
             None => ()

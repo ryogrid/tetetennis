@@ -97,8 +97,8 @@ pub extern "js" fn host_set_player(
   "(h,s,x,z,vx,vz)=>h.render.setPlayer(s,x,z,vx,vz)"
 
 ///|
-pub extern "js" fn host_start_swing(h : Host, side : Int, ty : String, fh : Bool) -> Unit =
-  "(h,s,t,fh)=>h.render.startSwing(s,t,fh)"
+pub extern "js" fn host_start_swing(h : Host, side : Int, ty : String, fh : Bool, motion : String) -> Unit =
+  "(h,s,t,fh,m)=>h.render.startSwing(s,t,fh,m)"
 
 ///|
 pub extern "js" fn host_serve_anim(h : Host, side : Int, on : Bool) -> Unit =
