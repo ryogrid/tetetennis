@@ -477,6 +477,46 @@ fn setup_change(self : Game, dir : Int) -> Unit {
   self.show_setup()
 }
 
+// Set the value of row `row` to `val` directly (desktop: clicking one of the
+// horizontally-laid-out option chips). Mirrors setup_change's per-kind logic.
+///|
+fn setup_set(self : Game, row : Int, val : Int) -> Unit {
+  let rows = self.setup_rows()
+  if row < 0 || row >= rows.length() {
+    return
+  }
+  self.setup_row = row
+  match rows[row] {
+    Mode => {
+      self.is_practice = val == 1
+      let n = self.setup_rows().length()
+      if self.setup_row >= n {
+        self.setup_row = n - 1
+      }
+    }
+    Surface => if val >= 0 && val < 3 { self.sel_surface = val }
+    Difficulty => if val >= 0 && val < 3 { self.sel_difficulty = val }
+    Games => if val >= 0 && val < games_options.length() { self.sel_games = games_options[val] }
+    Assist =>
+      if val >= 0 && val < 3 {
+        let lvl = level_from_idx(val)
+        @assist.set_assist_level(lvl)
+        @ffi.host_save_assist(self.host, level_str(lvl))
+      }
+    Feed =>
+      if val >= 0 && val < 2 {
+        self.prac_feed = val
+        if self.prac_shot >= self.prac_shot_count() {
+          self.prac_shot = 0
+        }
+      }
+    Shot => if val >= 0 && val < self.prac_shot_count() { self.prac_shot = val }
+    Depth => if val >= 0 && val < 3 { self.prac_depth = val }
+  }
+  @ffi.host_sfx(self.host, "sfxMenu")
+  self.show_setup()
+}
+
 ///|
 fn back_to_home(self : Game) -> Unit {
   self.state = MenuSetup
@@ -1897,7 +1937,7 @@ pub fn get_time_scale(dt : Double) -> Double {
 //   setup screen: "row" K (focus row K) · "dec"/"inc" K (change row K's value) · "go"
 //   players screen: "you"/"opp" I (pick character I) · "go" (start) · "back"
 //   results screen: any tap returns to setup.
-pub fn menu_cmd(action : String, arg : Int) -> Unit {
+pub fn menu_cmd(action : String, a : Int, b : Int) -> Unit {
   let self = g()
   match self.state {
     Results => self.back_to_home()
@@ -1905,21 +1945,23 @@ pub fn menu_cmd(action : String, arg : Int) -> Unit {
       let n = self.setup_rows().length()
       match action {
         "row" =>
-          if arg >= 0 && arg < n {
-            self.setup_row = arg
+          if a >= 0 && a < n {
+            self.setup_row = a
             @ffi.host_sfx(self.host, "sfxMenu")
             self.show_setup()
           }
         "dec" =>
-          if arg >= 0 && arg < n {
-            self.setup_row = arg
+          if a >= 0 && a < n {
+            self.setup_row = a
             self.setup_change(-1)
           }
         "inc" =>
-          if arg >= 0 && arg < n {
-            self.setup_row = arg
+          if a >= 0 && a < n {
+            self.setup_row = a
             self.setup_change(1)
           }
+        // desktop: click an option chip to set row `a` to value `b` directly
+        "set" => self.setup_set(a, b)
         "go" => {
           @ffi.host_sfx(self.host, "sfxConfirm")
           self.state = MenuPlayers
@@ -1933,16 +1975,16 @@ pub fn menu_cmd(action : String, arg : Int) -> Unit {
       let nc = @shots.characters.length()
       match action {
         "you" =>
-          if arg >= 0 && arg < nc {
+          if a >= 0 && a < nc {
             self.players_sel = 0
-            self.sel_player = arg
+            self.sel_player = a
             @ffi.host_sfx(self.host, "sfxMenu")
             self.show_players()
           }
         "opp" =>
-          if arg >= 0 && arg < nc {
+          if a >= 0 && a < nc {
             self.players_sel = 1
-            self.sel_opp = arg
+            self.sel_opp = a
             @ffi.host_sfx(self.host, "sfxMenu")
             self.show_players()
           }
