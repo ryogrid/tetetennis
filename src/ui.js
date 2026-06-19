@@ -90,7 +90,9 @@ const css = `
 .swatch-label { text-align: center; margin-top: 8px; font-size: 16px; }
 .hint { font-size: 13px; color: #777; }
 /* screen 1: setup rows */
-.setup { display: flex; flex-direction: column; gap: 8px; min-width: 460px; }
+/* width reserved for the PRACTICE layout's widest row (BALL TYPE, 5 chips) so
+   the box and its buttons don't resize when toggling MATCH/PRACTICE */
+.setup { display: flex; flex-direction: column; gap: 8px; width: 660px; max-width: 94vw; }
 .srow {
   display: grid; grid-template-columns: 120px 1fr; align-items: center;
   column-gap: 14px; padding: 8px 14px; border-radius: 10px;
