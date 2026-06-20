@@ -160,6 +160,10 @@ pub extern "js" fn host_show_setup(
 pub extern "js" fn host_show_players(h : Host, sel : Int, player : Int, opp : Int) -> Unit =
   "(h,s,p,o)=>h.ui.showPlayers(s,p,o)"
 
+///|
+// Title / brand entry screen (option b). No args — the JS UI owns the markup.
+pub extern "js" fn host_show_title(h : Host) -> Unit = "(h)=>h.ui.showTitle()"
+
 // practice HUD: a single read-out line replacing the scoreboard
 ///|
 pub extern "js" fn host_practice_hud(h : Host, label : String) -> Unit =
