@@ -1,0 +1,132 @@
+diff --git a/logic/ffi/host.js.mbt b/logic/ffi/host.js.mbt
+--- a/logic/ffi/host.js.mbt
++++ b/logic/ffi/host.js.mbt
+@@ -150,2 +150,6 @@
+ pub extern "js" fn host_show_players(h : Host, sel : Int, player : Int, opp : Int) -> Unit =
+   "(h,s,p,o)=>h.ui.showPlayers(s,p,o)"
++
++///|
++// Title / brand entry screen (option b). No args — the JS UI owns the markup.
++pub extern "js" fn host_show_title(h : Host) -> Unit = "(h)=>h.ui.showTitle()"
+diff --git a/logic/game/game.js.mbt b/logic/game/game.js.mbt
+--- a/logic/game/game.js.mbt
++++ b/logic/game/game.js.mbt
+@@ -120,7 +120,8 @@
+ ///|
+ enum AppState {
++  MenuTitle // NEW (option b): branded entry screen, shown before setup
+   MenuSetup // screen 1: MATCH/PRACTICE mode + mode-dependent settings as rows
+   MenuPlayers // screen 2: pick your player + opponent (rich character cards)
+   Match
+   Results
+ } derive(Eq)
+@@ -458,5 +458,20 @@
+ fn back_to_home(self : Game) -> Unit {
+   self.state = MenuSetup
+   self.setup_row = 0
+   self.show_setup()
+ }
++
++///|
++fn show_title(self : Game) -> Unit {
++  @ffi.host_show_title(self.host)
++}
++
++///|
++// Title → Setup. Shared by the keyboard (handle_input) and tap (menu_cmd) paths
++// so the transition lives in exactly one place.
++fn title_to_setup(self : Game) -> Unit {
++  self.state = MenuSetup
++  self.setup_row = 0
++  @ffi.host_sfx(self.host, "sfxConfirm")
++  self.show_setup()
++}
+@@ -900,6 +916,10 @@ pub fn handle_input() -> Unit {
+   let self = g()
+   let h = self.host
+   match self.state {
++    MenuTitle =>
++      if self.confirm_pressed() {
++        self.title_to_setup()
++      }
+     MenuSetup => {
+       let n = self.setup_rows().length()
+       if @ffi.host_was_pressed(h, "ArrowUp") {
+@@ -1290,5 +1306,9 @@ pub fn menu_cmd(action : String, a : Int, b : Int) -> Unit {
+   let self = g()
+   match self.state {
++    MenuTitle =>
++      if action == "play" {
++        self.title_to_setup()
++      }
+     Results => self.back_to_home()
+     MenuSetup => {
+       let n = self.setup_rows().length()
+@@ -1355,7 +1375,7 @@ pub fn game_init(host : @ffi.Host, seed : Int) -> Unit {
+   let self : Game = {
+     host,
+     rng: @rng.Gauss::new(seed),
+-    state: MenuSetup,
++    state: MenuTitle, // option b: open on the branded title screen
+     setup_row: 0,
+     players_sel: 0,
+     sel_player: 0,
+@@ -1380,5 +1400,5 @@ pub fn game_init(host : @ffi.Host, seed : Int) -> Unit {
+     "full" => @assist.set_assist_level(Full)
+     _ => ()
+   }
+-  self.show_setup()
++  self.show_title()
+ }
+diff --git a/src/ui.js b/src/ui.js
+--- a/src/ui.js
++++ b/src/ui.js
+@@ -300,6 +300,22 @@ const css = `
+ @media (hover: hover) and (pointer: fine) {
+   .screen[data-screen="setup"] {
+     justify-content: flex-start; padding-top: 6vh; overflow-y: auto;
+   }
+ }
++/* title screen (option b) */
++.title-screen { position:absolute; inset:0; display:flex; flex-direction:column;
++  align-items:center; justify-content:center; gap:16px; overflow:hidden;
++  background:radial-gradient(130% 90% at 50% 12%, #1a2230 0%, #0d0d14 60%); }
++.ts-court { position:absolute; left:50%; bottom:-8%; width:150%; height:60%;
++  transform:translateX(-50%) perspective(620px) rotateX(60deg); transform-origin:bottom center; opacity:.22;
++  background:
++    linear-gradient(90deg, transparent calc(18% - 2px), rgba(255,255,255,.5) 18%, transparent calc(18% + 2px)),
++    linear-gradient(90deg, transparent calc(82% - 2px), rgba(255,255,255,.5) 82%, transparent calc(82% + 2px)),
++    linear-gradient(0deg,  transparent calc(50% - 2px), rgba(255,255,255,.6) 50%, transparent calc(50% + 2px)); }
++.ts-logo { border-radius:24px; box-shadow:0 0 40px rgba(232,242,75,.35); position:relative; }
++.ts-word { font:800 56px sans-serif; letter-spacing:2px; color:#e8f24b; text-shadow:0 0 30px rgba(232,242,75,.4); margin:2px 0 -4px; }
++.ts-tag { font:600 13px sans-serif; letter-spacing:6px; color:#aaa; }
++.ts-hint { font:600 12px sans-serif; letter-spacing:3px; color:#888; animation:ts-pulse 1.6s ease-in-out infinite; }
++@keyframes ts-pulse { 0%,100%{opacity:.45} 50%{opacity:1} }
++@media (pointer: coarse) { .ts-word { font-size:40px; } }
+ `;
+@@ -699,1 +699,18 @@
++  // ----- title screen (option b): branded entry, driven by the MoonBit
++  // MenuTitle state. PLAY taps route through the existing menu pointerdown
++  // handler (data-cmd="play" -> menuCmd); Enter/Space go through host.input. -----
++  function showTitle() {
++    els.menu.style.display = 'flex';
++    els.menu.dataset.screen = 'title';
++    els.menu.innerHTML =
++      `<div class="title-screen">` +
++      `<div class="ts-court"></div>` +
++      `<img class="ts-logo" src="icon-192.png" alt="" width="108" height="108"/>` +
++      `<div class="ts-word">tetetennis</div>` +
++      `<div class="ts-tag">ARCADE TENNIS</div>` +
++      `<div class="startbtn" data-cmd="play" data-arg="0">&#9654; PLAY</div>` +
++      `<div class="ts-hint">PRESS ENTER OR TAP</div>` +
++      `</div>`;
++  }
++
+   function showSetup(isPractice, row, surface, difficulty, gamesIdx, assist, feed, shot, depth) {
+@@ -820,5 +857,6 @@ export function createUI({ onVirtualKey, onMoveAxis } = {}) {
+   return {
+     setMenuTapHandler(fn) { menuTapHandler = fn; },
++    showTitle,
+     showSetup, showPlayers,
+     showPause, hidePause,
+     showResults, hideMenu,

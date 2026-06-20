@@ -361,6 +361,22 @@ const css = `
     justify-content: flex-start; padding-top: 6vh; overflow-y: auto;
   }
 }
+/* title screen (option b) */
+.title-screen { position:absolute; inset:0; display:flex; flex-direction:column;
+  align-items:center; justify-content:center; gap:16px; overflow:hidden;
+  background:radial-gradient(130% 90% at 50% 12%, #1a2230 0%, #0d0d14 60%); }
+.ts-court { position:absolute; left:50%; bottom:-8%; width:150%; height:60%;
+  transform:translateX(-50%) perspective(620px) rotateX(60deg); transform-origin:bottom center; opacity:.22;
+  background:
+    linear-gradient(90deg, transparent calc(18% - 2px), rgba(255,255,255,.5) 18%, transparent calc(18% + 2px)),
+    linear-gradient(90deg, transparent calc(82% - 2px), rgba(255,255,255,.5) 82%, transparent calc(82% + 2px)),
+    linear-gradient(0deg,  transparent calc(50% - 2px), rgba(255,255,255,.6) 50%, transparent calc(50% + 2px)); }
+.ts-logo { border-radius:24px; box-shadow:0 0 40px rgba(232,242,75,.35); position:relative; }
+.ts-word { font:800 56px sans-serif; letter-spacing:2px; color:#e8f24b; text-shadow:0 0 30px rgba(232,242,75,.4); margin:2px 0 -4px; }
+.ts-tag { font:600 13px sans-serif; letter-spacing:6px; color:#aaa; }
+.ts-hint { font:600 12px sans-serif; letter-spacing:3px; color:#888; animation:ts-pulse 1.6s ease-in-out infinite; }
+@keyframes ts-pulse { 0%,100%{opacity:.45} 50%{opacity:1} }
+@media (pointer: coarse) { .ts-word { font-size:40px; } }
 `;
 
 export function createUI({ onVirtualKey, onMoveAxis } = {}) {
@@ -634,6 +650,23 @@ export function createUI({ onVirtualKey, onMoveAxis } = {}) {
       <div class="srow-val">${val}</div>
       <div class="srow-desc">${selRow ? desc : ''}</div>
     </div>`;
+  }
+
+  // ----- title screen (option b): branded entry, driven by the MoonBit
+  // MenuTitle state. PLAY taps route through the existing menu pointerdown
+  // handler (data-cmd="play" -> menuCmd); Enter/Space go through host.input. -----
+  function showTitle() {
+    els.menu.style.display = 'flex';
+    els.menu.dataset.screen = 'title';
+    els.menu.innerHTML =
+      `<div class="title-screen">` +
+      `<div class="ts-court"></div>` +
+      `<img class="ts-logo" src="icon-192.png" alt="" width="108" height="108"/>` +
+      `<div class="ts-word">tetetennis</div>` +
+      `<div class="ts-tag">ARCADE TENNIS</div>` +
+      `<div class="startbtn" data-cmd="play" data-arg="0">&#9654; PLAY</div>` +
+      `<div class="ts-hint">PRESS ENTER OR TAP</div>` +
+      `</div>`;
   }
 
   function showSetup(isPractice, row, surface, difficulty, gamesIdx, assist, feed, shot, depth) {
@@ -962,6 +995,7 @@ export function createUI({ onVirtualKey, onMoveAxis } = {}) {
 
   return {
     setMenuTapHandler(fn) { menuTapHandler = fn; },
+    showTitle,
     showSetup, showPlayers,
     showPause, hidePause,
     showResults, hideMenu,

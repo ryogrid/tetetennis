@@ -97,6 +97,7 @@ let serve_sweet_hi : Double = 0.88
 
 ///|
 enum AppState {
+  MenuTitle // NEW (option b): branded entry screen, shown before setup
   MenuSetup // screen 1: MATCH/PRACTICE mode + mode-dependent settings as rows
   MenuPlayers // screen 2: pick your player + opponent (rich character cards)
   Match
@@ -546,6 +547,19 @@ fn setup_set(self : Game, row : Int, val : Int) -> Unit {
 fn back_to_home(self : Game) -> Unit {
   self.state = MenuSetup
   self.setup_row = 0
+  self.show_setup()
+}
+
+///|
+fn show_title(self : Game) -> Unit {
+  @ffi.host_show_title(self.host)
+}
+
+///|
+fn title_to_setup(self : Game) -> Unit {
+  self.state = MenuSetup
+  self.setup_row = 0
+  @ffi.host_sfx(self.host, "sfxConfirm")
   self.show_setup()
 }
 
@@ -1369,6 +1383,10 @@ pub fn handle_input() -> Unit {
   let self = g()
   let h = self.host
   match self.state {
+    MenuTitle =>
+      if self.confirm_pressed() {
+        self.title_to_setup()
+      }
     MenuSetup => {
       let n = self.setup_rows().length()
       if @ffi.host_was_pressed(h, "ArrowUp") {
@@ -1975,6 +1993,10 @@ pub fn get_time_scale(dt : Double) -> Double {
 pub fn menu_cmd(action : String, a : Int, b : Int) -> Unit {
   let self = g()
   match self.state {
+    MenuTitle =>
+      if action == "play" {
+        self.title_to_setup()
+      }
     Results => self.back_to_home()
     MenuSetup => {
       let n = self.setup_rows().length()
@@ -2045,7 +2067,7 @@ pub fn game_init(host : @ffi.Host, seed : Int) -> Unit {
   let self : Game = {
     host,
     rng: @rng.Gauss::new(seed),
-    state: MenuSetup,
+    state: MenuTitle, // option b: open on the branded title screen
     setup_row: 0,
     players_sel: 0,
     sel_player: 0,
@@ -2070,5 +2092,5 @@ pub fn game_init(host : @ffi.Host, seed : Int) -> Unit {
     "full" => @assist.set_assist_level(Full)
     _ => ()
   }
-  self.show_setup()
+  self.show_title()
 }
