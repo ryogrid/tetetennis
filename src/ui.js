@@ -361,6 +361,40 @@ const css = `
     justify-content: flex-start; padding-top: 6vh; overflow-y: auto;
   }
 }
+/* ---- AFTER improvements: scoreboard card · results bars · court preview · practice ---- */
+#scoreboard { border: 1px solid rgba(255,255,255,.18); box-shadow: 0 4px 16px rgba(0,0,0,.4); }
+#scoreboard .sb-head { display:flex; justify-content:flex-end; gap:14px; padding:0 0 4px; margin-bottom:4px;
+  border-bottom:1px solid rgba(255,255,255,.08); font:700 10px sans-serif; letter-spacing:1px; color:#888; }
+#scoreboard .sb-head span:first-child { width:18px; text-align:center; }
+#scoreboard .sb-head span:last-child  { width:24px; text-align:center; }
+#scoreboard .sb-g { display:inline-block; width:18px; text-align:center; }
+#scoreboard .sb-p { display:inline-block; width:24px; text-align:center; font-weight:700; }
+/* results: diverging head-to-head stat bars */
+.sbar-head { display:flex; justify-content:space-between; width:540px; max-width:92vw; margin:4px auto 6px; font:700 12px sans-serif; letter-spacing:1px; }
+.sbars { display:flex; flex-direction:column; gap:9px; margin:6px 0; }
+.sbar { display:grid; grid-template-columns:54px 1fr 130px 1fr 54px; align-items:center; gap:10px; width:540px; max-width:92vw; }
+.sbar-n { font:700 15px sans-serif; color:#888; }
+.sbar-n.l { text-align:right; } .sbar-n.r { text-align:left; }
+.sbar-t { height:12px; position:relative; background:#2a2a36; border-radius:3px; }
+.sbar-t i { position:absolute; top:0; bottom:0; right:0; border-radius:3px; }
+.sbar-t.r i { right:auto; left:0; }
+.sbar-k { text-align:center; font:600 12px sans-serif; letter-spacing:.5px; color:#9aa; }
+/* setup: live court preview of the chosen surface */
+.setup-wrap { display:flex; gap:18px; align-items:flex-start; }
+.court-preview { display:flex; flex-direction:column; align-items:center; gap:8px; padding-top:30px; }
+.cp-label { font:700 11px sans-serif; letter-spacing:2px; color:#888; }
+.cp-court { width:132px; height:84px; position:relative; border-radius:8px; overflow:hidden; }
+.cp-name { font:700 14px sans-serif; }
+.cp-line { position:absolute; background:rgba(255,255,255,.85); }
+.cp-top{left:8px;right:8px;top:8px;height:2px} .cp-bot{left:8px;right:8px;bottom:8px;height:2px}
+.cp-left{left:8px;top:8px;bottom:8px;width:2px} .cp-right{right:8px;top:8px;bottom:8px;width:2px}
+.cp-mid{left:50%;top:8px;bottom:8px;width:2px;margin-left:-1px}
+.cp-net{left:8px;right:8px;top:50%;height:3px;margin-top:-1.5px;background:rgba(255,255,255,.95)}
+/* practice: distinct "no score" header badge */
+.practice-badge { display:inline-flex; align-items:center; gap:8px; padding:4px 14px; border-radius:999px;
+  background:rgba(80,230,120,.12); border:1px solid rgba(80,230,120,.5); color:#50e678; font:600 12px sans-serif; letter-spacing:1px; }
+.practice-badge i { width:7px; height:7px; border-radius:50%; background:#50e678; }
+@media (pointer: coarse) { .setup-wrap { flex-direction:column; align-items:center; } .court-preview { padding-top:0; } .sbar, .sbar-head { width:92vw; } }
 /* title screen (option b) */
 .title-screen { position:absolute; inset:0; display:flex; flex-direction:column;
   align-items:center; justify-content:center; gap:16px; overflow:hidden;
@@ -403,7 +437,7 @@ export function createUI({ onVirtualKey, onMoveAxis } = {}) {
   }
 
   // Radar chart of the eight 0-100 persona stats, drawn as inline SVG.
-  function statBars(stats) {
+  function statBars(stats, color = '#50e678') {
     const axes = ['POW', 'SPN', 'SLC', 'SRV', 'SPD', 'CTL', 'REA', 'NET'];
     const n = axes.length;
     const cx = 90, cy = 80, R = 60;
@@ -425,7 +459,7 @@ export function createUI({ onVirtualKey, onMoveAxis } = {}) {
     });
     const poly = axes.map((k, i) => pt(i, R * (stats[k] || 0) / 100).map((v) => v.toFixed(1)).join(',')).join(' ');
     return `<svg class="statradar" viewBox="0 0 180 165" width="180" height="165">${grid}${spokes}` +
-      `<polygon points="${poly}" fill="rgba(80,230,120,.28)" stroke="#50e678" stroke-width="1.5"/>${labels}</svg>`;
+      `<polygon points="${poly}" fill="${color}" fill-opacity="0.26" stroke="${color}" stroke-width="1.5"/>${labels}</svg>`;
   }
 
   // ---------- init ----------
@@ -616,7 +650,7 @@ export function createUI({ onVirtualKey, onMoveAxis } = {}) {
       <h3 style="color:#${c.color.toString(16).padStart(6, '0')}">${c.name}</h3>
       <div class="arch">${c.archetype}</div>
       <div class="desc">${c.desc}</div>
-      ${statBars(c.stats)}
+      ${statBars(c.stats, '#' + c.color.toString(16).padStart(6, '0'))}
     </div>`;
   }
 
@@ -626,6 +660,17 @@ export function createUI({ onVirtualKey, onMoveAxis } = {}) {
   function surfaceLabel(idx) {
     const t = SURFACE_THEMES[SURFACE_IDS[idx]];
     return `<span class="dot" style="background:#${t.court.toString(16).padStart(6, '0')}"></span>${t.label}`;
+  }
+
+  // top-down court swatch for the chosen surface (review: setup preview)
+  function courtPreview(idx) {
+    const t = SURFACE_THEMES[SURFACE_IDS[idx]];
+    const col = '#' + t.court.toString(16).padStart(6, '0');
+    return `<div class="court-preview"><div class="cp-label">COURT</div>` +
+      `<div class="cp-court" style="background:${col};box-shadow:0 0 0 1px rgba(255,255,255,.12),0 6px 18px ${col}44">` +
+      `<i class="cp-line cp-top"></i><i class="cp-line cp-bot"></i><i class="cp-line cp-left"></i>` +
+      `<i class="cp-line cp-right"></i><i class="cp-line cp-mid"></i><i class="cp-line cp-net"></i></div>` +
+      `<div class="cp-name" style="color:${col}">${t.label}</div></div>`;
   }
 
   // one selectable option chip (desktop layout / the MODE row): tapping it sets
@@ -695,9 +740,14 @@ export function createUI({ onVirtualKey, onMoveAxis } = {}) {
     const nav = isDesktop
       ? '&uarr;/&darr; row &middot; &larr;/&rarr; or click an option &middot; Enter &rarr; players'
       : '&uarr;/&darr; row &middot; &larr;/&rarr; change &middot; Enter &rarr; players &middot; or tap';
+    const badge = isPractice
+      ? `<div class="practice-badge"><i></i>NO SCORE &middot; ENDLESS FEED &middot; QUIT ANYTIME</div>`
+      : '';
     els.menu.innerHTML =
-      `<div class="title">GAME SETUP</div>` +
-      `<div class="setup">${rows.join('')}</div>` +
+      `<div class="title">GAME SETUP</div>` + badge +
+      `<div class="setup-wrap"><div class="setup">${rows.join('')}</div>` +
+      courtPreview(surface) +
+      `</div>` +
       `<div class="startbtn" data-cmd="go" data-arg="0">ENTER &rarr; PLAYERS</div>` +
       `<div class="hint">${nav}</div>`;
   }
@@ -733,13 +783,32 @@ export function createUI({ onVirtualKey, onMoveAxis } = {}) {
   function showResults(win, lose, games, playerWon, difficulty, stats) {
     els.menu.style.display = 'flex';
     els.menu.dataset.screen = 'results';
-    // stats: ';'-separated "Label\tYou\tOpp" rows
-    const rows = (stats || '').split(';').filter(Boolean).map((r) => {
-      const [label, you, opp] = r.split('\t');
-      return `<tr><td>${label}</td><td>${you}</td><td>${opp}</td></tr>`;
+    // stats: ';'-separated "Label\tYou\tOpp" rows → diverging head-to-head bars
+    const youCol = '#e8f24b', oppCol = '#50e678';
+    const youName = (win.includes('(You)') ? win : lose.includes('(You)') ? lose : 'You').replace(' (You)', '');
+    const oppName = win.includes('(You)') ? lose : win;
+    const bars = (stats || '').split(';').filter(Boolean).map((r) => {
+      const [label, youRaw, oppRaw] = r.split('\t');
+      const yn = parseFloat(youRaw), on = parseFloat(oppRaw);
+      const valid = isFinite(yn) && isFinite(on);
+      const pct = /%/.test(youRaw + oppRaw);
+      const lower = /error|fault/i.test(label);
+      const youWins = valid && (lower ? yn < on : yn > on);
+      const oppWins = valid && (lower ? on < yn : on > yn);
+      const scale = pct ? 100 : Math.max(isFinite(yn) ? yn : 0, isFinite(on) ? on : 0, 1) * 1.15;
+      const lw = isFinite(yn) ? Math.min(100, yn / scale * 100) : 0;
+      const rw = isFinite(on) ? Math.min(100, on / scale * 100) : 0;
+      return `<div class="sbar">` +
+        `<div class="sbar-n l${youWins ? ' win' : ''}" style="${youWins ? `color:${youCol}` : ''}">${youRaw}</div>` +
+        `<div class="sbar-t"><i style="width:${lw}%;background:${youCol};opacity:${youWins ? 1 : .45}"></i></div>` +
+        `<div class="sbar-k">${label}</div>` +
+        `<div class="sbar-t r"><i style="width:${rw}%;background:${oppCol};opacity:${oppWins ? 1 : .45}"></i></div>` +
+        `<div class="sbar-n r${oppWins ? ' win' : ''}" style="${oppWins ? `color:${oppCol}` : ''}">${oppRaw}</div>` +
+      `</div>`;
     }).join('');
-    const table = rows
-      ? `<table class="matchstats"><tr><th></th><th>You</th><th>${lose}</th></tr>${rows}</table>`
+    const table = bars
+      ? `<div class="sbar-head"><span style="color:${youCol}">${youName} (you)</span>` +
+        `<span style="color:${oppCol}">${oppName}</span></div><div class="sbars">${bars}</div>`
       : '';
     els.menu.innerHTML =
       `<div class="title">${playerWon ? 'YOU WIN!' : 'YOU LOSE'}</div>` +
@@ -847,8 +916,9 @@ export function createUI({ onVirtualKey, onMoveAxis } = {}) {
     const [gp, gc] = splitPair(games);
     const [pp, pc, tb] = splitPair(points);
     els.scoreboard.innerHTML =
-      `<div class="row"><b>${p}</b><span>${gp} &nbsp; ${pp}</span></div>` +
-      `<div class="row"><b>${c}</b><span>${gc} &nbsp; ${pc}</span></div>` +
+      `<div class="sb-head"><span>GMS</span><span>PTS</span></div>` +
+      `<div class="row"><b>${p}</b><span><i class="sb-g">${gp}</i><i class="sb-p">${pp}</i></span></div>` +
+      `<div class="row"><b>${c}</b><span><i class="sb-g">${gc}</i><i class="sb-p">${pc}</i></span></div>` +
       (serveNo === 2 ? '<div class="row" style="color:#e8a04b;font-size:12px">2nd serve</div>' : '') +
       (tb === 'TB' ? '<div class="row" style="color:#e8f24b;font-size:12px">Tiebreak</div>' : '');
   }
