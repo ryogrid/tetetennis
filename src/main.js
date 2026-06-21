@@ -31,12 +31,18 @@ app.appendChild(renderer.domElement);
 // Immersion / Presentation settings (the home for every immersion toggle),
 // persisted in localStorage and surfaced by the in-game gear panel.
 const IMM_KEY = 'immSettings';
+const prefersReduced = window.matchMedia
+  && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 const IMM_DEFAULTS = {
   lightMood: 'day', crowd: 1, grunts: true, footsteps: true, haptics: true, replays: true,
+  reducedMotion: false, captions: false,
 };
 function loadImmSettings() {
-  try { return { ...IMM_DEFAULTS, ...JSON.parse(localStorage.getItem(IMM_KEY) || '{}') }; }
-  catch { return { ...IMM_DEFAULTS }; }
+  // reduced-motion defaults to the OS preference unless the user has chosen
+  try {
+    return { ...IMM_DEFAULTS, reducedMotion: !!prefersReduced,
+      ...JSON.parse(localStorage.getItem(IMM_KEY) || '{}') };
+  } catch { return { ...IMM_DEFAULTS, reducedMotion: !!prefersReduced }; }
 }
 const immSettings = loadImmSettings();
 
@@ -59,6 +65,8 @@ const audio = createAudio();
 const input = createInput(audio.initAudio);
 
 let replaysEnabled = true; // instant replays on notable points (immersion 04 §4.1)
+let reducedMotion = false; // accessibility: suppress cinematics (immersion 07 §7.4)
+let captionsEnabled = false; // captions for audio-only events
 
 // Apply (and persist) one immersion setting by routing it to the right system.
 function applyImmSetting(key, val) {
@@ -74,13 +82,10 @@ function applyImmSetting(key, val) {
     case 'footsteps': audio.setFootsteps(val); break;
     case 'haptics': input.setHaptics(val); break;
     case 'replays': replaysEnabled = val; break;
+    case 'reducedMotion': reducedMotion = val; ui.setReducedMotion(val); break;
+    case 'captions': captionsEnabled = val; break;
   }
 }
-// apply saved settings at boot (lightMood was already applied by buildLights)
-for (const k of Object.keys(immSettings)) {
-  if (k !== 'lightMood') applyImmSetting(k, immSettings[k]);
-}
-
 const ui = createUI({
   onVirtualKey: (c, d) => input.setVirtualKey(c, d),
   onMoveAxis: (x, z) => input.setMoveAxis(x, z),
@@ -88,6 +93,12 @@ const ui = createUI({
   onSetting: applyImmSetting,
 });
 const render = createRenderHost(scene, audio);
+
+// apply saved settings at boot, now that every target system exists
+// (lightMood was already applied by buildLights)
+for (const k of Object.keys(immSettings)) {
+  if (k !== 'lightMood') applyImmSetting(k, immSettings[k]);
+}
 const cameraRig = createCameraRig(camera, render);
 const minimap = createMinimap();
 
@@ -164,6 +175,12 @@ const host = {
     audio.setTension(v);
     if (cameraRig.setTension) cameraRig.setTension(v);
   },
+  onCrowdReact(kind) {
+    if (captionsEnabled) {
+      ui.caption(kind === 'groan' ? '(crowd groans)'
+        : kind === 'cheer' ? '(crowd cheers)' : '(crowd reacts)');
+    }
+  },
   onPointHighlight(winner, isBreak, isSet, isMatch, rallyLen) {
     lastHighlight = { winner, isBreak, isSet, isMatch, rallyLen };
     pendingReplay = true; // frame loop decides whether it's worth replaying
@@ -195,7 +212,7 @@ let acc = 0;
 // a single slow-motion replay of the last couple of seconds. Hard caps below
 // guarantee it always ends and the sim resumes.
 function maybeStartReplay() {
-  if (!replaysEnabled || !lastHighlight) return;
+  if (!replaysEnabled || reducedMotion || !lastHighlight) return; // a11y: no auto cinematics
   const h = lastHighlight;
   const notable = h.isBreak || h.isSet || h.isMatch || h.rallyLen >= 8;
   if (!notable) return;

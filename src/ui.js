@@ -406,6 +406,28 @@ const css = `
 #hawkeye .he-in { color:#5dff7a; }
 #hawkeye .he-out { color:#ff5a5a; }
 @keyframes heIn { 0% { opacity:0; transform:scale(.7); } 100% { opacity:1; transform:scale(1); } }
+/* accessibility: honour reduced-motion (auto + manual toggle) (immersion 07 §7.4) */
+@media (prefers-reduced-motion: reduce) {
+  #bigmoment, #hawkeye, #scoreboard .sb-pop, #scoreboard .sb-flash { animation-duration:.001s !important; }
+}
+body.reduced-motion #bigmoment, body.reduced-motion #hawkeye,
+body.reduced-motion #scoreboard .sb-pop, body.reduced-motion #scoreboard .sb-flash {
+  animation-duration:.001s !important;
+}
+/* captions for audio-only events */
+#caption { position:fixed; bottom:54px; left:50%; transform:translateX(-50%); z-index:46;
+  display:none; padding:4px 12px; border-radius:6px; background:rgba(0,0,0,.6); color:#eee;
+  font:600 14px sans-serif; letter-spacing:1px; pointer-events:none; }
+/* first-run onboarding card */
+#intro { position:fixed; inset:0; z-index:70; display:none; align-items:center; justify-content:center;
+  background:rgba(6,6,10,.72); }
+#intro .card { width:300px; max-width:88vw; padding:18px 20px; border-radius:12px;
+  background:rgba(18,18,26,.96); border:1px solid rgba(255,255,255,.18); color:#e8eef2;
+  font:14px sans-serif; text-align:center; }
+#intro h2 { margin:0 0 8px; color:#7fd; font-size:20px; letter-spacing:1px; }
+#intro p { margin:6px 0; line-height:1.5; color:#cdd; }
+#intro button { margin-top:12px; padding:8px 18px; border-radius:8px; border:none;
+  background:#2f9c6a; color:#fff; font:700 14px sans-serif; cursor:pointer; }
 /* results: diverging head-to-head stat bars */
 .sbar-head { display:flex; justify-content:space-between; width:540px; max-width:92vw; margin:4px auto 6px; font:700 12px sans-serif; letter-spacing:1px; }
 .sbars { display:flex; flex-direction:column; gap:9px; margin:6px 0; }
@@ -512,6 +534,8 @@ export function createUI({ onVirtualKey, onMoveAxis, settings, onSetting } = {})
   els.banner = div('banner', hud);
   els.bigmoment = div('bigmoment', hud);
   els.hawkeye = div('hawkeye', hud);
+  els.caption = div('caption', hud);
+  els.intro = div('intro', hud);
   els.toast = div('toast', hud);
   els.shotbar = div('shotbar', hud);
   els.controls = div('controls', hud);
@@ -579,6 +603,8 @@ export function createUI({ onVirtualKey, onMoveAxis, settings, onSetting } = {})
       { key: 'footsteps', label: 'Footsteps', opts: [[true, 'On'], [false, 'Off']] },
       { key: 'haptics', label: 'Haptics', opts: [[true, 'On'], [false, 'Off']] },
       { key: 'replays', label: 'Replays', opts: [[true, 'On'], [false, 'Off']] },
+      { key: 'reducedMotion', label: 'Reduced motion', opts: [[false, 'Off'], [true, 'On']] },
+      { key: 'captions', label: 'Captions', opts: [[false, 'Off'], [true, 'On']] },
     ];
     function render() {
       panel.innerHTML = '<div style="font-weight:700;letter-spacing:1px;margin-bottom:8px;'
@@ -616,6 +642,7 @@ export function createUI({ onVirtualKey, onMoveAxis, settings, onSetting } = {})
     render();
   }
   buildSettingsPanel();
+  maybeShowIntro();
 
   // source-code link (bottom-right, just below the controls box)
   const srcLink = document.createElement('a');
@@ -1066,6 +1093,31 @@ export function createUI({ onVirtualKey, onMoveAxis, settings, onSetting } = {})
   }
   function getSituation() { return currentSituation; }
 
+  // Accessibility: reduced-motion toggle + brief captions for audio-only events,
+  // and a one-time first-run onboarding card. (immersion 07 §7.2 / §7.4)
+  function setReducedMotion(on) { document.body.classList.toggle('reduced-motion', !!on); }
+  let captionTimer = null;
+  function caption(text) {
+    els.caption.textContent = text;
+    els.caption.style.display = 'block';
+    if (captionTimer) clearTimeout(captionTimer);
+    captionTimer = setTimeout(() => { els.caption.style.display = 'none'; }, 1400);
+  }
+  function maybeShowIntro() {
+    let seen = false;
+    try { seen = localStorage.getItem('seenIntro') === '1'; } catch { /* ignore */ }
+    if (seen) return;
+    els.intro.innerHTML = '<div class="card"><h2>Welcome</h2>'
+      + '<p>Arrow keys to move. Hold Z / X / C / V to charge a shot, release to hit.</p>'
+      + '<p>Tap ⚙ (top-right) for immersion settings, ⤓ CLIP to save a highlight.</p>'
+      + '<button id="intro-ok">Got it</button></div>';
+    els.intro.style.display = 'flex';
+    els.intro.querySelector('#intro-ok').onclick = () => {
+      els.intro.style.display = 'none';
+      try { localStorage.setItem('seenIntro', '1'); } catch { /* ignore */ }
+    };
+  }
+
   // Hawk-Eye close-call inset: a zoomed top-down view of the nearest line with
   // the ball mark offset by its true margin, plus an IN/OUT verdict. Driven by
   // host_close_call when a bounce lands within ~10 cm of a boundary. (06 §6.6)
@@ -1248,5 +1300,6 @@ export function createUI({ onVirtualKey, onMoveAxis, settings, onSetting } = {})
     hitQuality, hideHitQuality,
     moveHint, hideMoveHint,
     pointSituation, getSituation, hawkEye,
+    setReducedMotion, caption,
   };
 }

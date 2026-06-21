@@ -34,7 +34,7 @@ pub extern "js" fn host_sfx_crowd(h : Host, intensity : Double) -> Unit =
 ///|
 // Short mid-rally crowd reaction ("groan"|"cheer"|"ooh"), 0..1 intensity.
 pub extern "js" fn host_sfx_crowd_react(h : Host, kind : String, intensity : Double) -> Unit =
-  "(h,k,i)=>h.audio.sfxCrowdReact(k,i)"
+  "(h,k,i)=>{h.audio.sfxCrowdReact(k,i);h.onCrowdReact(k)}"
 
 ///|
 // Spawn a bounce dust puff + skid mark at the ground bounce point (render-only).
