@@ -99,6 +99,9 @@ export function createRenderHost(scene, audio = null) {
     startSwing(side, type, fh, motion) {
       const p = players[side];
       if (p) p.startSwing(type, fh, motion);
+      // the receiver split-steps in anticipation of this contact
+      const other = players[side ^ 1];
+      if (other) other.splitStep();
     },
     serveAnim(side, on) {
       const p = players[side];

@@ -511,6 +511,7 @@ export function createPlayerRig({ side, color, reach, scene }) {
     vel: { x: 0, z: 0 },
     swing: null,      // {t, type, fh}
     serveAnimSt: null, // {t}
+    splitSt: null,     // {t} split-step hop in anticipation of the opponent's hit
     runPhase: 0,
     _sm: null,
     _smY: undefined,
@@ -530,6 +531,13 @@ export function createPlayerRig({ side, color, reach, scene }) {
       this.serveAnimSt = on ? { t: 0 } : null;
     },
 
+    // Split-step: a quick load-and-hop as the opponent strikes, the universal
+    // "ready" move in tennis. Triggered from render-host when the OTHER side
+    // starts a swing. Ignored if already swinging/serving. (immersion 01 §1.3)
+    splitStep() {
+      if (!this.swing && !this.serveAnimSt) this.splitSt = { t: 0 };
+    },
+
     // per-frame cosmetic advance: swing/serve clocks, run phase, then pose.
     tick(dt) {
       if (this.swing) {
@@ -539,6 +547,10 @@ export function createPlayerRig({ side, color, reach, scene }) {
       if (this.serveAnimSt) {
         this.serveAnimSt.t += dt;
         if (this.serveAnimSt.t > 1.4) this.serveAnimSt = null;
+      }
+      if (this.splitSt) {
+        this.splitSt.t += dt;
+        if (this.splitSt.t > 0.42) this.splitSt = null;
       }
       const sp = Math.hypot(this.vel.x, this.vel.z);
       this.runPhase += dt * (4 + sp * 2.2);
@@ -637,6 +649,15 @@ export function createPlayerRig({ side, color, reach, scene }) {
       // arms pump counter to the legs (unless they are busy)
       if (!this.swing && !this.serveAnimSt) J.shoulderR.rotation.x -= sw * 0.8;
       if (!this.serveAnimSt) J.shoulderL.rotation.x += sw * 0.8;
+
+      // split-step hop: a quick crouch-and-rise with knee load, additive on top
+      // of the smoothed stance so it reads crisply (immersion 01 §1.3)
+      if (this.splitSt && !this.swing && !this.serveAnimSt) {
+        const hop = Math.sin(Math.min(this.splitSt.t / 0.42, 1) * Math.PI); // 0→1→0
+        J.hips.position.y -= hop * 0.06;
+        J.kneeR.rotation.x += hop * 0.5;
+        J.kneeL.rotation.x += hop * 0.5;
+      }
     },
 
     setReachZoneColor(hex) {
