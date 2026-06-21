@@ -549,6 +549,7 @@ export function createPlayerRig({ side, color, reach, scene }) {
     swing: null,      // {t, type, fh}
     serveAnimSt: null, // {t}
     splitSt: null,     // {t} split-step hop in anticipation of the opponent's hit
+    celebSt: null,     // {t, kind} between-points celebration
     runPhase: 0,
     _sm: null,
     _smY: undefined,
@@ -576,6 +577,12 @@ export function createPlayerRig({ side, color, reach, scene }) {
       if (!this.swing && !this.serveAnimSt) this.splitSt = { t: 0 };
     },
 
+    // Between-points celebration (immersion 06 §6.4): "big" = overhead fist
+    // pump, else a small fist. Ignored mid-swing/serve.
+    celebrate(kind) {
+      if (!this.swing && !this.serveAnimSt) this.celebSt = { t: 0, kind: kind || 'point' };
+    },
+
     // per-frame cosmetic advance: swing/serve clocks, run phase, then pose.
     // `ballState` ({active,pos}|null) lets the swing aim at the real ball.
     tick(dt, ballState) {
@@ -591,6 +598,10 @@ export function createPlayerRig({ side, color, reach, scene }) {
       if (this.splitSt) {
         this.splitSt.t += dt;
         if (this.splitSt.t > 0.42) this.splitSt = null;
+      }
+      if (this.celebSt) {
+        this.celebSt.t += dt;
+        if (this.celebSt.t > 1.7) this.celebSt = null;
       }
       const sp = Math.hypot(this.vel.x, this.vel.z);
       this.runPhase += dt * (4 + sp * 2.2);
@@ -730,6 +741,18 @@ export function createPlayerRig({ side, color, reach, scene }) {
         J.hips.position.y -= hop * 0.06;
         J.kneeR.rotation.x += hop * 0.5;
         J.kneeL.rotation.x += hop * 0.5;
+      }
+
+      // celebration: raise + pump the racket arm overhead (immersion 06 §6.4)
+      if (this.celebSt && !this.swing && !this.serveAnimSt) {
+        const ct = this.celebSt.t;
+        const big = this.celebSt.kind === 'big';
+        const pump = Math.abs(Math.sin(ct * 8)) * (big ? 0.55 : 0.3);
+        const fade = ct > 1.3 ? Math.max(0, 1 - (ct - 1.3) / 0.4) : 1;
+        J.shoulderR.rotation.x = (big ? -2.2 : -1.4) * fade + pump;
+        J.shoulderR.rotation.z = 0.3 * fade;
+        J.elbowR.rotation.x = (1.2 - pump) * fade + 0.4;
+        J.chest.rotation.x = -0.12 * fade;
       }
 
       // contact-point aim: during the contact window, rotate the racket shoulder

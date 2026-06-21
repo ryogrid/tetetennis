@@ -1174,6 +1174,10 @@ fn point_end(self : Game, ms : MatchState, winner : @rules.Side, call_text : Str
   @ffi.host_point_highlight(
     self.host, side_int(winner), is_break, is_set, is_set, rally_len,
   )
+  // the winner celebrates a game / break / set
+  if is_game || is_break {
+    @ffi.host_celebrate(self.host, side_int(winner), "big")
+  }
   let win_name = names_for(ms, winner)
   @ffi.host_sfx_crowd(self.host, if winner == @rules.P { 1.0 } else { 0.55 })
   if call_text != "" {

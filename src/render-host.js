@@ -107,6 +107,10 @@ export function createRenderHost(scene, audio = null) {
       const p = players[side];
       if (p) p.serveAnim(on);
     },
+    celebrate(side, kind) {
+      const p = players[side];
+      if (p && p.celebrate) p.celebrate(kind);
+    },
     setReachColor(inReach) {
       if (players[0]) players[0].setReachZoneColor(inReach ? REACH_HOT : REACH_IDLE);
     },

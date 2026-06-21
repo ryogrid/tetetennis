@@ -132,6 +132,11 @@ pub extern "js" fn host_set_player(
   "(h,s,x,z,vx,vz)=>h.render.setPlayer(s,x,z,vx,vz)"
 
 ///|
+// Between-points celebration on the rig ("big" fist pump | "point").
+pub extern "js" fn host_celebrate(h : Host, side : Int, kind : String) -> Unit =
+  "(h,s,k)=>h.render.celebrate(s,k)"
+
+///|
 pub extern "js" fn host_start_swing(h : Host, side : Int, ty : String, fh : Bool, motion : String) -> Unit =
   "(h,s,t,fh,m)=>h.render.startSwing(s,t,fh,m)"
 
