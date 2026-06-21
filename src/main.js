@@ -35,7 +35,7 @@ const prefersReduced = window.matchMedia
   && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 const IMM_DEFAULTS = {
   lightMood: 'day', crowd: 1, grunts: true, footsteps: true, haptics: true, replays: true,
-  reducedMotion: false, captions: false,
+  reducedMotion: false, captions: false, broadcast: false,
 };
 function loadImmSettings() {
   // reduced-motion defaults to the OS preference unless the user has chosen
@@ -84,6 +84,7 @@ function applyImmSetting(key, val) {
     case 'replays': replaysEnabled = val; break;
     case 'reducedMotion': reducedMotion = val; ui.setReducedMotion(val); break;
     case 'captions': captionsEnabled = val; break;
+    case 'broadcast': cameraRig.setBroadcast(val); break;
   }
 }
 const ui = createUI({
@@ -93,12 +94,6 @@ const ui = createUI({
   onSetting: applyImmSetting,
 });
 const render = createRenderHost(scene, audio);
-
-// apply saved settings at boot, now that every target system exists
-// (lightMood was already applied by buildLights)
-for (const k of Object.keys(immSettings)) {
-  if (k !== 'lightMood') applyImmSetting(k, immSettings[k]);
-}
 const cameraRig = createCameraRig(camera, render);
 const minimap = createMinimap();
 
@@ -195,6 +190,12 @@ const host = {
     }
   },
 };
+
+// apply saved immersion settings at boot, now that every target system exists
+// (lightMood was already applied by buildLights)
+for (const k of Object.keys(immSettings)) {
+  if (k !== 'lightMood') applyImmSetting(k, immSettings[k]);
+}
 
 const seed = (Math.random() * 0x7fffffff) | 0;
 logic.init(host, seed);

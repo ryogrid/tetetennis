@@ -17,6 +17,9 @@ const OVER_H = 8.5; // meters above the court
 const OVER_BACK = 5.5; // meters behind the player
 const OVER_LOOK_AHEAD = 16; // look at a point this far down-court from the player
 const OVER_LOOK_X = 0.4; // fraction of the player's x carried into the look target
+// Opt-in broadcast ("TV") angle: elevated, centred behind the baseline.
+const BROADCAST_H = 4.8;
+const BROADCAST_BACK = 5.5;
 
 export function createCameraRig(camera, renderHost) {
   const pos = new THREE.Vector3(0, EYE_H, 12.5);
@@ -25,18 +28,26 @@ export function createCameraRig(camera, renderHost) {
   const desiredLook = new THREE.Vector3();
   let serveLookX = 0;
   let _mode = 'rally';
+  let broadcast = false; // immersion 04 §4.2 — off by default (changes depth reading)
 
   return {
     // x of the target service box center; set when players are placed
     setServeLookX(x) { serveLookX = x; },
     getMode() { return _mode; },
+    // Opt-in broadcast camera. WARNING: this trades the eye-level depth-reading
+    // the kaizen aids rely on for a more cinematic TV angle.
+    setBroadcast(on) { broadcast = !!on; },
     update(dt, mode) {
       _mode = mode;
       const player = renderHost.getPlayer(0); // human (side 0, +z)
       const ball = renderHost.getBall();
       const eyeX = player.pos.x;
       const eyeZ = player.pos.z + CAMERA_BACK;
-      if (mode === 'overhead') {
+      if (broadcast && mode !== 'overhead' && mode !== 'serve') {
+        // elevated, centred TV angle looking down-court
+        desiredPos.set(eyeX * 0.35, BROADCAST_H, player.pos.z + BROADCAST_BACK);
+        desiredLook.set(0, 0.8, player.pos.z - 16);
+      } else if (mode === 'overhead') {
         // Overhead view overrides the serve/rally framing: a high, over-the-
         // shoulder angle behind and above the player, looking down-court. It
         // follows the player and ignores serveLookX.
