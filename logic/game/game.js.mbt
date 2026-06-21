@@ -1106,7 +1106,7 @@ fn fault(self : Game, ms : MatchState) -> Unit {
 
 ///|
 fn record_winner(self : Game, ms : MatchState, side : @rules.Side) -> Unit {
-  ignore(self)
+  @ffi.host_sfx_crowd_react(self.host, "cheer", 0.7)
   match side {
     @rules.P => ms.stats.p_winners = ms.stats.p_winners + 1
     @rules.C => ms.stats.c_winners = ms.stats.c_winners + 1
@@ -1115,7 +1115,7 @@ fn record_winner(self : Game, ms : MatchState, side : @rules.Side) -> Unit {
 
 ///|
 fn record_error(self : Game, ms : MatchState, side : @rules.Side) -> Unit {
-  ignore(self)
+  @ffi.host_sfx_crowd_react(self.host, "groan", 0.55)
   match side {
     @rules.P => ms.stats.p_unforced = ms.stats.p_unforced + 1
     @rules.C => ms.stats.c_unforced = ms.stats.c_unforced + 1

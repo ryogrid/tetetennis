@@ -182,8 +182,46 @@ export function createAudio() {
   }
   function getTension() { return tensionLevel; }
 
+  // A short crowd vocal reaction (immersion 03 §3.2): "groan" (error, falling),
+  // "ooh"/gasp (near-miss, rising), "cheer" (winner, bright).
+  function sfxCrowdReact(kind, intensity) {
+    if (!ctx || !pinkBuf) return;
+    const t = ctx.currentTime;
+    const v = 0.10 + Math.min(Math.max(intensity || 0.5, 0), 1) * 0.18;
+    const dur = kind === 'cheer' ? 1.2 : 0.7;
+    const n = noiseSrc(pinkBuf, dur);
+    const f = ctx.createBiquadFilter();
+    if (kind === 'groan') {
+      f.type = 'lowpass';
+      f.frequency.setValueAtTime(900, t);
+      f.frequency.exponentialRampToValueAtTime(280, t + dur);
+    } else if (kind === 'cheer') {
+      f.type = 'bandpass'; f.frequency.value = 1100; f.Q.value = 0.6;
+    } else { // ooh / gasp
+      f.type = 'bandpass'; f.Q.value = 0.7;
+      f.frequency.setValueAtTime(700, t);
+      f.frequency.exponentialRampToValueAtTime(1400, t + dur * 0.6);
+    }
+    const g = ctx.createGain();
+    g.gain.setValueAtTime(0.0001, t);
+    g.gain.linearRampToValueAtTime(v, t + (kind === 'cheer' ? 0.25 : 0.12));
+    g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+    n.connect(f).connect(g).connect(master);
+  }
+
+  // Briefly lift the ambient crowd bed on each hit so a long rally audibly
+  // builds (it settles back toward the tension-scaled base).
+  function bumpCrowd() {
+    if (!ambientNodes) return;
+    const now = ctx.currentTime;
+    const base = ambientGainTarget * (1 + tensionLevel * 0.8);
+    ambientNodes.g.gain.setTargetAtTime(base * 1.6, now, 0.12);
+    ambientNodes.g.gain.setTargetAtTime(base, now + 0.25, 1.1);
+  }
+
   function sfxHit(speed, type, pan, jammed) {
     if (!ctx) return;
+    bumpCrowd(); // a rally that keeps going lifts the crowd
     // effort grunt on hard, clean contacts (serves/smashes/big drives)
     if (gruntsEnabled && !jammed && speed > 20
         && Math.random() < 0.45 + Math.min(speed / 55, 1) * 0.4) {
@@ -548,5 +586,6 @@ export function createAudio() {
     sfxToss, sfxMenu, sfxConfirm, sfxReachAlert, sfxPerfect,
     ambient, setAmbientLevel, sfxFootstep, sfxSlide,
     sfxGrunt, setGrunts, setFootsteps, setTension, getTension,
+    sfxCrowdReact,
   };
 }
