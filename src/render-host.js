@@ -120,6 +120,17 @@ export function createRenderHost(scene, audio = null) {
       if (show) { openCourt.position.x = x; openCourt.position.z = z; }
     },
 
+    // Hide the live on-court prediction markers during an instant replay; the
+    // sim re-drives them when it resumes. (immersion 04 §4.1)
+    setReplayMode(on) {
+      if (on && ball) {
+        ball.hideLanding();
+        ball.hideTrail();
+        ball.setSweet(false, 0, 0, 0, false, 0, false);
+      }
+      if (on) openCourt.visible = false;
+    },
+
     // advance every rig's cosmetic pose/stride + the ball spin/pulse. main.js
     // calls this once per render frame, right before renderer.render.
     tick(dt) {

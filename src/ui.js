@@ -552,6 +552,7 @@ export function createUI({ onVirtualKey, onMoveAxis, settings, onSetting } = {})
       { key: 'grunts', label: 'Grunts', opts: [[true, 'On'], [false, 'Off']] },
       { key: 'footsteps', label: 'Footsteps', opts: [[true, 'On'], [false, 'Off']] },
       { key: 'haptics', label: 'Haptics', opts: [[true, 'On'], [false, 'Off']] },
+      { key: 'replays', label: 'Replays', opts: [[true, 'On'], [false, 'Off']] },
     ];
     function render() {
       panel.innerHTML = '<div style="font-weight:700;letter-spacing:1px;margin-bottom:8px;'

@@ -10,6 +10,7 @@ import { createAudio } from './audio.js';
 import { createUI } from './ui.js';
 import { createRenderHost } from './render-host.js';
 import { createMinimap } from './minimap.js';
+import { createReplayBuffer } from './replay-buffer.js';
 import { registerPWA } from './pwa.js';
 
 const DT = 1 / 240; // fixed physics step (mirrors the MoonBit DT)
@@ -30,7 +31,9 @@ app.appendChild(renderer.domElement);
 // Immersion / Presentation settings (the home for every immersion toggle),
 // persisted in localStorage and surfaced by the in-game gear panel.
 const IMM_KEY = 'immSettings';
-const IMM_DEFAULTS = { lightMood: 'day', crowd: 1, grunts: true, footsteps: true, haptics: true };
+const IMM_DEFAULTS = {
+  lightMood: 'day', crowd: 1, grunts: true, footsteps: true, haptics: true, replays: true,
+};
 function loadImmSettings() {
   try { return { ...IMM_DEFAULTS, ...JSON.parse(localStorage.getItem(IMM_KEY) || '{}') }; }
   catch { return { ...IMM_DEFAULTS }; }
@@ -55,6 +58,8 @@ window.addEventListener('resize', () => {
 const audio = createAudio();
 const input = createInput(audio.initAudio);
 
+let replaysEnabled = true; // instant replays on notable points (immersion 04 §4.1)
+
 // Apply (and persist) one immersion setting by routing it to the right system.
 function applyImmSetting(key, val) {
   immSettings[key] = val;
@@ -68,6 +73,7 @@ function applyImmSetting(key, val) {
     case 'grunts': audio.setGrunts(val); break;
     case 'footsteps': audio.setFootsteps(val); break;
     case 'haptics': input.setHaptics(val); break;
+    case 'replays': replaysEnabled = val; break;
   }
 }
 // apply saved settings at boot (lightMood was already applied by buildLights)
@@ -84,6 +90,19 @@ const ui = createUI({
 const render = createRenderHost(scene, audio);
 const cameraRig = createCameraRig(camera, render);
 const minimap = createMinimap();
+
+// --- instant replay (immersion 04 §4.1) ---
+const replay = createReplayBuffer();
+let replayState = null;   // {from, t, wall, speed} while playing a replay back
+let pendingReplay = false; // a notable point just ended → start a replay this frame
+const _rTarget = new THREE.Vector3();
+const _rCam = new THREE.Vector3();
+const replayBadge = document.createElement('div');
+replayBadge.textContent = '● REPLAY';
+replayBadge.style.cssText = 'position:fixed;top:14px;left:50%;transform:translateX(-50%);'
+  + 'z-index:55;display:none;color:#ff5a5a;font:700 16px sans-serif;letter-spacing:2px;'
+  + 'text-shadow:0 1px 4px #000';
+document.body.appendChild(replayBadge);
 
 // latest notable-point descriptor (consumed by replay / highlight features)
 let lastHighlight = null;
@@ -115,6 +134,7 @@ const host = {
   },
   onPointHighlight(winner, isBreak, isSet, isMatch, rallyLen) {
     lastHighlight = { winner, isBreak, isSet, isMatch, rallyLen };
+    pendingReplay = true; // frame loop decides whether it's worth replaying
     if (cameraRig.onPointHighlight) cameraRig.onPointHighlight(lastHighlight);
     if (render.onPointHighlight) render.onPointHighlight(lastHighlight);
   },
@@ -131,10 +151,54 @@ window.__lights = lights; // lighting-mood controller (settings UI hooks this)
 let last = performance.now();
 let acc = 0;
 
+// Start a slow-motion replay of the last couple of seconds if the point that
+// just ended was notable enough (break/set/match/long rally) and we have footage.
+function maybeStartReplay() {
+  if (!replaysEnabled || !lastHighlight) return;
+  const h = lastHighlight;
+  const notable = h.isBreak || h.isSet || h.isMatch || h.rallyLen >= 8;
+  if (!notable) return;
+  const n = replay.frames();
+  if (n < 60) return; // not enough footage yet
+  const win = Math.min(n, 165); // last ~2.75 s
+  replayState = { from: n - win, t: 0, wall: 0, speed: 0.5 };
+  render.setReplayMode(true);
+  render.setHumanTransparent(false);
+  replayBadge.style.display = 'block';
+}
+
+function endReplay() {
+  replayState = null;
+  render.setReplayMode(false);
+  replayBadge.style.display = 'none';
+}
+
+// Drive one replay frame: push a recorded row into the renderer and frame it
+// with a cinematic side angle. Hard caps guarantee it always ends and resumes.
+function runReplayFrame(dt) {
+  const rs = replayState;
+  rs.wall += dt;
+  rs.t += dt * rs.speed;
+  const fi = rs.from + Math.floor(rs.t * 60);
+  if (fi >= replay.frames() || rs.wall > 6) { endReplay(); return; }
+  const r = replay.read(fi);
+  render.setBall(r.active, r.bx, r.by, r.bz, r.sx, r.sy, r.sz);
+  render.setPlayer(0, r.p0x, r.p0z, 0, 0);
+  render.setPlayer(1, r.p1x, r.p1z, 0, 0);
+  render.tick(dt);
+  _rTarget.set(r.bx, r.by, r.bz);
+  _rCam.set(13, 7, r.bz * 0.4); // elevated broadcast side angle
+  camera.position.lerp(_rCam, 0.12);
+  camera.lookAt(_rTarget);
+  renderer.render(scene, camera);
+}
+
 function frame(now) {
   requestAnimationFrame(frame);
   const dt = Math.min((now - last) / 1000, 0.1);
   last = now;
+
+  if (replayState) { runReplayFrame(dt); return; }
 
   logic.handleInput();
   // Approach slow-motion: scale simulated time (not the camera or physics
@@ -148,6 +212,12 @@ function frame(now) {
   logic.frameUpdate(sdt);
   render.tick(sdt);
   input.endFrame();
+  // record render state for instant replay (skipped while replaying)
+  if (replaysEnabled && render.isActive()) {
+    replay.record(render.getBall(), render.getPlayer(0), render.getPlayer(1));
+  }
+  // a notable point just ended → maybe kick off a replay (sim freezes meanwhile)
+  if (pendingReplay) { pendingReplay = false; maybeStartReplay(); }
   // behind-player view → dim the human so the incoming ball stays visible
   const behind = render.isActive() && cameraRig.getMode() !== 'overhead';
   render.setHumanTransparent(behind);
