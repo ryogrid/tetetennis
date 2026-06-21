@@ -1017,6 +1017,12 @@ export function createUI({ onVirtualKey, onMoveAxis, settings, onSetting } = {})
     prevScore = { gp, gc, pp, pc, shown: true };
   }
 
+  // Latest dramatic situation of the upcoming point ("match"|"break"|"deuce"|
+  // "normal"). Stored here; the BREAK/SET/MATCH overlay renders from it.
+  let currentSituation = 'normal';
+  function pointSituation(kind) { currentSituation = kind || 'normal'; }
+  function getSituation() { return currentSituation; }
+
   // practice HUD: replace the scoreboard with a single feed-settings read-out
   function practiceHud(label) {
     els.scoreboard.innerHTML =
@@ -1168,5 +1174,6 @@ export function createUI({ onVirtualKey, onMoveAxis, settings, onSetting } = {})
     gauge, hideGauge, charge, hideCharge,
     hitQuality, hideHitQuality,
     moveHint, hideMoveHint,
+    pointSituation, getSituation,
   };
 }

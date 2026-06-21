@@ -196,3 +196,60 @@ pub fn score_strings(m : Match) -> ScoreStrings {
   }
   { games, points, server: m.server, winner: m.winner }
 }
+
+///|
+// The dramatic situation of the UPCOMING point, for crowd/camera/overlay cues.
+// This is a 1-set match, so a set point is also a match point → "match".
+// Returns one of: "match" | "break" | "deuce" | "normal".
+pub fn point_situation(m : Match) -> String {
+  if m.winner is Some(_) {
+    return "normal"
+  }
+  if m.tiebreak {
+    let pp = m.tb_points_p
+    let pc = m.tb_points_c
+    if (pp >= 6 && pp - pc >= 1) || (pc >= 6 && pc - pp >= 1) {
+      return "match" // set/match point in the breaker
+    }
+    if pp >= 6 && pc >= 6 {
+      return "deuce"
+    }
+    return "normal"
+  }
+  let pp = m.points_p
+  let pc = m.points_c
+  if pp == 3 && pc == 3 {
+    return "deuce"
+  }
+  let p_gp = pp >= 3 && pp > pc
+  let c_gp = pc >= 3 && pc > pp
+  if p_gp || c_gp {
+    let w = if p_gp { P } else { C }
+    let gw = get_games(m, w) + 1
+    let go = get_games(m, other(w))
+    if gw >= m.target_games && gw - go >= 2 {
+      return "match" // winning this game wins the set (= match)
+    }
+    if w != m.server {
+      return "break" // the returner is at game point
+    }
+    return "normal" // server's hold game point
+  }
+  "normal"
+}
+
+///|
+// Base tension 0..1 derived from the situation, fanned out to crowd/music/camera.
+pub fn situation_tension(kind : String) -> Double {
+  if kind == "match" {
+    1.0
+  } else if kind == "set" {
+    0.85
+  } else if kind == "break" {
+    0.7
+  } else if kind == "deuce" {
+    0.5
+  } else {
+    0.2
+  }
+}

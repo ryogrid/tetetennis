@@ -36,6 +36,30 @@ pub extern "js" fn host_sfx_crowd(h : Host, intensity : Double) -> Unit =
 pub extern "js" fn host_bounce_fx(h : Host, x : Double, z : Double, speed : Double, surface : String) -> Unit =
   "(h,x,z,s,id)=>h.render.bounceFx(x,z,s,id)"
 
+// ---------------- presentation / drama signals (output-only) ----------------
+
+///|
+// The dramatic situation of the upcoming point ("match"|"break"|"deuce"|"normal").
+pub extern "js" fn host_point_situation(h : Host, kind : String) -> Unit =
+  "(h,k)=>h.onPointSituation(k)"
+
+///|
+// Normalized 0..1 tension, fanned out to crowd/music/camera by the host.
+pub extern "js" fn host_tension(h : Host, value : Double) -> Unit =
+  "(h,v)=>h.onTension(v)"
+
+///|
+// Emitted at point end describing why the point was notable (replay/highlights).
+pub extern "js" fn host_point_highlight(
+  h : Host,
+  winner : Int,
+  is_break : Bool,
+  is_set : Bool,
+  is_match : Bool,
+  rally_len : Int,
+) -> Unit =
+  "(h,w,b,s,m,r)=>h.onPointHighlight(w,b,s,m,r)"
+
 // ---------------- match lifecycle ----------------
 
 ///|

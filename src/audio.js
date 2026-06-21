@@ -169,6 +169,19 @@ export function createAudio() {
   function setGrunts(on) { gruntsEnabled = !!on; }
   function setFootsteps(on) { footstepsEnabled = !!on; }
 
+  // Latest 0..1 match tension (immersion 06 §6.0). Stored here so the ambient
+  // crowd bed can swell with the moment (mid-rally reactions build on this).
+  let tensionLevel = 0;
+  function setTension(v) {
+    tensionLevel = Math.max(0, Math.min(1, v || 0));
+    // lift the ambient bed a touch on tense points
+    if (ambientNodes) {
+      ambientNodes.g.gain.setTargetAtTime(
+        ambientGainTarget * (1 + tensionLevel * 0.8), ctx.currentTime, 0.6);
+    }
+  }
+  function getTension() { return tensionLevel; }
+
   function sfxHit(speed, type, pan, jammed) {
     if (!ctx) return;
     // effort grunt on hard, clean contacts (serves/smashes/big drives)
@@ -534,6 +547,6 @@ export function createAudio() {
     sfxHit, sfxBounce, sfxCrowd, sfxNet, sfxOut, sfxFault,
     sfxToss, sfxMenu, sfxConfirm, sfxReachAlert, sfxPerfect,
     ambient, setAmbientLevel, sfxFootstep, sfxSlide,
-    sfxGrunt, setGrunts, setFootsteps,
+    sfxGrunt, setGrunts, setFootsteps, setTension, getTension,
   };
 }

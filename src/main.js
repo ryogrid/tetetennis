@@ -85,6 +85,9 @@ const render = createRenderHost(scene, audio);
 const cameraRig = createCameraRig(camera, render);
 const minimap = createMinimap();
 
+// latest notable-point descriptor (consumed by replay / highlight features)
+let lastHighlight = null;
+
 const host = {
   render,
   audio,
@@ -101,6 +104,19 @@ const host = {
     try {
       if (ASSIST_LEVELS.includes(level)) localStorage.setItem(ASSIST_KEY, level);
     } catch { /* localStorage unavailable */ }
+  },
+  // ---- presentation / drama signals (immersion 06 §6.0), fanned out ----
+  onPointSituation(kind) {
+    ui.pointSituation(kind);
+  },
+  onTension(v) {
+    audio.setTension(v);
+    if (cameraRig.setTension) cameraRig.setTension(v);
+  },
+  onPointHighlight(winner, isBreak, isSet, isMatch, rallyLen) {
+    lastHighlight = { winner, isBreak, isSet, isMatch, rallyLen };
+    if (cameraRig.onPointHighlight) cameraRig.onPointHighlight(lastHighlight);
+    if (render.onPointHighlight) render.onPointHighlight(lastHighlight);
   },
 };
 

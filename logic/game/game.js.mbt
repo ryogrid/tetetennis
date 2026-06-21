@@ -813,6 +813,10 @@ fn position_for_serve(self : Game, ms : MatchState) -> Unit {
   ms.cpu_serve_plan = None
   ent(ms, sv).end_serve_anim()
   @ffi.host_serve_anim(self.host, side_int(sv), false)
+  // tell the presentation layer how tense the upcoming point is
+  let sit = @rules.point_situation(ms.m)
+  @ffi.host_point_situation(self.host, sit)
+  @ffi.host_tension(self.host, @rules.situation_tension(sit))
 }
 
 ///|
@@ -1143,6 +1147,7 @@ fn point_end(self : Game, ms : MatchState, winner : @rules.Side, call_text : Str
   }
   // accumulate per-point stats (rally length, net-point outcomes)
   let st = ms.stats
+  let rally_len = st.rally_shots // capture before the reset below
   st.points_played = st.points_played + 1
   st.total_rally_shots = st.total_rally_shots + st.rally_shots
   st.rally_shots = 0
@@ -1160,7 +1165,15 @@ fn point_end(self : Game, ms : MatchState, winner : @rules.Side, call_text : Str
   }
   st.p_came_net = false
   st.c_came_net = false
+  let pre_server = ms.m.server
   let ev = @rules.add_point(ms.m, winner)
+  // notable-point signal for replays / highlight ranking / tension audio
+  let is_game = ev == @rules.Game || ev == @rules.SetWon
+  let is_set = ev == @rules.SetWon
+  let is_break = is_game && winner != pre_server
+  @ffi.host_point_highlight(
+    self.host, side_int(winner), is_break, is_set, is_set, rally_len,
+  )
   let win_name = names_for(ms, winner)
   @ffi.host_sfx_crowd(self.host, if winner == @rules.P { 1.0 } else { 0.55 })
   if call_text != "" {
