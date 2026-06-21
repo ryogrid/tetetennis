@@ -18,6 +18,7 @@ export function createAudio() {
   let hitBuffer = null;  // tennis-racket1.mp3, used for ALL hit sounds (serve/smash/stroke)
   let ambientNodes = null; // continuous crowd murmur bed (immersion 03 §3.1)
   let wantAmbient = false;  // ambient requested before the audio ctx existed
+  let gruntsEnabled = true; // player effort grunts on big hits (immersion 03 §3.3)
 
   // Procedural impulse response: decaying stereo noise.
   function makeReverbIR(sec, decay) {
@@ -130,8 +131,49 @@ export function createAudio() {
   // Racket impact: a 5-layer synth (Body, Crack, Shimmer, String Ring, Brush)
   // shaped per shot type, panned by contact x, with a reverb send. A jammed
   // (mishit) contact is detuned and low-passed into a dull thud.
+  // Player effort grunt: two detuned sawtooths through "ah"-vowel formant
+  // bandpasses with a quick pitch-drop, fired on hard contacts. (immersion 03 §3.3)
+  function sfxGrunt(speed, pan) {
+    if (!ctx) return;
+    const t = ctx.currentTime;
+    const sN = Math.min(speed / 55, 1);
+    const f0 = 118 + Math.random() * 70; // grunt fundamental
+    const out = ctx.createGain();
+    const panner = ctx.createStereoPanner ? ctx.createStereoPanner() : null;
+    if (panner) { panner.pan.value = Math.max(-1, Math.min(1, pan || 0)); out.connect(panner); panner.connect(master); }
+    else out.connect(master);
+    const f1 = ctx.createBiquadFilter();
+    f1.type = 'bandpass'; f1.frequency.value = 720; f1.Q.value = 6;
+    const f2 = ctx.createBiquadFilter();
+    f2.type = 'bandpass'; f2.frequency.value = 1150; f2.Q.value = 8;
+    const mix = ctx.createGain();
+    f1.connect(mix); f2.connect(mix);
+    const g = ctx.createGain();
+    const v = 0.05 + sN * 0.12;
+    g.gain.setValueAtTime(0.0001, t);
+    g.gain.exponentialRampToValueAtTime(v, t + 0.03);
+    g.gain.exponentialRampToValueAtTime(0.0001, t + 0.30);
+    mix.connect(g).connect(out);
+    for (const det of [-7, 7]) {
+      const o = ctx.createOscillator();
+      o.type = 'sawtooth';
+      o.frequency.setValueAtTime(f0 * 1.6, t);
+      o.frequency.exponentialRampToValueAtTime(f0, t + 0.12);
+      o.detune.value = det;
+      o.connect(f1); o.connect(f2);
+      o.start(t); o.stop(t + 0.32);
+    }
+  }
+
+  function setGrunts(on) { gruntsEnabled = !!on; }
+
   function sfxHit(speed, type, pan, jammed) {
     if (!ctx) return;
+    // effort grunt on hard, clean contacts (serves/smashes/big drives)
+    if (gruntsEnabled && !jammed && speed > 20
+        && Math.random() < 0.45 + Math.min(speed / 55, 1) * 0.4) {
+      sfxGrunt(speed, pan);
+    }
     const s = SHOT[type] || SHOT.flat;
     const sNorm = Math.min((speed || 20) / 55, 1);
     const jit = 1 + (Math.random() - 0.5) * 0.06; // pitch jitter every hit
@@ -490,5 +532,6 @@ export function createAudio() {
     sfxHit, sfxBounce, sfxCrowd, sfxNet, sfxOut, sfxFault,
     sfxToss, sfxMenu, sfxConfirm, sfxReachAlert, sfxPerfect,
     ambient, setAmbientLevel, sfxFootstep, sfxSlide,
+    sfxGrunt, setGrunts,
   };
 }
