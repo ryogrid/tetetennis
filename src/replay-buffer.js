@@ -39,5 +39,13 @@ export function createReplayBuffer(capacity = 420) { // ~7 s @ 60 fps
       };
     },
     clear() { head = 0; count = 0; },
+    // Copy the last `n` held frames into a standalone clip (array of rows) for
+    // the highlight reel, so it survives later overwrites of the ring buffer.
+    snapshot(n) {
+      const k = Math.min(n, count);
+      const out = [];
+      for (let i = count - k; i < count; i++) out.push(this.read(i));
+      return out;
+    },
   };
 }

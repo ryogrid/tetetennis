@@ -74,7 +74,7 @@ pub extern "js" fn host_point_highlight(
 
 ///|
 pub extern "js" fn host_start_match(h : Host, surface_id : String, p_idx : Int, c_idx : Int) -> Unit =
-  "(h,s,p,c)=>{h.render.startMatch(s,p,c);h.audio.ambient(true)}"
+  "(h,s,p,c)=>{h.render.startMatch(s,p,c);h.audio.ambient(true);h.onMatchStart()}"
 
 ///|
 pub extern "js" fn host_teardown_match(h : Host) -> Unit =

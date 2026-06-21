@@ -91,10 +91,11 @@ const render = createRenderHost(scene, audio);
 const cameraRig = createCameraRig(camera, render);
 const minimap = createMinimap();
 
-// --- instant replay (immersion 04 §4.1) ---
+// --- instant replay (immersion 04 §4.1) + highlight reel (06 §6.8) ---
 const replay = createReplayBuffer();
-let replayState = null;   // {from, t, wall, speed} while playing a replay back
-let pendingReplay = false; // a notable point just ended → start a replay this frame
+const highlights = []; // captured clips ranked by drama, for the end-of-match reel
+let replayState = null;   // {clips,ci,t,wall,speed} while playing back
+let pendingReplay = false; // a notable point just ended → start playback this frame
 const _rTarget = new THREE.Vector3();
 const _rCam = new THREE.Vector3();
 const replayBadge = document.createElement('div');
@@ -124,6 +125,13 @@ const host = {
       if (ASSIST_LEVELS.includes(level)) localStorage.setItem(ASSIST_KEY, level);
     } catch { /* localStorage unavailable */ }
   },
+  // reset replay/highlight state when a fresh match starts
+  onMatchStart() {
+    highlights.length = 0;
+    replay.clear();
+    replayState = null;
+    replayBadge.style.display = 'none';
+  },
   // ---- presentation / drama signals (immersion 06 §6.0), fanned out ----
   onPointSituation(kind) {
     ui.pointSituation(kind);
@@ -135,8 +143,15 @@ const host = {
   onPointHighlight(winner, isBreak, isSet, isMatch, rallyLen) {
     lastHighlight = { winner, isBreak, isSet, isMatch, rallyLen };
     pendingReplay = true; // frame loop decides whether it's worth replaying
-    if (cameraRig.onPointHighlight) cameraRig.onPointHighlight(lastHighlight);
-    if (render.onPointHighlight) render.onPointHighlight(lastHighlight);
+    // capture a clip of notable points for the end-of-match reel
+    if (replaysEnabled) {
+      const notable = isBreak || isSet || isMatch || rallyLen >= 8;
+      if (notable && replay.frames() >= 60) {
+        const rank = (isMatch ? 100 : isSet ? 80 : isBreak ? 50 : 0) + rallyLen;
+        highlights.push({ clip: replay.snapshot(165), rank });
+        if (highlights.length > 16) highlights.shift();
+      }
+    }
   },
 };
 
@@ -151,19 +166,31 @@ window.__lights = lights; // lighting-mood controller (settings UI hooks this)
 let last = performance.now();
 let acc = 0;
 
-// Start a slow-motion replay of the last couple of seconds if the point that
-// just ended was notable enough (break/set/match/long rally) and we have footage.
+// Begin playback if the point that just ended was notable. On the match-winning
+// point this plays a multi-clip HIGHLIGHT REEL (top moments by drama); otherwise
+// a single slow-motion replay of the last couple of seconds. Hard caps below
+// guarantee it always ends and the sim resumes.
 function maybeStartReplay() {
   if (!replaysEnabled || !lastHighlight) return;
   const h = lastHighlight;
   const notable = h.isBreak || h.isSet || h.isMatch || h.rallyLen >= 8;
   if (!notable) return;
-  const n = replay.frames();
-  if (n < 60) return; // not enough footage yet
-  const win = Math.min(n, 165); // last ~2.75 s
-  replayState = { from: n - win, t: 0, wall: 0, speed: 0.5 };
+  if (replay.frames() < 60) return; // not enough footage yet
+  let clips;
+  let badge = '● REPLAY';
+  if (h.isMatch && highlights.length > 1) {
+    // end-of-match reel: top moments by rank, oldest→newest for a narrative
+    clips = highlights.slice().sort((a, b) => b.rank - a.rank).slice(0, 5)
+      .map((x) => x.clip).reverse();
+    badge = '★ MATCH HIGHLIGHTS';
+  } else {
+    clips = [replay.snapshot(165)]; // last ~2.75 s
+  }
+  if (!clips.length || !clips[0].length) return;
+  replayState = { clips, ci: 0, t: 0, wall: 0, speed: 0.5 };
   render.setReplayMode(true);
   render.setHumanTransparent(false);
+  replayBadge.textContent = badge;
   replayBadge.style.display = 'block';
 }
 
@@ -173,15 +200,21 @@ function endReplay() {
   replayBadge.style.display = 'none';
 }
 
-// Drive one replay frame: push a recorded row into the renderer and frame it
-// with a cinematic side angle. Hard caps guarantee it always ends and resumes.
+// Drive one playback frame from the current clip: push a recorded row into the
+// renderer and frame it with a cinematic side angle.
 function runReplayFrame(dt) {
   const rs = replayState;
   rs.wall += dt;
   rs.t += dt * rs.speed;
-  const fi = rs.from + Math.floor(rs.t * 60);
-  if (fi >= replay.frames() || rs.wall > 6) { endReplay(); return; }
-  const r = replay.read(fi);
+  let clip = rs.clips[rs.ci];
+  let fi = Math.floor(rs.t * 60);
+  if (fi >= clip.length) { // advance to the next clip in the reel
+    rs.ci++; rs.t = 0; fi = 0;
+    if (rs.ci >= rs.clips.length) { endReplay(); return; }
+    clip = rs.clips[rs.ci];
+  }
+  if (rs.wall > 18) { endReplay(); return; } // absolute safety cap
+  const r = clip[fi];
   render.setBall(r.active, r.bx, r.by, r.bz, r.sx, r.sy, r.sz);
   render.setPlayer(0, r.p0x, r.p0z, 0, 0);
   render.setPlayer(1, r.p1x, r.p1z, 0, 0);
