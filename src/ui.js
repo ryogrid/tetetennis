@@ -420,7 +420,7 @@ body.reduced-motion #scoreboard .sb-pop, body.reduced-motion #scoreboard .sb-fla
   font:600 14px sans-serif; letter-spacing:1px; pointer-events:none; }
 /* first-run onboarding card */
 #intro { position:fixed; inset:0; z-index:70; display:none; align-items:center; justify-content:center;
-  background:rgba(6,6,10,.72); }
+  background:rgba(6,6,10,.72); pointer-events:auto; }
 #intro .card { width:300px; max-width:88vw; padding:18px 20px; border-radius:12px;
   background:rgba(18,18,26,.96); border:1px solid rgba(255,255,255,.18); color:#e8eef2;
   font:14px sans-serif; text-align:center; }
@@ -1114,10 +1114,17 @@ export function createUI({ onVirtualKey, onMoveAxis, settings, onSetting } = {})
       + '<p>Tap ⚙ (top-right) for immersion settings, ⤓ CLIP to save a highlight.</p>'
       + '<button id="intro-ok">Got it</button></div>';
     els.intro.style.display = 'flex';
-    els.intro.querySelector('#intro-ok').onclick = () => {
+    const dismiss = () => {
       els.intro.style.display = 'none';
+      els.intro.onclick = null;
+      window.removeEventListener('keydown', onKey, true);
       try { localStorage.setItem('seenIntro', '1'); } catch { /* ignore */ }
     };
+    function onKey(e) { e.preventDefault(); e.stopImmediatePropagation(); dismiss(); }
+    // dismiss on the button, on clicking anywhere in the overlay, or any key
+    els.intro.querySelector('#intro-ok').onclick = (e) => { e.stopPropagation(); dismiss(); };
+    els.intro.onclick = dismiss;
+    window.addEventListener('keydown', onKey, true);
   }
 
   // Hawk-Eye close-call inset: a zoomed top-down view of the nearest line with
