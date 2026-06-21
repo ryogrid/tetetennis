@@ -19,6 +19,7 @@ export function createAudio() {
   let ambientNodes = null; // continuous crowd murmur bed (immersion 03 §3.1)
   let wantAmbient = false;  // ambient requested before the audio ctx existed
   let gruntsEnabled = true; // player effort grunts on big hits (immersion 03 §3.3)
+  let footstepsEnabled = true; // footstep / slide SFX (immersion 03 §3.4)
 
   // Procedural impulse response: decaying stereo noise.
   function makeReverbIR(sec, decay) {
@@ -166,6 +167,7 @@ export function createAudio() {
   }
 
   function setGrunts(on) { gruntsEnabled = !!on; }
+  function setFootsteps(on) { footstepsEnabled = !!on; }
 
   function sfxHit(speed, type, pan, jammed) {
     if (!ctx) return;
@@ -295,7 +297,7 @@ export function createAudio() {
   // Footstep tick: a short filtered-noise scuff flavoured by surface, panned by
   // court x, volume scaled by player speed. (immersion 03 §3.4)
   function sfxFootstep(speed, surfaceId, pan) {
-    if (!ctx || !whiteBuf) return;
+    if (!ctx || !whiteBuf || !footstepsEnabled) return;
     const v = Math.min(0.04 + speed * 0.011, 0.15);
     const out = ctx.createGain();
     const panner = ctx.createStereoPanner ? ctx.createStereoPanner() : null;
@@ -325,7 +327,7 @@ export function createAudio() {
 
   // Clay slide: a longer band-passed pink-noise scrape for a sliding stop.
   function sfxSlide(speed, pan) {
-    if (!ctx || !pinkBuf) return;
+    if (!ctx || !pinkBuf || !footstepsEnabled) return;
     const v = Math.min(0.05 + speed * 0.01, 0.14);
     const out = ctx.createGain();
     const panner = ctx.createStereoPanner ? ctx.createStereoPanner() : null;
@@ -532,6 +534,6 @@ export function createAudio() {
     sfxHit, sfxBounce, sfxCrowd, sfxNet, sfxOut, sfxFault,
     sfxToss, sfxMenu, sfxConfirm, sfxReachAlert, sfxPerfect,
     ambient, setAmbientLevel, sfxFootstep, sfxSlide,
-    sfxGrunt, setGrunts,
+    sfxGrunt, setGrunts, setFootsteps,
   };
 }

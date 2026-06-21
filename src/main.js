@@ -27,11 +27,18 @@ renderer.shadowMap.enabled = true;
 renderer.shadowMap.type = THREE.PCFSoftShadowMap;
 app.appendChild(renderer.domElement);
 
+// Immersion / Presentation settings (the home for every immersion toggle),
+// persisted in localStorage and surfaced by the in-game gear panel.
+const IMM_KEY = 'immSettings';
+const IMM_DEFAULTS = { lightMood: 'day', crowd: 1, grunts: true, footsteps: true, haptics: true };
+function loadImmSettings() {
+  try { return { ...IMM_DEFAULTS, ...JSON.parse(localStorage.getItem(IMM_KEY) || '{}') }; }
+  catch { return { ...IMM_DEFAULTS }; }
+}
+const immSettings = loadImmSettings();
+
 const scene = new THREE.Scene();
-const lightMood = (() => {
-  try { return localStorage.getItem('lightMood') || 'day'; } catch { return 'day'; }
-})();
-const lights = buildLights(scene, lightMood); // { setMood } — wired to settings UI in a later step
+const lights = buildLights(scene, immSettings.lightMood); // { setMood }
 
 const camera = new THREE.PerspectiveCamera(
   70, window.innerWidth / window.innerHeight, 0.1, 200,
@@ -47,9 +54,32 @@ window.addEventListener('resize', () => {
 
 const audio = createAudio();
 const input = createInput(audio.initAudio);
+
+// Apply (and persist) one immersion setting by routing it to the right system.
+function applyImmSetting(key, val) {
+  immSettings[key] = val;
+  try { localStorage.setItem(IMM_KEY, JSON.stringify(immSettings)); } catch { /* ignore */ }
+  switch (key) {
+    case 'lightMood': lights.setMood(val); break;
+    case 'crowd':
+      audio.setAmbientLevel(val === 2 ? 0.07 : val === 1 ? 0.035 : 0);
+      if (val === 0) audio.ambient(false);
+      break;
+    case 'grunts': audio.setGrunts(val); break;
+    case 'footsteps': audio.setFootsteps(val); break;
+    case 'haptics': input.setHaptics(val); break;
+  }
+}
+// apply saved settings at boot (lightMood was already applied by buildLights)
+for (const k of Object.keys(immSettings)) {
+  if (k !== 'lightMood') applyImmSetting(k, immSettings[k]);
+}
+
 const ui = createUI({
   onVirtualKey: (c, d) => input.setVirtualKey(c, d),
   onMoveAxis: (x, z) => input.setMoveAxis(x, z),
+  settings: immSettings,
+  onSetting: applyImmSetting,
 });
 const render = createRenderHost(scene, audio);
 const cameraRig = createCameraRig(camera, render);

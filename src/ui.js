@@ -426,7 +426,7 @@ const css = `
 @media (pointer: coarse) { .ts-word { font-size:40px; } }
 `;
 
-export function createUI({ onVirtualKey, onMoveAxis } = {}) {
+export function createUI({ onVirtualKey, onMoveAxis, settings, onSetting } = {}) {
   const els = {};
   let bannerTimer = null;
   let toastTimer = null;
@@ -522,6 +522,73 @@ export function createUI({ onVirtualKey, onMoveAxis } = {}) {
     'Release in the sweet spot for a Perfect Hit; longer charge = more power<br>' +
     'Serve: Space toss, then Z/X/C when the power meter is in the green band<br>' +
     'Aim: hold a direction at the moment you release';
+
+  // ---------- immersion / presentation settings panel (immersion 07 §7.1) ----------
+  // A gear button + overlay that is the single home for every immersion toggle.
+  // Reads/writes the `settings` object handed in by main.js and routes changes
+  // through onSetting(key, value) (which applies + persists them).
+  function buildSettingsPanel() {
+    if (!settings) return;
+    const gear = document.createElement('button');
+    gear.id = 'imm-gear';
+    gear.textContent = '⚙';
+    gear.title = 'Immersion settings';
+    gear.style.cssText = 'position:fixed;top:10px;right:10px;z-index:60;width:38px;'
+      + 'height:38px;border-radius:8px;background:rgba(18,18,26,.72);color:#cfe;'
+      + 'border:1px solid rgba(255,255,255,.22);font-size:19px;cursor:pointer';
+    document.body.appendChild(gear);
+
+    const panel = document.createElement('div');
+    panel.id = 'imm-panel';
+    panel.style.cssText = 'position:fixed;top:56px;right:10px;z-index:60;display:none;'
+      + 'width:236px;padding:12px 14px;border-radius:10px;background:rgba(13,13,20,.93);'
+      + 'color:#e8eef2;border:1px solid rgba(255,255,255,.18);'
+      + 'box-shadow:0 6px 24px rgba(0,0,0,.5);font:13px sans-serif';
+    document.body.appendChild(panel);
+
+    const ROWS = [
+      { key: 'lightMood', label: 'Lighting', opts: [['day', 'Day'], ['dusk', 'Dusk'], ['night', 'Night']] },
+      { key: 'crowd', label: 'Crowd vol', opts: [[0, 'Off'], [1, 'Low'], [2, 'High']] },
+      { key: 'grunts', label: 'Grunts', opts: [[true, 'On'], [false, 'Off']] },
+      { key: 'footsteps', label: 'Footsteps', opts: [[true, 'On'], [false, 'Off']] },
+      { key: 'haptics', label: 'Haptics', opts: [[true, 'On'], [false, 'Off']] },
+    ];
+    function render() {
+      panel.innerHTML = '<div style="font-weight:700;letter-spacing:1px;margin-bottom:8px;'
+        + 'color:#9fd">IMMERSION</div>';
+      for (const row of ROWS) {
+        const r = document.createElement('div');
+        r.style.cssText = 'display:flex;justify-content:space-between;align-items:center;'
+          + 'margin:7px 0;gap:8px';
+        const lab = document.createElement('span');
+        lab.textContent = row.label; lab.style.color = '#aab';
+        const grp = document.createElement('span');
+        grp.style.cssText = 'display:flex;gap:4px';
+        for (const [val, txt] of row.opts) {
+          const b = document.createElement('button');
+          b.textContent = txt;
+          const active = settings[row.key] === val;
+          b.style.cssText = 'padding:3px 8px;border-radius:6px;cursor:pointer;font-size:12px;'
+            + 'border:1px solid rgba(255,255,255,.18);'
+            + (active ? 'background:#2f9c6a;color:#fff' : 'background:rgba(255,255,255,.06);color:#bcd');
+          b.onclick = () => {
+            settings[row.key] = val;
+            if (onSetting) onSetting(row.key, val);
+            render();
+          };
+          grp.appendChild(b);
+        }
+        r.appendChild(lab); r.appendChild(grp); panel.appendChild(r);
+      }
+    }
+    gear.onclick = () => {
+      const show = panel.style.display === 'none';
+      panel.style.display = show ? 'block' : 'none';
+      if (show) render();
+    };
+    render();
+  }
+  buildSettingsPanel();
 
   // source-code link (bottom-right, just below the controls box)
   const srcLink = document.createElement('a');
