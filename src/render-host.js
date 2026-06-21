@@ -84,6 +84,7 @@ export function createRenderHost(scene) {
     },
     showTrail(arr, idealIdx) { if (ball) ball.showTrail(arr, idealIdx); },
     hideTrail() { if (ball) ball.hideTrail(); },
+    bounceFx(x, z, speed, surface) { if (ball) ball.bounceFx(x, z, speed, surface); },
 
     setPlayer(side, x, z, vx, vz) {
       const p = players[side];

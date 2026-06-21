@@ -31,6 +31,11 @@ pub extern "js" fn host_sfx_bounce(h : Host, speed : Double, surface : String) -
 pub extern "js" fn host_sfx_crowd(h : Host, intensity : Double) -> Unit =
   "(h,i)=>h.audio.sfxCrowd(i)"
 
+///|
+// Spawn a bounce dust puff + skid mark at the ground bounce point (render-only).
+pub extern "js" fn host_bounce_fx(h : Host, x : Double, z : Double, speed : Double, surface : String) -> Unit =
+  "(h,x,z,s,id)=>h.render.bounceFx(x,z,s,id)"
+
 // ---------------- match lifecycle ----------------
 
 ///|

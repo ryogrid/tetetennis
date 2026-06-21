@@ -1186,6 +1186,7 @@ fn point_end(self : Game, ms : MatchState, winner : @rules.Side, call_text : Str
 ///|
 fn process_bounce(self : Game, ms : MatchState, px : Double, pz : Double, speed : Double) -> Unit {
   @ffi.host_sfx_bounce(self.host, speed, ms.surface_id)
+  @ffi.host_bounce_fx(self.host, px, pz, speed, ms.surface_id)
   @ffi.host_hide_landing(self.host)
   if ms.rally_phase == Over || ms.rally_phase == Idle {
     return
@@ -1798,9 +1799,10 @@ fn point_over_step(self : Game, ms : MatchState, dt : Double) -> Unit {
     @physics.step_ball(b, dt, ms.surface, ms.events)
     for e in ms.events {
       match e {
-        @physics.Bounce(_, _, _, speed) =>
+        @physics.Bounce(bx, _, bz, speed) =>
           if speed > 2.0 {
             @ffi.host_sfx_bounce(self.host, speed, ms.surface_id)
+            @ffi.host_bounce_fx(self.host, bx, bz, speed, ms.surface_id)
           }
         @physics.Net(_) => ()
       }
