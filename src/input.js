@@ -12,6 +12,7 @@ export function createInput(onFirstInput) {
   // analog movement (touch joystick): used in place of the arrow keys when active
   const axis = { x: 0, z: 0, active: false };
   let first = false;
+  let hapticsEnabled = true; // contact-feel rumble/vibrate (immersion 06 §6.7)
 
   function norm(code) { return ALIASES[code] || code; }
 
@@ -94,5 +95,32 @@ export function createInput(onFirstInput) {
       axis.active = Math.hypot(x, z) > 0.001;
     },
     endFrame() { pressed.clear(); },
+    // Contact-feel haptics scaled by hit quality (0..100). Mobile vibrate +
+    // any connected gamepad's rumble actuator, queried on demand. Degrades
+    // silently where unsupported (e.g. iOS Safari has no navigator.vibrate).
+    // (immersion 06 §6.7)
+    haptic(q) {
+      if (!hapticsEnabled) return;
+      const inten = Math.max(0, Math.min(1, (q || 0) / 100));
+      const dur = Math.round(8 + inten * 28); // 8..36 ms
+      try { if (navigator.vibrate) navigator.vibrate(dur); } catch { /* unsupported */ }
+      try {
+        const pads = navigator.getGamepads ? navigator.getGamepads() : [];
+        for (const p of pads) {
+          if (!p) continue;
+          const act = p.vibrationActuator || (p.hapticActuators && p.hapticActuators[0]);
+          if (act && act.playEffect) {
+            act.playEffect('dual-rumble', {
+              duration: dur + 30,
+              strongMagnitude: 0.25 + inten * 0.55,
+              weakMagnitude: 0.2 + inten * 0.5,
+            });
+          } else if (act && act.pulse) {
+            act.pulse(0.3 + inten * 0.6, dur + 30);
+          }
+        }
+      } catch { /* no gamepad / unsupported */ }
+    },
+    setHaptics(on) { hapticsEnabled = !!on; },
   };
 }

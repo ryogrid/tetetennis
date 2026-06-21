@@ -12,11 +12,17 @@ const SURFACE_IDS = ['clay', 'grass', 'hard'];
 const REACH_IDLE = 0x3988ff; // blue
 const REACH_HOT = 0xff50a0;  // pink (ball in range)
 
-export function createRenderHost(scene) {
+export function createRenderHost(scene, audio = null) {
   let court = null;
   let ball = null;
   const players = [null, null]; // [human(side 0), cpu(side 1)]
   let surfaceId = 'hard';
+
+  // footstep/slide SFX bookkeeping per side (immersion 03 §3.4)
+  const stepAcc = [0, 0];
+  const lastPos = [null, null];
+  const lastSpeed = [0, 0];
+  const slideCd = [0, 0];
 
   // open-court highlight: a translucent patch on the CPU's vacated side
   const openCourt = new THREE.Mesh(
@@ -49,7 +55,21 @@ export function createRenderHost(scene) {
 
   function teardownMatch() {
     openCourt.visible = false;
-    if (court) { scene.remove(court); court = null; }
+    if (court) {
+      scene.remove(court);
+      // dispose court geometry/materials/textures (incl. the crowd) so a
+      // rematch's buildCourt() doesn't leak GPU resources.
+      court.traverse((o) => {
+        if (o.geometry) o.geometry.dispose();
+        if (o.material) {
+          for (const mtl of Array.isArray(o.material) ? o.material : [o.material]) {
+            if (mtl.map) mtl.map.dispose();
+            mtl.dispose();
+          }
+        }
+      });
+      court = null;
+    }
     for (let i = 0; i < players.length; i++) {
       if (players[i]) { players[i].dispose(); players[i] = null; }
     }
@@ -70,6 +90,7 @@ export function createRenderHost(scene) {
     },
     showTrail(arr, idealIdx) { if (ball) ball.showTrail(arr, idealIdx); },
     hideTrail() { if (ball) ball.hideTrail(); },
+    bounceFx(x, z, speed, surface) { if (ball) ball.bounceFx(x, z, speed, surface); },
 
     setPlayer(side, x, z, vx, vz) {
       const p = players[side];
@@ -78,10 +99,17 @@ export function createRenderHost(scene) {
     startSwing(side, type, fh, motion) {
       const p = players[side];
       if (p) p.startSwing(type, fh, motion);
+      // the receiver split-steps in anticipation of this contact
+      const other = players[side ^ 1];
+      if (other) other.splitStep();
     },
     serveAnim(side, on) {
       const p = players[side];
       if (p) p.serveAnim(on);
+    },
+    celebrate(side, kind) {
+      const p = players[side];
+      if (p && p.celebrate) p.celebrate(kind);
     },
     setReachColor(inReach) {
       if (players[0]) players[0].setReachZoneColor(inReach ? REACH_HOT : REACH_IDLE);
@@ -96,12 +124,50 @@ export function createRenderHost(scene) {
       if (show) { openCourt.position.x = x; openCourt.position.z = z; }
     },
 
+    // Hide the live on-court prediction markers during an instant replay; the
+    // sim re-drives them when it resumes. (immersion 04 §4.1)
+    setReplayMode(on) {
+      if (on && ball) {
+        ball.hideLanding();
+        ball.hideTrail();
+        ball.setSweet(false, 0, 0, 0, false, 0, false);
+      }
+      if (on) openCourt.visible = false;
+    },
+
     // advance every rig's cosmetic pose/stride + the ball spin/pulse. main.js
     // calls this once per render frame, right before renderer.render.
     tick(dt) {
-      if (players[0]) players[0].tick(dt);
-      if (players[1]) players[1].tick(dt);
+      const bs = ball ? ball.state : null;
+      if (players[0]) players[0].tick(dt, bs);
+      if (players[1]) players[1].tick(dt, bs);
       if (ball) ball.tick(dt);
+      // footstep / clay-slide SFX, derived from each rig's motion (no FFI)
+      if (audio) {
+        for (let side = 0; side < 2; side++) {
+          const p = players[side];
+          if (!p) { lastPos[side] = null; continue; }
+          const sp = Math.hypot(p.vel.x, p.vel.z);
+          const pan = Math.max(-1, Math.min(1, p.pos.x / 6));
+          const lp = lastPos[side];
+          if (lp) {
+            stepAcc[side] += Math.hypot(p.pos.x - lp.x, p.pos.z - lp.z);
+            if (stepAcc[side] >= 0.85 && sp > 1.2) {
+              audio.sfxFootstep && audio.sfxFootstep(sp, surfaceId, pan);
+              stepAcc[side] -= 0.85;
+            }
+            const decel = dt > 0 ? (lastSpeed[side] - sp) / dt : 0;
+            slideCd[side] -= dt;
+            if (surfaceId === 'clay' && sp > 3 && decel > 6 && slideCd[side] <= 0) {
+              audio.sfxSlide && audio.sfxSlide(Math.max(sp, lastSpeed[side]), pan);
+              if (p.slide) p.slide(); // cosmetic braking slide on the rig
+              slideCd[side] = 0.45;
+            }
+          }
+          lastPos[side] = { x: p.pos.x, z: p.pos.z };
+          lastSpeed[side] = sp;
+        }
+      }
     },
 
     // --- read access for the camera rig ---

@@ -80,6 +80,22 @@ function ballTexture() {
   return _ballTex;
 }
 
+// Soft radial-alpha disc, reused for the bounce dust particles.
+let _discTex = null;
+function discTexture() {
+  if (_discTex) return _discTex;
+  const c = document.createElement('canvas');
+  c.width = c.height = 32;
+  const x = c.getContext('2d');
+  const g = x.createRadialGradient(16, 16, 0, 16, 16, 16);
+  g.addColorStop(0, 'rgba(255,255,255,0.9)');
+  g.addColorStop(1, 'rgba(255,255,255,0)');
+  x.fillStyle = g;
+  x.fillRect(0, 0, 32, 32);
+  _discTex = new THREE.CanvasTexture(c);
+  return _discTex;
+}
+
 export function createBallEntity(scene) {
   // latest state pushed by setBall(); the camera reads .active/.pos
   const state = {
@@ -191,6 +207,42 @@ export function createBallEntity(scene) {
   sweet.visible = false;
   scene.add(sweet);
 
+  // --- bounce VFX: dust puff + skid marks (immersion 05 §5.3) ---
+  const DUST_CAP = 24;
+  const dust = new THREE.InstancedMesh(
+    new THREE.PlaneGeometry(1, 1),
+    new THREE.MeshBasicMaterial({
+      map: discTexture(), transparent: true, opacity: 0.55,
+      depthWrite: false, color: 0xc8895a,
+    }),
+    DUST_CAP,
+  );
+  dust.count = 0;
+  dust.visible = false;
+  dust.frustumCulled = false;
+  scene.add(dust);
+  const dustP = []; // active particles {x,y,z,vx,vy,vz,life,max,sz}
+  const _mDust = new THREE.Matrix4();
+  const _qId = new THREE.Quaternion();
+  const _sDust = new THREE.Vector3();
+  const _pDust = new THREE.Vector3();
+
+  // skid marks: a ring buffer of flat ground decals that fade out (clay/grass)
+  const MARK_CAP = 14;
+  const marks = [];
+  for (let i = 0; i < MARK_CAP; i++) {
+    const mk = new THREE.Mesh(
+      new THREE.PlaneGeometry(0.5, 0.2),
+      new THREE.MeshBasicMaterial({ color: 0x7a3b1e, transparent: true, opacity: 0, depthWrite: false }),
+    );
+    mk.rotation.x = -Math.PI / 2;
+    mk.position.y = 0.013;
+    mk.visible = false;
+    scene.add(mk);
+    marks.push({ mesh: mk, life: 0, max: 1, op0: 0 });
+  }
+  let markHead = 0;
+
   const _spinAxis = new THREE.Vector3();
   let ringT = 0;
 
@@ -218,6 +270,45 @@ export function createBallEntity(scene) {
         if (hist.length > 32) hist.shift();
       } else {
         hist.length = 0;
+      }
+    },
+    // Spawn a bounce puff (+ a fading skid mark on gritty surfaces) at the
+    // bounce point, scaled by impact speed. Driven from the logic layer via
+    // host_bounce_fx → render.bounceFx. (immersion 05 §5.3)
+    bounceFx(x, z, speed, surface) {
+      const fast = Math.min(speed / 25, 1);
+      const tint = surface === 'clay' ? 0xc8895a
+        : surface === 'grass' ? 0x9fc77a : 0xc9c9c9;
+      dust.material.color.setHex(tint);
+      dust.material.opacity = surface === 'clay' ? 0.6 : 0.32;
+      const k = surface === 'clay'
+        ? 6 + ((fast * 10) | 0)
+        : 2 + ((fast * 4) | 0);
+      for (let i = 0; i < k; i++) {
+        const ang = Math.random() * Math.PI * 2;
+        const sp = (0.35 + Math.random() * 1.1) * (0.6 + fast);
+        dustP.push({
+          x, y: 0.03, z,
+          vx: Math.cos(ang) * sp,
+          vy: 0.5 + Math.random() * 1.3 * (0.5 + fast),
+          vz: Math.sin(ang) * sp,
+          life: 0, max: 0.35 + Math.random() * 0.35,
+          sz: 0.10 + Math.random() * 0.14,
+        });
+      }
+      if (dustP.length > DUST_CAP) dustP.splice(0, dustP.length - DUST_CAP);
+      // gritty surfaces leave a visible skid streak
+      if ((surface === 'clay' || surface === 'grass') && speed > 4) {
+        const mk = marks[markHead];
+        markHead = (markHead + 1) % MARK_CAP;
+        mk.mesh.visible = true;
+        mk.mesh.position.set(x, 0.013, z);
+        mk.mesh.rotation.set(-Math.PI / 2, 0, Math.random() * Math.PI);
+        mk.mesh.scale.set(0.6 + fast * 0.9, 1, 1);
+        mk.op0 = surface === 'clay' ? 0.5 : 0.22;
+        mk.max = mk.life = surface === 'clay' ? 12 : 6;
+        mk.mesh.material.color.setHex(surface === 'clay' ? 0x7a3b1e : 0x3a5a28);
+        mk.mesh.material.opacity = mk.op0;
       }
     },
     // per-frame cosmetic advance: spin tumble + ring/sweet pulse
@@ -299,6 +390,49 @@ export function createBallEntity(scene) {
         pastTrail.count = 0;
         hist.length = 0;
       }
+
+      // --- bounce dust: integrate + compact the active particles ---
+      if (dustP.length) {
+        let w = 0;
+        for (let i = 0; i < dustP.length; i++) {
+          const p = dustP[i];
+          p.life += dt;
+          if (p.life >= p.max) continue; // expired → drop
+          p.vy -= 2.2 * dt;              // light gravity
+          p.vx *= 1 - 1.5 * dt;
+          p.vz *= 1 - 1.5 * dt;
+          p.x += p.vx * dt;
+          p.y = Math.max(0.02, p.y + p.vy * dt);
+          p.z += p.vz * dt;
+          dustP[w++] = p;
+        }
+        dustP.length = w;
+        const cnt = Math.min(w, DUST_CAP);
+        for (let i = 0; i < cnt; i++) {
+          const p = dustP[i];
+          const fr = p.life / p.max;
+          const fade = fr > 0.6 ? 1 - (fr - 0.6) / 0.4 : 1; // shrink out near end
+          const sc = p.sz * (0.5 + fr * 1.6) * fade;
+          _pDust.set(p.x, p.y, p.z);
+          _sDust.set(sc, sc, sc);
+          _mDust.compose(_pDust, _qId, _sDust);
+          dust.setMatrixAt(i, _mDust);
+        }
+        dust.count = cnt;
+        dust.instanceMatrix.needsUpdate = true;
+        dust.visible = cnt > 0;
+      } else if (dust.visible) {
+        dust.visible = false;
+        dust.count = 0;
+      }
+
+      // --- skid marks: fade out over their lifetime ---
+      for (const mk of marks) {
+        if (!mk.mesh.visible) continue;
+        mk.life -= dt;
+        if (mk.life <= 0) { mk.mesh.visible = false; continue; }
+        mk.mesh.material.opacity = mk.op0 * (mk.life / mk.max);
+      }
     },
     showLanding(x, z) {
       ring.visible = true;
@@ -347,7 +481,15 @@ export function createBallEntity(scene) {
       trail.count = 0;
     },
     dispose() {
-      scene.remove(mesh, blob, ring, sweet, trail, pastTrail);
+      scene.remove(mesh, blob, ring, sweet, trail, pastTrail, dust);
+      dust.geometry.dispose();
+      if (dust.material.map) dust.material.map.dispose();
+      dust.material.dispose();
+      for (const mk of marks) {
+        scene.remove(mk.mesh);
+        mk.mesh.geometry.dispose();
+        mk.mesh.material.dispose();
+      }
       mesh.geometry.dispose();
       mesh.material.dispose();
       blob.geometry.dispose();

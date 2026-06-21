@@ -31,14 +31,54 @@ pub extern "js" fn host_sfx_bounce(h : Host, speed : Double, surface : String) -
 pub extern "js" fn host_sfx_crowd(h : Host, intensity : Double) -> Unit =
   "(h,i)=>h.audio.sfxCrowd(i)"
 
+///|
+// Short mid-rally crowd reaction ("groan"|"cheer"|"ooh"), 0..1 intensity.
+pub extern "js" fn host_sfx_crowd_react(h : Host, kind : String, intensity : Double) -> Unit =
+  "(h,k,i)=>{h.audio.sfxCrowdReact(k,i);h.onCrowdReact(k)}"
+
+///|
+// Spawn a bounce dust puff + skid mark at the ground bounce point (render-only).
+pub extern "js" fn host_bounce_fx(h : Host, x : Double, z : Double, speed : Double, surface : String) -> Unit =
+  "(h,x,z,s,id)=>h.render.bounceFx(x,z,s,id)"
+
+///|
+// A bounce within a few cm of a singles boundary → Hawk-Eye review inset.
+pub extern "js" fn host_close_call(h : Host, x : Double, z : Double, is_in : Bool) -> Unit =
+  "(h,x,z,i)=>h.ui.hawkEye(x,z,i)"
+
+// ---------------- presentation / drama signals (output-only) ----------------
+
+///|
+// The dramatic situation of the upcoming point ("match"|"break"|"deuce"|"normal").
+pub extern "js" fn host_point_situation(h : Host, kind : String) -> Unit =
+  "(h,k)=>h.onPointSituation(k)"
+
+///|
+// Normalized 0..1 tension, fanned out to crowd/music/camera by the host.
+pub extern "js" fn host_tension(h : Host, value : Double) -> Unit =
+  "(h,v)=>h.onTension(v)"
+
+///|
+// Emitted at point end describing why the point was notable (replay/highlights).
+pub extern "js" fn host_point_highlight(
+  h : Host,
+  winner : Int,
+  is_break : Bool,
+  is_set : Bool,
+  is_match : Bool,
+  rally_len : Int,
+) -> Unit =
+  "(h,w,b,s,m,r)=>h.onPointHighlight(w,b,s,m,r)"
+
 // ---------------- match lifecycle ----------------
 
 ///|
 pub extern "js" fn host_start_match(h : Host, surface_id : String, p_idx : Int, c_idx : Int) -> Unit =
-  "(h,s,p,c)=>h.render.startMatch(s,p,c)"
+  "(h,s,p,c)=>{h.render.startMatch(s,p,c);h.audio.ambient(true);h.onMatchStart()}"
 
 ///|
-pub extern "js" fn host_teardown_match(h : Host) -> Unit = "(h)=>h.render.teardownMatch()"
+pub extern "js" fn host_teardown_match(h : Host) -> Unit =
+  "(h)=>{h.render.teardownMatch();h.audio.ambient(false)}"
 
 // ---------------- render: ball ----------------
 
@@ -95,6 +135,11 @@ pub extern "js" fn host_set_player(
   vz : Double,
 ) -> Unit =
   "(h,s,x,z,vx,vz)=>h.render.setPlayer(s,x,z,vx,vz)"
+
+///|
+// Between-points celebration on the rig ("big" fist pump | "point").
+pub extern "js" fn host_celebrate(h : Host, side : Int, kind : String) -> Unit =
+  "(h,s,k)=>h.render.celebrate(s,k)"
 
 ///|
 pub extern "js" fn host_start_swing(h : Host, side : Int, ty : String, fh : Bool, motion : String) -> Unit =
@@ -232,7 +277,7 @@ pub extern "js" fn host_serve_info(h : Host, ty : String, kmh : Double) -> Unit 
 // hitting-point quality 0..100 (non-serve hits), shown on the left
 ///|
 pub extern "js" fn host_hit_quality(h : Host, q : Int) -> Unit =
-  "(h,q)=>h.ui.hitQuality(q)"
+  "(h,q)=>{h.ui.hitQuality(q);h.input.haptic(q)}"
 
 ///|
 pub extern "js" fn host_set_recommended_shot(h : Host, ty : String) -> Unit =

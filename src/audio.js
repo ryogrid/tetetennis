@@ -16,6 +16,10 @@ export function createAudio() {
   let reverbSend = null; // wet bus
   const samples = {};    // optional decoded hit samples by shot type
   let hitBuffer = null;  // tennis-racket1.mp3, used for ALL hit sounds (serve/smash/stroke)
+  let ambientNodes = null; // continuous crowd murmur bed (immersion 03 §3.1)
+  let wantAmbient = false;  // ambient requested before the audio ctx existed
+  let gruntsEnabled = true; // player effort grunts on big hits (immersion 03 §3.3)
+  let footstepsEnabled = true; // footstep / slide SFX (immersion 03 §3.4)
 
   // Procedural impulse response: decaying stereo noise.
   function makeReverbIR(sec, decay) {
@@ -64,6 +68,10 @@ export function createAudio() {
       b2 = 0.57000 * b2 + white * 1.0526913;
       p[i] = (b0 + b1 + b2 + white * 0.1848) * 0.25;
     }
+
+    // a match may have started before the first user gesture created the ctx;
+    // honour a pending ambient-bed request now that pinkBuf exists.
+    if (wantAmbient) ambient(true);
   }
 
   function noiseSrc(buf, dur) {
@@ -124,8 +132,101 @@ export function createAudio() {
   // Racket impact: a 5-layer synth (Body, Crack, Shimmer, String Ring, Brush)
   // shaped per shot type, panned by contact x, with a reverb send. A jammed
   // (mishit) contact is detuned and low-passed into a dull thud.
+  // Player effort grunt: two detuned sawtooths through "ah"-vowel formant
+  // bandpasses with a quick pitch-drop, fired on hard contacts. (immersion 03 §3.3)
+  function sfxGrunt(speed, pan) {
+    if (!ctx) return;
+    const t = ctx.currentTime;
+    const sN = Math.min(speed / 55, 1);
+    const f0 = 118 + Math.random() * 70; // grunt fundamental
+    const out = ctx.createGain();
+    const panner = ctx.createStereoPanner ? ctx.createStereoPanner() : null;
+    if (panner) { panner.pan.value = Math.max(-1, Math.min(1, pan || 0)); out.connect(panner); panner.connect(master); }
+    else out.connect(master);
+    const f1 = ctx.createBiquadFilter();
+    f1.type = 'bandpass'; f1.frequency.value = 720; f1.Q.value = 6;
+    const f2 = ctx.createBiquadFilter();
+    f2.type = 'bandpass'; f2.frequency.value = 1150; f2.Q.value = 8;
+    const mix = ctx.createGain();
+    f1.connect(mix); f2.connect(mix);
+    const g = ctx.createGain();
+    const v = 0.05 + sN * 0.12;
+    g.gain.setValueAtTime(0.0001, t);
+    g.gain.exponentialRampToValueAtTime(v, t + 0.03);
+    g.gain.exponentialRampToValueAtTime(0.0001, t + 0.30);
+    mix.connect(g).connect(out);
+    for (const det of [-7, 7]) {
+      const o = ctx.createOscillator();
+      o.type = 'sawtooth';
+      o.frequency.setValueAtTime(f0 * 1.6, t);
+      o.frequency.exponentialRampToValueAtTime(f0, t + 0.12);
+      o.detune.value = det;
+      o.connect(f1); o.connect(f2);
+      o.start(t); o.stop(t + 0.32);
+    }
+  }
+
+  function setGrunts(on) { gruntsEnabled = !!on; }
+  function setFootsteps(on) { footstepsEnabled = !!on; }
+
+  // Latest 0..1 match tension (immersion 06 §6.0). Stored here so the ambient
+  // crowd bed can swell with the moment (mid-rally reactions build on this).
+  let tensionLevel = 0;
+  function setTension(v) {
+    tensionLevel = Math.max(0, Math.min(1, v || 0));
+    // lift the ambient bed a touch on tense points
+    if (ambientNodes) {
+      ambientNodes.g.gain.setTargetAtTime(
+        ambientGainTarget * (1 + tensionLevel * 0.8), ctx.currentTime, 0.6);
+    }
+  }
+  function getTension() { return tensionLevel; }
+
+  // A short crowd vocal reaction (immersion 03 §3.2): "groan" (error, falling),
+  // "ooh"/gasp (near-miss, rising), "cheer" (winner, bright).
+  function sfxCrowdReact(kind, intensity) {
+    if (!ctx || !pinkBuf) return;
+    const t = ctx.currentTime;
+    const v = 0.10 + Math.min(Math.max(intensity || 0.5, 0), 1) * 0.18;
+    const dur = kind === 'cheer' ? 1.2 : 0.7;
+    const n = noiseSrc(pinkBuf, dur);
+    const f = ctx.createBiquadFilter();
+    if (kind === 'groan') {
+      f.type = 'lowpass';
+      f.frequency.setValueAtTime(900, t);
+      f.frequency.exponentialRampToValueAtTime(280, t + dur);
+    } else if (kind === 'cheer') {
+      f.type = 'bandpass'; f.frequency.value = 1100; f.Q.value = 0.6;
+    } else { // ooh / gasp
+      f.type = 'bandpass'; f.Q.value = 0.7;
+      f.frequency.setValueAtTime(700, t);
+      f.frequency.exponentialRampToValueAtTime(1400, t + dur * 0.6);
+    }
+    const g = ctx.createGain();
+    g.gain.setValueAtTime(0.0001, t);
+    g.gain.linearRampToValueAtTime(v, t + (kind === 'cheer' ? 0.25 : 0.12));
+    g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+    n.connect(f).connect(g).connect(master);
+  }
+
+  // Briefly lift the ambient crowd bed on each hit so a long rally audibly
+  // builds (it settles back toward the tension-scaled base).
+  function bumpCrowd() {
+    if (!ambientNodes) return;
+    const now = ctx.currentTime;
+    const base = ambientGainTarget * (1 + tensionLevel * 0.8);
+    ambientNodes.g.gain.setTargetAtTime(base * 1.6, now, 0.12);
+    ambientNodes.g.gain.setTargetAtTime(base, now + 0.25, 1.1);
+  }
+
   function sfxHit(speed, type, pan, jammed) {
     if (!ctx) return;
+    bumpCrowd(); // a rally that keeps going lifts the crowd
+    // effort grunt on hard, clean contacts (serves/smashes/big drives)
+    if (gruntsEnabled && !jammed && speed > 20
+        && Math.random() < 0.45 + Math.min(speed / 55, 1) * 0.4) {
+      sfxGrunt(speed, pan);
+    }
     const s = SHOT[type] || SHOT.flat;
     const sNorm = Math.min((speed || 20) / 55, 1);
     const jit = 1 + (Math.random() - 0.5) * 0.06; // pitch jitter every hit
@@ -244,6 +345,59 @@ export function createAudio() {
     noise.connect(lp).connect(g2).connect(master);
   }
 
+  // Footstep tick: a short filtered-noise scuff flavoured by surface, panned by
+  // court x, volume scaled by player speed. (immersion 03 §3.4)
+  function sfxFootstep(speed, surfaceId, pan) {
+    if (!ctx || !whiteBuf || !footstepsEnabled) return;
+    const v = Math.min(0.04 + speed * 0.011, 0.15);
+    const out = ctx.createGain();
+    const panner = ctx.createStereoPanner ? ctx.createStereoPanner() : null;
+    if (panner) { panner.pan.value = Math.max(-1, Math.min(1, pan || 0)); out.connect(panner); panner.connect(master); }
+    else out.connect(master);
+    const n = noiseSrc(whiteBuf, 0.06);
+    const f = ctx.createBiquadFilter();
+    if (surfaceId === 'hard') { f.type = 'highpass'; f.frequency.value = 1600; }
+    else if (surfaceId === 'clay') { f.type = 'lowpass'; f.frequency.value = 700; }
+    else { f.type = 'lowpass'; f.frequency.value = 1100; }
+    const g = ctx.createGain();
+    env(g, v, 0.002, surfaceId === 'hard' ? 0.05 : 0.08);
+    n.connect(f).connect(g).connect(out);
+    // hard courts squeak at speed: a quick rising chirp
+    if (surfaceId === 'hard' && speed > 6) {
+      const t = ctx.currentTime;
+      const o = ctx.createOscillator();
+      o.type = 'sine';
+      o.frequency.setValueAtTime(900, t);
+      o.frequency.exponentialRampToValueAtTime(1550, t + 0.08);
+      const g2 = ctx.createGain();
+      env(g2, v * 0.5, 0.004, 0.09);
+      o.connect(g2).connect(out);
+      o.start(t); o.stop(t + 0.13);
+    }
+  }
+
+  // Clay slide: a longer band-passed pink-noise scrape for a sliding stop.
+  function sfxSlide(speed, pan) {
+    if (!ctx || !pinkBuf || !footstepsEnabled) return;
+    const v = Math.min(0.05 + speed * 0.01, 0.14);
+    const out = ctx.createGain();
+    const panner = ctx.createStereoPanner ? ctx.createStereoPanner() : null;
+    if (panner) { panner.pan.value = Math.max(-1, Math.min(1, pan || 0)); out.connect(panner); panner.connect(master); }
+    else out.connect(master);
+    const t = ctx.currentTime;
+    const n = noiseSrc(pinkBuf, 0.35);
+    const bp = ctx.createBiquadFilter();
+    bp.type = 'bandpass';
+    bp.frequency.setValueAtTime(1600, t);
+    bp.frequency.exponentialRampToValueAtTime(900, t + 0.3);
+    bp.Q.value = 0.6;
+    const g = ctx.createGain();
+    g.gain.setValueAtTime(0.0001, t);
+    g.gain.linearRampToValueAtTime(v, t + 0.06);
+    g.gain.exponentialRampToValueAtTime(0.0001, t + 0.34);
+    n.connect(bp).connect(g).connect(out);
+  }
+
   function sfxNet() {
     if (!ctx) return;
     const t = ctx.currentTime;
@@ -297,6 +451,51 @@ export function createAudio() {
     g2.gain.linearRampToValueAtTime(0.10 * intensity, t + 0.35);
     g2.gain.exponentialRampToValueAtTime(0.0001, t + dur);
     noise2.connect(bp).connect(g2).connect(master);
+  }
+
+  // Continuous ambient crowd bed: a low looped pink-noise murmur through a
+  // slowly-breathing lowpass, so the stadium is never dead-silent between
+  // points. Started at match start, stopped at teardown. (immersion 03 §3.1)
+  let ambientGainTarget = 0.045;
+  function ambient(on) {
+    if (!ctx) { wantAmbient = on; return; } // defer until initAudio builds pinkBuf
+    wantAmbient = on;
+    if (on) {
+      if (ambientNodes || !pinkBuf) return; // already running / no buffer yet
+      const src = ctx.createBufferSource();
+      src.buffer = pinkBuf;
+      src.loop = true;
+      const lp = ctx.createBiquadFilter();
+      lp.type = 'lowpass';
+      lp.frequency.value = 480;
+      // slow LFO on the cutoff → a gentle "breathing" murmur, not a flat hiss
+      const lfo = ctx.createOscillator();
+      lfo.frequency.value = 0.07;
+      const lfoG = ctx.createGain();
+      lfoG.gain.value = 180;
+      lfo.connect(lfoG).connect(lp.frequency);
+      const g = ctx.createGain();
+      g.gain.setValueAtTime(0.0001, ctx.currentTime);
+      g.gain.setTargetAtTime(ambientGainTarget, ctx.currentTime, 1.5); // fade in
+      src.connect(lp).connect(g).connect(master);
+      src.start();
+      lfo.start();
+      ambientNodes = { src, lp, g, lfo };
+    } else {
+      if (!ambientNodes) return;
+      const { src, g, lfo } = ambientNodes;
+      const t = ctx.currentTime;
+      g.gain.setTargetAtTime(0.0001, t, 0.4); // fade out
+      try { src.stop(t + 2); lfo.stop(t + 2); } catch { /* already stopped */ }
+      ambientNodes = null;
+    }
+  }
+
+  // Live volume control for the ambient bed (used by the settings panel and by
+  // mid-rally crowd swells, immersion 03 §3.2 / 07 §7.1).
+  function setAmbientLevel(v) {
+    ambientGainTarget = Math.max(0, v);
+    if (ambientNodes) ambientNodes.g.gain.setTargetAtTime(ambientGainTarget, ctx.currentTime, 0.3);
   }
 
   function beep(freq, when, dur, vol = 0.22) {
@@ -385,5 +584,8 @@ export function createAudio() {
     initAudio,
     sfxHit, sfxBounce, sfxCrowd, sfxNet, sfxOut, sfxFault,
     sfxToss, sfxMenu, sfxConfirm, sfxReachAlert, sfxPerfect,
+    ambient, setAmbientLevel, sfxFootstep, sfxSlide,
+    sfxGrunt, setGrunts, setFootsteps, setTension, getTension,
+    sfxCrowdReact,
   };
 }

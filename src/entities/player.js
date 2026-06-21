@@ -9,6 +9,18 @@ import * as THREE from 'three';
 
 const SWING_DUR = 0.45;
 
+// reusable temporaries for the contact-point aim (immersion 01 §1.4); shared
+// because updateVisual runs sequentially per rig, never concurrently.
+const _ikHead = new THREE.Vector3();
+const _ikSh = new THREE.Vector3();
+const _ikToHead = new THREE.Vector3();
+const _ikToBall = new THREE.Vector3();
+const _ikQd = new THREE.Quaternion();
+const _ikQs = new THREE.Quaternion();
+const _ikQsh = new THREE.Quaternion();
+const _ikQnew = new THREE.Quaternion();
+const _ikQpar = new THREE.Quaternion();
+
 const SKIN = 0xe8c39e;
 const SHORTS = 0x2b2b35;
 
@@ -36,21 +48,34 @@ function buildRig(color) {
   pelvis.castShadow = true;
   hips.add(pelvis);
 
+  // chest carries the whole upper body so it can rotate independently of the
+  // hips → hip–shoulder separation / X-factor. Sits at the hips origin, so the
+  // torso/shoulder offsets below are unchanged. (immersion 01 §1.1)
+  const chest = new THREE.Group();
+  hips.add(chest);
+  joints.chest = chest;
+
   const torso = new THREE.Mesh(
     new THREE.CapsuleGeometry(0.13, 0.34, 4, 10),
     new THREE.MeshLambertMaterial({ color }),
   );
   torso.position.y = 0.30;
   torso.castShadow = true;
-  hips.add(torso);
+  chest.add(torso);
+
+  // neck lets the head tilt/turn (auto-driven toward the ball)
+  const neck = new THREE.Group();
+  neck.position.y = 0.52;
+  chest.add(neck);
+  joints.neck = neck;
 
   const head = new THREE.Mesh(
     new THREE.SphereGeometry(0.12, 12, 10),
     new THREE.MeshLambertMaterial({ color: SKIN }),
   );
-  head.position.y = 0.72;
+  head.position.y = 0.20; // 0.72 in the hips frame minus the neck offset
   head.castShadow = true;
-  hips.add(head);
+  neck.add(head);
 
   // arms (limbs extend -y from their joint). Limbs are deliberately thick:
   // the only rig the player ever sees is 12-24 m away in FPV.
@@ -58,7 +83,7 @@ function buildRig(color) {
     const sx = side === 'R' ? 1 : -1;
     const shoulder = new THREE.Group();
     shoulder.position.set(sx * 0.23, 0.52, 0);
-    hips.add(shoulder);
+    chest.add(shoulder);
     shoulder.add(limbMesh(0.28, 0.062, SKIN));
     const elbow = new THREE.Group();
     elbow.position.y = -0.28;
@@ -68,10 +93,15 @@ function buildRig(color) {
     joints['elbow' + side] = elbow;
   }
 
-  // racket on the right hand
+  // wrist between the forearm and the racket → racket-head lag + pronation
+  const wristR = new THREE.Group();
+  wristR.position.y = -0.26;
+  joints.elbowR.add(wristR);
+  joints.wristR = wristR;
+  // racket on the right hand (now hangs off the wrist, same head geometry)
   const racket = new THREE.Group();
-  racket.position.y = -0.26;
-  joints.elbowR.add(racket);
+  racket.position.y = 0;
+  wristR.add(racket);
   const handle = limbMesh(0.3, 0.028, 0x333333);
   racket.add(handle);
   const headRing = new THREE.Mesh(
@@ -99,8 +129,21 @@ function buildRig(color) {
     knee.position.y = -0.40;
     hip.add(knee);
     knee.add(limbMesh(0.42, 0.06, SKIN));
+    // ankle + foot: the ankle counter-rotates to keep the foot flat on the
+    // ground despite hip/knee swing → believable footing (immersion 01 §1.1)
+    const ankle = new THREE.Group();
+    ankle.position.y = -0.42;
+    knee.add(ankle);
+    const foot = new THREE.Mesh(
+      new THREE.BoxGeometry(0.10, 0.06, 0.22),
+      new THREE.MeshLambertMaterial({ color: 0x222228 }),
+    );
+    foot.position.set(0, -0.03, 0.06);
+    foot.castShadow = true;
+    ankle.add(foot);
     joints['hip' + side] = hip;
     joints['knee' + side] = knee;
+    joints['ankle' + side] = ankle;
   }
 
   // Collect every body/racket material so the rig can be dimmed to translucent
@@ -126,6 +169,13 @@ function kf(t, times, values) {
     }
   }
   return values[values.length - 1];
+}
+
+// rest → peak (at normalized time `peak`) → rest, for proximal→distal
+// sequencing where authors set "when + how much" rather than aligning arrays.
+// (immersion 01 §1.2)
+function peakAt(n, peak, rest, amp) {
+  return kf(n, [0, peak, 1], [rest, amp, rest]);
 }
 
 // ---- per-shot-type swing keyframes (normalised time n, contact at 0.4) ----
@@ -155,6 +205,9 @@ function fhFlatPose(n) {
     ],
     elbowR: [kf(n, [0, 0.25, 0.4, 0.5, 0.7, 1], [0.6, 1.0, 0.2, 0.4, 0.75, 0.65]), 0, 0],
     racket: [kf(n, [0, 0.25, 0.4, 1], [0.3, 0.9, 0.05, 0.3]), 0, 0],
+    // D1-tuned X-factor + a flatter wrist drive (less lag than topspin)
+    chest: [0, kf(n, [0, 0.25, 0.4, 0.5, 0.7, 1], [-0.10, -0.50, -0.12, 0.08, 0.20, 0.12]), 0],
+    wristR: [kf(n, [0, 0.25, 0.4, 0.5, 1], [0.0, 0.45, 0.0, -0.35, -0.10]), 0, 0],
     kneeBend: kf(n, [0, 0.25, 0.4, 0.5, 0.7, 1], [0.3, 0.55, 0.35, 0.25, 0.20, 0.22]),
     baseY: 0.83 - kf(n, [0, 0.25, 0.4, 0.5, 0.7, 1], [0.02, 0.09, 0.03, 0.04, 0, 0.01]),
   };
@@ -176,6 +229,12 @@ function fhTopspinPose(n) {
     ],
     elbowR: [kf(n, [0, 0.25, 0.4, 0.5, 0.7, 1], [0.6, 0.9, 0.15, 0.3, 0.8, 0.55]), 0, 0],
     racket: [kf(n, [0, 0.25, 0.4, 1], [0.3, 0.8, -0.2, 0.2]), 0, 0],
+    // D1-tuned X-factor: shoulders coil ~30° past the hips at takeback, then the
+    // hips fire first and the chest unwinds through contact (immersion 02 / 01 §1.2)
+    chest: [0, kf(n, [0, 0.25, 0.4, 0.5, 0.7, 1], [-0.10, -0.55, -0.18, 0.05, 0.18, 0.12]), 0],
+    // racket-head lag: wrist laid back through the takeback, windshield-wipers
+    // through just after contact for topspin
+    wristR: [kf(n, [0, 0.25, 0.4, 0.5, 1], [0.0, 0.6, 0.1, -0.5, -0.15]), 0, 0],
     kneeBend: kf(n, [0, 0.25, 0.4, 0.5, 0.7, 1], [0.3, 0.65, 0.40, 0.25, 0.18, 0.22]),
     baseY: 0.83 - kf(n, [0, 0.25, 0.4, 0.5, 0.7, 1], [0.01, 0.10, 0.05, 0.05, 0, 0.01]),
   };
@@ -293,6 +352,9 @@ function bhTopspinPose(n) {
     ],
     elbowL: [kf(n, [0, 0.25, 0.4, 0.5, 0.7, 1], [0.6, 0.85, 0.05, 0.2, 0.75, 0.55]), 0, 0],
     racket: [kf(n, [0, 0.25, 0.4, 1], [0.3, 0.7, -0.15, 0.2]), 0, 0],
+    // D1-tuned X-factor (backhand coils the opposite way) + two-handed wrist lag
+    chest: [0, kf(n, [0, 0.25, 0.4, 0.5, 0.7, 1], [0.10, 0.55, 0.15, -0.05, -0.18, -0.12]), 0],
+    wristR: [kf(n, [0, 0.25, 0.4, 0.5, 1], [0.0, -0.4, 0.0, 0.4, 0.12]), 0, 0],
     kneeBend: kf(n, [0, 0.25, 0.4, 0.5, 0.7, 1], [0.3, 0.65, 0.38, 0.25, 0.18, 0.22]),
     baseY: 0.83 - kf(n, [0, 0.25, 0.4, 0.5, 0.7, 1], [0.01, 0.10, 0.04, 0.05, 0, 0.01]),
   };
@@ -511,9 +573,13 @@ export function createPlayerRig({ side, color, reach, scene }) {
     vel: { x: 0, z: 0 },
     swing: null,      // {t, type, fh}
     serveAnimSt: null, // {t}
+    splitSt: null,     // {t} split-step hop in anticipation of the opponent's hit
+    celebSt: null,     // {t, kind} between-points celebration
+    slideSt: null,     // {t} clay braking slide
     runPhase: 0,
     _sm: null,
     _smY: undefined,
+    _ball: null, // latest active ball world pos, for the contact-point aim
 
     setPlayer(x, z, vx, vz) {
       this.pos.x = x; this.pos.z = z;
@@ -530,8 +596,29 @@ export function createPlayerRig({ side, color, reach, scene }) {
       this.serveAnimSt = on ? { t: 0 } : null;
     },
 
+    // Split-step: a quick load-and-hop as the opponent strikes, the universal
+    // "ready" move in tennis. Triggered from render-host when the OTHER side
+    // starts a swing. Ignored if already swinging/serving. (immersion 01 §1.3)
+    splitStep() {
+      if (!this.swing && !this.serveAnimSt) this.splitSt = { t: 0 };
+    },
+
+    // Between-points celebration (immersion 06 §6.4): "big" = overhead fist
+    // pump, else a small fist. Ignored mid-swing/serve.
+    celebrate(kind) {
+      if (!this.swing && !this.serveAnimSt) this.celebSt = { t: 0, kind: kind || 'point' };
+    },
+
+    // Clay slide: a brief braking crouch, triggered from render-host when a hard
+    // deceleration is detected on clay. (immersion 01 §1.3)
+    slide() {
+      if (!this.swing && !this.serveAnimSt) this.slideSt = { t: 0 };
+    },
+
     // per-frame cosmetic advance: swing/serve clocks, run phase, then pose.
-    tick(dt) {
+    // `ballState` ({active,pos}|null) lets the swing aim at the real ball.
+    tick(dt, ballState) {
+      this._ball = ballState && ballState.active ? ballState.pos : null;
       if (this.swing) {
         this.swing.t += dt;
         if (this.swing.t >= SWING_DUR) this.swing = null;
@@ -540,8 +627,23 @@ export function createPlayerRig({ side, color, reach, scene }) {
         this.serveAnimSt.t += dt;
         if (this.serveAnimSt.t > 1.4) this.serveAnimSt = null;
       }
+      if (this.splitSt) {
+        this.splitSt.t += dt;
+        if (this.splitSt.t > 0.42) this.splitSt = null;
+      }
+      if (this.celebSt) {
+        this.celebSt.t += dt;
+        if (this.celebSt.t > 1.7) this.celebSt = null;
+      }
+      if (this.slideSt) {
+        this.slideSt.t += dt;
+        if (this.slideSt.t > 0.5) this.slideSt = null;
+      }
       const sp = Math.hypot(this.vel.x, this.vel.z);
-      this.runPhase += dt * (4 + sp * 2.2);
+      // Distance-locked stride: advance the leg cycle by ground distance covered,
+      // not by time, so the feet stop skating (the #1 realism killer). One full
+      // cycle (2 steps) ≈ 1.6 m. (immersion 01 §1.5)
+      this.runPhase += (sp * dt / 1.6) * (Math.PI * 2);
       this.updateVisual(dt);
     },
 
@@ -568,6 +670,9 @@ export function createPlayerRig({ side, color, reach, scene }) {
       t.elbowR = [0.9, 0, 0];
       t.elbowL = [0.9, 0, 0];
       t.racket = [0.3, 0, 0];
+      t.chest = [0, 0, 0];   // X-factor: extra upper-body yaw over the hips
+      t.neck = [0.05, 0, 0]; // slight athletic look-down by default
+      t.wristR = [0, 0, 0];  // racket-head lag / pronation
       let baseY = 0.83;
 
       if (this.swing) {
@@ -592,6 +697,21 @@ export function createPlayerRig({ side, color, reach, scene }) {
             t.shoulderL = la.shoulderL;
             t.elbowL = la.elbowL;
           }
+          // X-factor: shoulders lead the hips. If a pose authors its own chest
+          // we honour it; otherwise split the hip yaw so the chest carries ~45%
+          // extra rotation and the hips/legs rotate less — hip–shoulder
+          // separation. (immersion 01 §1.1-1.2)
+          if (pose.chest) {
+            t.chest = pose.chest;
+          } else {
+            t.chest = [0, t.hips[1] * 0.45, 0];
+            t.hips[1] *= 0.55;
+          }
+          // racket-head lag: the wrist lays back through the takeback and whips
+          // through just after contact (only possible now the wrist exists)
+          const nn = this.swing.t / SWING_DUR;
+          t.wristR = pose.wristR
+            || [kf(nn, [0, 0.3, 0.4, 0.5, 1], [0.0, 0.5, 0.0, -0.4, -0.1]), 0, 0];
         }
       }
 
@@ -608,6 +728,21 @@ export function createPlayerRig({ side, color, reach, scene }) {
         t.kneeR[0] = sp.kneeBend;
         t.kneeL[0] = sp.kneeBend;
         baseY = sp.baseY;
+        // serve X-factor + wrist pronation snap across contact (n≈0.62)
+        t.chest = [0, t.hips[1] * 0.4, 0];
+        t.hips[1] *= 0.6;
+        t.wristR = [kf(n, [0, 0.5, 0.62, 0.78, 1], [0.2, 0.3, -0.3, 0.45, 0.2]), 0, 0];
+      }
+
+      // neck: gentle auto-track toward the ball (subtle on a featureless head,
+      // but wires the joint and tilts toward high/low balls). (immersion 01 §1.1)
+      if (this._ball) {
+        const fwd = isHuman ? 1 : -1;
+        const dx = (this._ball.x - this.pos.x) * fwd;
+        const dz = Math.max(0.5, Math.abs(this.pos.z - this._ball.z));
+        const yaw = Math.max(-0.6, Math.min(0.6, Math.atan2(dx, dz)));
+        const pitch = Math.max(-0.4, Math.min(0.4, -(this._ball.y - 1.45) * 0.12 + 0.05));
+        t.neck = [pitch, yaw, 0];
       }
 
       // smooth-apply the base pose. The filter state lives in this._sm (NOT
@@ -637,6 +772,73 @@ export function createPlayerRig({ side, color, reach, scene }) {
       // arms pump counter to the legs (unless they are busy)
       if (!this.swing && !this.serveAnimSt) J.shoulderR.rotation.x -= sw * 0.8;
       if (!this.serveAnimSt) J.shoulderL.rotation.x += sw * 0.8;
+
+      // split-step hop: a quick crouch-and-rise with knee load, additive on top
+      // of the smoothed stance so it reads crisply (immersion 01 §1.3)
+      if (this.splitSt && !this.swing && !this.serveAnimSt) {
+        const hop = Math.sin(Math.min(this.splitSt.t / 0.42, 1) * Math.PI); // 0→1→0
+        J.hips.position.y -= hop * 0.06;
+        J.kneeR.rotation.x += hop * 0.5;
+        J.kneeL.rotation.x += hop * 0.5;
+      }
+
+      // celebration: raise + pump the racket arm overhead (immersion 06 §6.4)
+      if (this.celebSt && !this.swing && !this.serveAnimSt) {
+        const ct = this.celebSt.t;
+        const big = this.celebSt.kind === 'big';
+        const pump = Math.abs(Math.sin(ct * 8)) * (big ? 0.55 : 0.3);
+        const fade = ct > 1.3 ? Math.max(0, 1 - (ct - 1.3) / 0.4) : 1;
+        J.shoulderR.rotation.x = (big ? -2.2 : -1.4) * fade + pump;
+        J.shoulderR.rotation.z = 0.3 * fade;
+        J.elbowR.rotation.x = (1.2 - pump) * fade + 0.4;
+        J.chest.rotation.x = -0.12 * fade;
+      }
+
+      // contact-point aim: during the contact window, rotate the racket shoulder
+      // so the racket head swings toward the REAL ball, blended in/out so the
+      // stylized swing is preserved everywhere else. World-space (so the CPU's
+      // 180° flip is handled), bounded by the blend weight so it can't break the
+      // pose. (immersion 01 §1.4)
+      if (this.swing && this._ball) {
+        const n = this.swing.t / SWING_DUR;
+        if (n > 0.28 && n < 0.52) {
+          const w = Math.sin(((n - 0.28) / 0.24) * Math.PI); // 0→1→0, peak ~n=0.40
+          root.updateMatrixWorld(true);
+          const head = _ikHead.set(0, -0.44, 0);
+          J.racket.localToWorld(head); // racket sweet-spot in world space
+          const sh = _ikSh.setFromMatrixPosition(J.shoulderR.matrixWorld);
+          const toBall = _ikToBall.set(
+            this._ball.x - sh.x, this._ball.y - sh.y, this._ball.z - sh.z);
+          const toHead = _ikToHead.set(head.x - sh.x, head.y - sh.y, head.z - sh.z);
+          const db = toBall.length();
+          if (db > 0.05 && db < 1.5 && toHead.length() > 0.05) {
+            toBall.normalize();
+            toHead.normalize();
+            _ikQd.setFromUnitVectors(toHead, toBall);   // rotation head→ball
+            _ikQs.identity().slerp(_ikQd, Math.min(w, 1) * 0.8); // partial, weighted
+            J.shoulderR.getWorldQuaternion(_ikQsh);
+            _ikQnew.multiplyQuaternions(_ikQs, _ikQsh); // new world orientation
+            J.shoulderR.parent.getWorldQuaternion(_ikQpar).invert();
+            J.shoulderR.quaternion.copy(_ikQpar.multiply(_ikQnew)); // back to local
+          }
+        }
+      }
+
+      // clay braking slide: a quick crouch-and-settle (immersion 01 §1.3)
+      if (this.slideSt && !this.swing && !this.serveAnimSt) {
+        const s = Math.sin(Math.min(this.slideSt.t / 0.5, 1) * Math.PI); // 0→1→0
+        J.hips.position.y -= s * 0.05;
+        J.kneeR.rotation.x += s * 0.45;
+        J.kneeL.rotation.x += s * 0.45;
+        J.hips.rotation.x -= s * 0.12; // slight lean back
+      }
+
+      // keep the feet roughly flat on the ground despite hip/knee swing — the
+      // ankle counter-rotates the leg's accumulated pitch (immersion 01 §1.1/1.5)
+      if (J.ankleR) {
+        J.ankleR.rotation.x = -(J.hipR.rotation.x + J.kneeR.rotation.x) * 0.7;
+        J.ankleL.rotation.x = -(J.hipL.rotation.x + J.kneeL.rotation.x) * 0.7;
+      }
     },
 
     setReachZoneColor(hex) {

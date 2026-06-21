@@ -369,6 +369,65 @@ const css = `
 #scoreboard .sb-head span:last-child  { width:24px; text-align:center; }
 #scoreboard .sb-g { display:inline-block; width:18px; text-align:center; }
 #scoreboard .sb-p { display:inline-block; width:24px; text-align:center; font-weight:700; }
+/* broadcast-style score-change animations (immersion 06 §6.1) */
+#scoreboard .sb-pop { animation: sbPop .45s ease; }
+#scoreboard .sb-flash { animation: sbFlash .85s ease; }
+@keyframes sbPop {
+  0% { transform: scale(1); color:#fff; }
+  28% { transform: scale(1.55); color:#e8f24b; }
+  100% { transform: scale(1); }
+}
+@keyframes sbFlash {
+  0% { transform: scale(1); color:#fff; text-shadow:none; }
+  22% { transform: scale(1.7); color:#ffd33b; text-shadow:0 0 10px rgba(255,211,59,.9); }
+  100% { transform: scale(1); text-shadow:none; }
+}
+/* BREAK / MATCH POINT moment overlay (immersion 06 §6.2) */
+#bigmoment { position:fixed; top:23%; left:50%; transform:translateX(-50%); z-index:40;
+  font:800 40px sans-serif; letter-spacing:3px; pointer-events:none; display:none;
+  text-shadow:0 2px 12px rgba(0,0,0,.8); animation: bmIn 2.2s ease forwards; }
+#bigmoment.bm-break { color:#ff9b3d; }
+#bigmoment.bm-match { color:#ff4b4b; }
+@keyframes bmIn {
+  0% { opacity:0; transform:translateX(-50%) scale(.6); }
+  12% { opacity:1; transform:translateX(-50%) scale(1.12); }
+  20% { transform:translateX(-50%) scale(1); }
+  80% { opacity:1; }
+  100% { opacity:0; transform:translateX(-50%) scale(1); }
+}
+/* Hawk-Eye close-call review inset (immersion 06 §6.6) */
+#hawkeye { position:fixed; bottom:12px; left:12px; z-index:45; display:none; width:140px;
+  padding:8px; border-radius:8px; background:rgba(10,10,16,.9);
+  border:1px solid rgba(255,255,255,.18); text-align:center; font:13px sans-serif;
+  color:#dde; animation: heIn .35s ease; }
+#hawkeye .he-head { font:700 11px sans-serif; letter-spacing:2px; color:#7fd; margin-bottom:4px; }
+#hawkeye svg { border-radius:4px; }
+#hawkeye .he-verdict { margin-top:5px; font-weight:800; letter-spacing:1px; }
+#hawkeye .he-in { color:#5dff7a; }
+#hawkeye .he-out { color:#ff5a5a; }
+@keyframes heIn { 0% { opacity:0; transform:scale(.7); } 100% { opacity:1; transform:scale(1); } }
+/* accessibility: honour reduced-motion (auto + manual toggle) (immersion 07 §7.4) */
+@media (prefers-reduced-motion: reduce) {
+  #bigmoment, #hawkeye, #scoreboard .sb-pop, #scoreboard .sb-flash { animation-duration:.001s !important; }
+}
+body.reduced-motion #bigmoment, body.reduced-motion #hawkeye,
+body.reduced-motion #scoreboard .sb-pop, body.reduced-motion #scoreboard .sb-flash {
+  animation-duration:.001s !important;
+}
+/* captions for audio-only events */
+#caption { position:fixed; bottom:54px; left:50%; transform:translateX(-50%); z-index:46;
+  display:none; padding:4px 12px; border-radius:6px; background:rgba(0,0,0,.6); color:#eee;
+  font:600 14px sans-serif; letter-spacing:1px; pointer-events:none; }
+/* first-run onboarding card */
+#intro { position:fixed; inset:0; z-index:70; display:none; align-items:center; justify-content:center;
+  background:rgba(6,6,10,.72); }
+#intro .card { width:300px; max-width:88vw; padding:18px 20px; border-radius:12px;
+  background:rgba(18,18,26,.96); border:1px solid rgba(255,255,255,.18); color:#e8eef2;
+  font:14px sans-serif; text-align:center; }
+#intro h2 { margin:0 0 8px; color:#7fd; font-size:20px; letter-spacing:1px; }
+#intro p { margin:6px 0; line-height:1.5; color:#cdd; }
+#intro button { margin-top:12px; padding:8px 18px; border-radius:8px; border:none;
+  background:#2f9c6a; color:#fff; font:700 14px sans-serif; cursor:pointer; }
 /* results: diverging head-to-head stat bars */
 .sbar-head { display:flex; justify-content:space-between; width:540px; max-width:92vw; margin:4px auto 6px; font:700 12px sans-serif; letter-spacing:1px; }
 .sbars { display:flex; flex-direction:column; gap:9px; margin:6px 0; }
@@ -413,7 +472,7 @@ const css = `
 @media (pointer: coarse) { .ts-word { font-size:40px; } }
 `;
 
-export function createUI({ onVirtualKey, onMoveAxis } = {}) {
+export function createUI({ onVirtualKey, onMoveAxis, settings, onSetting } = {}) {
   const els = {};
   let bannerTimer = null;
   let toastTimer = null;
@@ -473,6 +532,10 @@ export function createUI({ onVirtualKey, onMoveAxis } = {}) {
   els.menu = div('menu', hud, 'screen');
   els.scoreboard = div('scoreboard', hud);
   els.banner = div('banner', hud);
+  els.bigmoment = div('bigmoment', hud);
+  els.hawkeye = div('hawkeye', hud);
+  els.caption = div('caption', hud);
+  els.intro = div('intro', hud);
   els.toast = div('toast', hud);
   els.shotbar = div('shotbar', hud);
   els.controls = div('controls', hud);
@@ -509,6 +572,79 @@ export function createUI({ onVirtualKey, onMoveAxis } = {}) {
     'Release in the sweet spot for a Perfect Hit; longer charge = more power<br>' +
     'Serve: Space toss, then Z/X/C when the power meter is in the green band<br>' +
     'Aim: hold a direction at the moment you release';
+
+  // ---------- immersion / presentation settings panel (immersion 07 §7.1) ----------
+  // A gear button + overlay that is the single home for every immersion toggle.
+  // Reads/writes the `settings` object handed in by main.js and routes changes
+  // through onSetting(key, value) (which applies + persists them).
+  function buildSettingsPanel() {
+    if (!settings) return;
+    const gear = document.createElement('button');
+    gear.id = 'imm-gear';
+    gear.textContent = '⚙';
+    gear.title = 'Immersion settings';
+    gear.style.cssText = 'position:fixed;top:10px;right:10px;z-index:60;width:38px;'
+      + 'height:38px;border-radius:8px;background:rgba(18,18,26,.72);color:#cfe;'
+      + 'border:1px solid rgba(255,255,255,.22);font-size:19px;cursor:pointer';
+    document.body.appendChild(gear);
+
+    const panel = document.createElement('div');
+    panel.id = 'imm-panel';
+    panel.style.cssText = 'position:fixed;top:56px;right:10px;z-index:60;display:none;'
+      + 'width:236px;padding:12px 14px;border-radius:10px;background:rgba(13,13,20,.93);'
+      + 'color:#e8eef2;border:1px solid rgba(255,255,255,.18);'
+      + 'box-shadow:0 6px 24px rgba(0,0,0,.5);font:13px sans-serif';
+    document.body.appendChild(panel);
+
+    const ROWS = [
+      { key: 'lightMood', label: 'Lighting', opts: [['day', 'Day'], ['dusk', 'Dusk'], ['night', 'Night']] },
+      { key: 'crowd', label: 'Crowd vol', opts: [[0, 'Off'], [1, 'Low'], [2, 'High']] },
+      { key: 'grunts', label: 'Grunts', opts: [[true, 'On'], [false, 'Off']] },
+      { key: 'footsteps', label: 'Footsteps', opts: [[true, 'On'], [false, 'Off']] },
+      { key: 'haptics', label: 'Haptics', opts: [[true, 'On'], [false, 'Off']] },
+      { key: 'replays', label: 'Replays', opts: [[true, 'On'], [false, 'Off']] },
+      { key: 'reducedMotion', label: 'Reduced motion', opts: [[false, 'Off'], [true, 'On']] },
+      { key: 'captions', label: 'Captions', opts: [[false, 'Off'], [true, 'On']] },
+      { key: 'broadcast', label: 'Broadcast cam', opts: [[false, 'Off'], [true, 'On']] },
+      { key: 'postfx', label: 'Bloom (HQ)', opts: [[false, 'Off'], [true, 'On']] },
+    ];
+    function render() {
+      panel.innerHTML = '<div style="font-weight:700;letter-spacing:1px;margin-bottom:8px;'
+        + 'color:#9fd">IMMERSION</div>';
+      for (const row of ROWS) {
+        const r = document.createElement('div');
+        r.style.cssText = 'display:flex;justify-content:space-between;align-items:center;'
+          + 'margin:7px 0;gap:8px';
+        const lab = document.createElement('span');
+        lab.textContent = row.label; lab.style.color = '#aab';
+        const grp = document.createElement('span');
+        grp.style.cssText = 'display:flex;gap:4px';
+        for (const [val, txt] of row.opts) {
+          const b = document.createElement('button');
+          b.textContent = txt;
+          const active = settings[row.key] === val;
+          b.style.cssText = 'padding:3px 8px;border-radius:6px;cursor:pointer;font-size:12px;'
+            + 'border:1px solid rgba(255,255,255,.18);'
+            + (active ? 'background:#2f9c6a;color:#fff' : 'background:rgba(255,255,255,.06);color:#bcd');
+          b.onclick = () => {
+            settings[row.key] = val;
+            if (onSetting) onSetting(row.key, val);
+            render();
+          };
+          grp.appendChild(b);
+        }
+        r.appendChild(lab); r.appendChild(grp); panel.appendChild(r);
+      }
+    }
+    gear.onclick = () => {
+      const show = panel.style.display === 'none';
+      panel.style.display = show ? 'block' : 'none';
+      if (show) render();
+    };
+    render();
+  }
+  buildSettingsPanel();
+  maybeShowIntro();
 
   // source-code link (bottom-right, just below the controls box)
   const srcLink = document.createElement('a');
@@ -879,6 +1015,7 @@ export function createUI({ onVirtualKey, onMoveAxis } = {}) {
 
   function showHUD() {
     hudShown = true;
+    prevScore.shown = false; // don't animate the opening 0-0 of a new match
     els.scoreboard.style.display = 'block';
     applyTouchVisibility();
     maybeShowCamHint();
@@ -903,6 +1040,9 @@ export function createUI({ onVirtualKey, onMoveAxis } = {}) {
   // player/cpu names. serveNo is 1 or 2. The logic owns all score formatting,
   // so we split the combined "a-b" strings back onto the two name rows for the
   // familiar two-line scoreboard (deuce/ad/tiebreak fold into both columns).
+  // previous split score values, for the broadcast change-animation
+  let prevScore = { gp: '', gc: '', pp: '', pc: '', shown: false };
+
   function splitPair(s) {
     let body = s, prefix = '';
     if (s === 'Deuce') return ['40', '40'];
@@ -921,6 +1061,93 @@ export function createUI({ onVirtualKey, onMoveAxis } = {}) {
       `<div class="row"><b>${c}</b><span><i class="sb-g">${gc}</i><i class="sb-p">${pc}</i></span></div>` +
       (serveNo === 2 ? '<div class="row" style="color:#e8a04b;font-size:12px">2nd serve</div>' : '') +
       (tb === 'TB' ? '<div class="row" style="color:#e8f24b;font-size:12px">Tiebreak</div>' : '');
+    // broadcast feel: pop the changed point, flash a won game
+    if (prevScore.shown) {
+      const gEls = els.scoreboard.querySelectorAll('.sb-g');
+      const pEls = els.scoreboard.querySelectorAll('.sb-p');
+      if (gp !== prevScore.gp && gEls[0]) gEls[0].classList.add('sb-flash');
+      if (gc !== prevScore.gc && gEls[1]) gEls[1].classList.add('sb-flash');
+      if (pp !== prevScore.pp && pEls[0]) pEls[0].classList.add('sb-pop');
+      if (pc !== prevScore.pc && pEls[1]) pEls[1].classList.add('sb-pop');
+    }
+    prevScore = { gp, gc, pp, pc, shown: true };
+  }
+
+  // Latest dramatic situation of the upcoming point ("match"|"break"|"deuce"|
+  // "normal"). Drives the BREAK/SET/MATCH-POINT moment overlay, shown briefly at
+  // serve setup so it never occludes the live rally. (immersion 06 §6.2)
+  let currentSituation = 'normal';
+  let bigMomentTimer = null;
+  function pointSituation(kind) {
+    currentSituation = kind || 'normal';
+    if (kind === 'match' || kind === 'break') {
+      els.bigmoment.textContent = kind === 'match' ? 'MATCH POINT' : 'BREAK POINT';
+      els.bigmoment.className = kind === 'match' ? 'bm-match' : 'bm-break';
+      els.bigmoment.style.display = 'block';
+      els.bigmoment.style.animation = 'none';
+      void els.bigmoment.offsetWidth; // reflow to retrigger the animation
+      els.bigmoment.style.animation = '';
+      if (bigMomentTimer) clearTimeout(bigMomentTimer);
+      bigMomentTimer = setTimeout(() => { els.bigmoment.style.display = 'none'; }, 2200);
+    } else {
+      els.bigmoment.style.display = 'none';
+    }
+  }
+  function getSituation() { return currentSituation; }
+
+  // Accessibility: reduced-motion toggle + brief captions for audio-only events,
+  // and a one-time first-run onboarding card. (immersion 07 §7.2 / §7.4)
+  function setReducedMotion(on) { document.body.classList.toggle('reduced-motion', !!on); }
+  let captionTimer = null;
+  function caption(text) {
+    els.caption.textContent = text;
+    els.caption.style.display = 'block';
+    if (captionTimer) clearTimeout(captionTimer);
+    captionTimer = setTimeout(() => { els.caption.style.display = 'none'; }, 1400);
+  }
+  function maybeShowIntro() {
+    let seen = false;
+    try { seen = localStorage.getItem('seenIntro') === '1'; } catch { /* ignore */ }
+    if (seen) return;
+    els.intro.innerHTML = '<div class="card"><h2>Welcome</h2>'
+      + '<p>Arrow keys to move. Hold Z / X / C / V to charge a shot, release to hit.</p>'
+      + '<p>Tap ⚙ (top-right) for immersion settings, ⤓ CLIP to save a highlight.</p>'
+      + '<button id="intro-ok">Got it</button></div>';
+    els.intro.style.display = 'flex';
+    els.intro.querySelector('#intro-ok').onclick = () => {
+      els.intro.style.display = 'none';
+      try { localStorage.setItem('seenIntro', '1'); } catch { /* ignore */ }
+    };
+  }
+
+  // Hawk-Eye close-call inset: a zoomed top-down view of the nearest line with
+  // the ball mark offset by its true margin, plus an IN/OUT verdict. Driven by
+  // host_close_call when a bounce lands within ~10 cm of a boundary. (06 §6.6)
+  let hawkTimer = null;
+  function hawkEye(x, z, isIn) {
+    const SL = 4.115, BL = 11.885;
+    const dxs = Math.abs(x) - SL; // signed dist to sideline (+ outside)
+    const dzs = Math.abs(z) - BL; // signed dist to baseline
+    const vertical = Math.abs(dxs) <= Math.abs(dzs); // nearest = sideline?
+    const margin = vertical ? dxs : dzs;
+    const off = Math.max(-55, Math.min(55, margin * 700)); // px per metre, clamped
+    const cm = (Math.abs(margin) * 100).toFixed(1);
+    const dot = `<circle r="9" fill="#e9f24a" stroke="#222" stroke-width="1.5"`;
+    const svg = vertical
+      ? `<svg viewBox="0 0 120 120" width="120" height="120"><rect width="120" height="120" fill="#0a3a18"/>`
+        + `<line x1="60" y1="6" x2="60" y2="114" stroke="#fff" stroke-width="6"/>`
+        + `${dot} cx="${(60 + off).toFixed(1)}" cy="60"/></svg>`
+      : `<svg viewBox="0 0 120 120" width="120" height="120"><rect width="120" height="120" fill="#0a3a18"/>`
+        + `<line x1="6" y1="60" x2="114" y2="60" stroke="#fff" stroke-width="6"/>`
+        + `${dot} cx="60" cy="${(60 + off).toFixed(1)}"/></svg>`;
+    els.hawkeye.innerHTML = `<div class="he-head">HAWK-EYE</div>${svg}`
+      + `<div class="he-verdict ${isIn ? 'he-in' : 'he-out'}">${isIn ? 'IN' : 'OUT'} · ${cm} cm</div>`;
+    els.hawkeye.style.display = 'block';
+    els.hawkeye.style.animation = 'none';
+    void els.hawkeye.offsetWidth;
+    els.hawkeye.style.animation = '';
+    if (hawkTimer) clearTimeout(hawkTimer);
+    hawkTimer = setTimeout(() => { els.hawkeye.style.display = 'none'; }, 2600);
   }
 
   // practice HUD: replace the scoreboard with a single feed-settings read-out
@@ -1074,5 +1301,7 @@ export function createUI({ onVirtualKey, onMoveAxis } = {}) {
     gauge, hideGauge, charge, hideCharge,
     hitQuality, hideHitQuality,
     moveHint, hideMoveHint,
+    pointSituation, getSituation, hawkEye,
+    setReducedMotion, caption,
   };
 }

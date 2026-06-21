@@ -813,6 +813,10 @@ fn position_for_serve(self : Game, ms : MatchState) -> Unit {
   ms.cpu_serve_plan = None
   ent(ms, sv).end_serve_anim()
   @ffi.host_serve_anim(self.host, side_int(sv), false)
+  // tell the presentation layer how tense the upcoming point is
+  let sit = @rules.point_situation(ms.m)
+  @ffi.host_point_situation(self.host, sit)
+  @ffi.host_tension(self.host, @rules.situation_tension(sit))
 }
 
 ///|
@@ -1102,7 +1106,7 @@ fn fault(self : Game, ms : MatchState) -> Unit {
 
 ///|
 fn record_winner(self : Game, ms : MatchState, side : @rules.Side) -> Unit {
-  ignore(self)
+  @ffi.host_sfx_crowd_react(self.host, "cheer", 0.7)
   match side {
     @rules.P => ms.stats.p_winners = ms.stats.p_winners + 1
     @rules.C => ms.stats.c_winners = ms.stats.c_winners + 1
@@ -1111,7 +1115,7 @@ fn record_winner(self : Game, ms : MatchState, side : @rules.Side) -> Unit {
 
 ///|
 fn record_error(self : Game, ms : MatchState, side : @rules.Side) -> Unit {
-  ignore(self)
+  @ffi.host_sfx_crowd_react(self.host, "groan", 0.55)
   match side {
     @rules.P => ms.stats.p_unforced = ms.stats.p_unforced + 1
     @rules.C => ms.stats.c_unforced = ms.stats.c_unforced + 1
@@ -1143,6 +1147,7 @@ fn point_end(self : Game, ms : MatchState, winner : @rules.Side, call_text : Str
   }
   // accumulate per-point stats (rally length, net-point outcomes)
   let st = ms.stats
+  let rally_len = st.rally_shots // capture before the reset below
   st.points_played = st.points_played + 1
   st.total_rally_shots = st.total_rally_shots + st.rally_shots
   st.rally_shots = 0
@@ -1160,7 +1165,19 @@ fn point_end(self : Game, ms : MatchState, winner : @rules.Side, call_text : Str
   }
   st.p_came_net = false
   st.c_came_net = false
+  let pre_server = ms.m.server
   let ev = @rules.add_point(ms.m, winner)
+  // notable-point signal for replays / highlight ranking / tension audio
+  let is_game = ev == @rules.Game || ev == @rules.SetWon
+  let is_set = ev == @rules.SetWon
+  let is_break = is_game && winner != pre_server
+  @ffi.host_point_highlight(
+    self.host, side_int(winner), is_break, is_set, is_set, rally_len,
+  )
+  // the winner celebrates a game / break / set
+  if is_game || is_break {
+    @ffi.host_celebrate(self.host, side_int(winner), "big")
+  }
   let win_name = names_for(ms, winner)
   @ffi.host_sfx_crowd(self.host, if winner == @rules.P { 1.0 } else { 0.55 })
   if call_text != "" {
@@ -1186,6 +1203,18 @@ fn point_end(self : Game, ms : MatchState, winner : @rules.Side, call_text : Str
 ///|
 fn process_bounce(self : Game, ms : MatchState, px : Double, pz : Double, speed : Double) -> Unit {
   @ffi.host_sfx_bounce(self.host, speed, ms.surface_id)
+  @ffi.host_bounce_fx(self.host, px, pz, speed, ms.surface_id)
+  // Hawk-Eye: a bounce within ~10 cm of the singles sideline/baseline
+  let ax = if px < 0.0 { -px } else { px }
+  let az = if pz < 0.0 { -pz } else { pz }
+  let dxs = ax - @physics.court_half_width
+  let dzs = az - @physics.court_half_len
+  let mx = if dxs < 0.0 { -dxs } else { dxs }
+  let mz = if dzs < 0.0 { -dzs } else { dzs }
+  if mx < 0.10 || mz < 0.10 {
+    let is_in = ax <= @physics.court_half_width && az <= @physics.court_half_len
+    @ffi.host_close_call(self.host, px, pz, is_in)
+  }
   @ffi.host_hide_landing(self.host)
   if ms.rally_phase == Over || ms.rally_phase == Idle {
     return
@@ -1798,9 +1827,10 @@ fn point_over_step(self : Game, ms : MatchState, dt : Double) -> Unit {
     @physics.step_ball(b, dt, ms.surface, ms.events)
     for e in ms.events {
       match e {
-        @physics.Bounce(_, _, _, speed) =>
+        @physics.Bounce(bx, _, bz, speed) =>
           if speed > 2.0 {
             @ffi.host_sfx_bounce(self.host, speed, ms.surface_id)
+            @ffi.host_bounce_fx(self.host, bx, bz, speed, ms.surface_id)
           }
         @physics.Net(_) => ()
       }

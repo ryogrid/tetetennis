@@ -126,6 +126,31 @@ test "tiebreak serve rotation: 1 then 2-2-2" {
 }
 
 ///|
+test "point_situation: break / deuce / hold / match" {
+  let m = create_match(P)
+  assert_eq(point_situation(m), "normal")
+  // returner (C serving) at game point for P → break point
+  m.points_p = 3
+  m.points_c = 0
+  m.server = C
+  assert_eq(point_situation(m), "break")
+  // server holding game point → not a break, just normal
+  m.server = P
+  assert_eq(point_situation(m), "normal")
+  // 40-40 → deuce
+  m.points_p = 3
+  m.points_c = 3
+  assert_eq(point_situation(m), "deuce")
+  // P serving for the set at 5-4, 40-0 → match point (1-set match)
+  m.games_p = 5
+  m.games_c = 4
+  m.points_p = 3
+  m.points_c = 0
+  m.server = P
+  assert_eq(point_situation(m), "match")
+}
+
+///|
 test "point parity for serve side, including deuce cycles" {
   let m = create_match(P)
   assert_eq(point_number_in_game(m) % 2, 0) // first point: deuce side
