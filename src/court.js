@@ -240,9 +240,26 @@ export function buildCourt(surfaceId) {
   return g;
 }
 
-export function buildLights(scene) {
+// Lighting / atmosphere presets. `day` keeps the original look exactly; `dusk`
+// and `night` (floodlit) are selectable moods. (immersion 05 §5.6)
+export const LIGHT_MOODS = {
+  day: {
+    sun: 0xffffff, sunI: 1.1, sunPos: [12, 22, 8],
+    amb: 0xffffff, ambI: 0.55, bg: 0x0d0d14, fog: 0x0d0d14,
+  },
+  dusk: {
+    sun: 0xffc89a, sunI: 0.85, sunPos: [16, 14, 6],
+    amb: 0xffd0b0, ambI: 0.42, bg: 0x1b1018, fog: 0x241420,
+  },
+  night: {
+    // cool, bright floodlight from high up + low cool ambient → stadium-at-night
+    sun: 0xdfe8ff, sunI: 1.35, sunPos: [10, 28, 10],
+    amb: 0x9fb0d8, ambI: 0.38, bg: 0x05060d, fog: 0x070912,
+  },
+};
+
+export function buildLights(scene, mood = 'day') {
   const sun = new THREE.DirectionalLight(0xffffff, 1.1);
-  sun.position.set(12, 22, 8);
   sun.castShadow = true;
   sun.shadow.mapSize.set(1024, 1024);
   sun.shadow.camera.left = -16;
@@ -251,7 +268,24 @@ export function buildLights(scene) {
   sun.shadow.camera.bottom = -20;
   sun.shadow.camera.far = 60;
   scene.add(sun);
-  scene.add(new THREE.AmbientLight(0xffffff, 0.55));
-  scene.background = new THREE.Color(0x0d0d14);
+  const amb = new THREE.AmbientLight(0xffffff, 0.55);
+  scene.add(amb);
+
+  function setMood(name) {
+    const m = LIGHT_MOODS[name] || LIGHT_MOODS.day;
+    sun.color.setHex(m.sun);
+    sun.intensity = m.sunI;
+    sun.position.set(m.sunPos[0], m.sunPos[1], m.sunPos[2]);
+    amb.color.setHex(m.amb);
+    amb.intensity = m.ambI;
+    if (scene.background instanceof THREE.Color) scene.background.setHex(m.bg);
+    else scene.background = new THREE.Color(m.bg);
+    if (scene.fog) { scene.fog.color.setHex(m.fog); }
+    else scene.fog = new THREE.Fog(m.fog, 45, 120);
+  }
+
   scene.fog = new THREE.Fog(0x0d0d14, 45, 120);
+  scene.background = new THREE.Color(0x0d0d14);
+  setMood(mood);
+  return { setMood };
 }

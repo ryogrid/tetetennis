@@ -28,7 +28,10 @@ renderer.shadowMap.type = THREE.PCFSoftShadowMap;
 app.appendChild(renderer.domElement);
 
 const scene = new THREE.Scene();
-buildLights(scene);
+const lightMood = (() => {
+  try { return localStorage.getItem('lightMood') || 'day'; } catch { return 'day'; }
+})();
+const lights = buildLights(scene, lightMood); // { setMood } — wired to settings UI in a later step
 
 const camera = new THREE.PerspectiveCamera(
   70, window.innerWidth / window.innerHeight, 0.1, 200,
@@ -77,6 +80,7 @@ ui.setMenuTapHandler((action, a, b) => logic.menuCmd(action, a, b));
 
 window.__host = host; // for debugging / e2e checks
 window.__cam = camera;
+window.__lights = lights; // lighting-mood controller (settings UI hooks this)
 
 let last = performance.now();
 let acc = 0;
