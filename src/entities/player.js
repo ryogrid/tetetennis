@@ -205,6 +205,9 @@ function fhFlatPose(n) {
     ],
     elbowR: [kf(n, [0, 0.25, 0.4, 0.5, 0.7, 1], [0.6, 1.0, 0.2, 0.4, 0.75, 0.65]), 0, 0],
     racket: [kf(n, [0, 0.25, 0.4, 1], [0.3, 0.9, 0.05, 0.3]), 0, 0],
+    // D1-tuned X-factor + a flatter wrist drive (less lag than topspin)
+    chest: [0, kf(n, [0, 0.25, 0.4, 0.5, 0.7, 1], [-0.10, -0.50, -0.12, 0.08, 0.20, 0.12]), 0],
+    wristR: [kf(n, [0, 0.25, 0.4, 0.5, 1], [0.0, 0.45, 0.0, -0.35, -0.10]), 0, 0],
     kneeBend: kf(n, [0, 0.25, 0.4, 0.5, 0.7, 1], [0.3, 0.55, 0.35, 0.25, 0.20, 0.22]),
     baseY: 0.83 - kf(n, [0, 0.25, 0.4, 0.5, 0.7, 1], [0.02, 0.09, 0.03, 0.04, 0, 0.01]),
   };
@@ -226,6 +229,12 @@ function fhTopspinPose(n) {
     ],
     elbowR: [kf(n, [0, 0.25, 0.4, 0.5, 0.7, 1], [0.6, 0.9, 0.15, 0.3, 0.8, 0.55]), 0, 0],
     racket: [kf(n, [0, 0.25, 0.4, 1], [0.3, 0.8, -0.2, 0.2]), 0, 0],
+    // D1-tuned X-factor: shoulders coil ~30° past the hips at takeback, then the
+    // hips fire first and the chest unwinds through contact (immersion 02 / 01 §1.2)
+    chest: [0, kf(n, [0, 0.25, 0.4, 0.5, 0.7, 1], [-0.10, -0.55, -0.18, 0.05, 0.18, 0.12]), 0],
+    // racket-head lag: wrist laid back through the takeback, windshield-wipers
+    // through just after contact for topspin
+    wristR: [kf(n, [0, 0.25, 0.4, 0.5, 1], [0.0, 0.6, 0.1, -0.5, -0.15]), 0, 0],
     kneeBend: kf(n, [0, 0.25, 0.4, 0.5, 0.7, 1], [0.3, 0.65, 0.40, 0.25, 0.18, 0.22]),
     baseY: 0.83 - kf(n, [0, 0.25, 0.4, 0.5, 0.7, 1], [0.01, 0.10, 0.05, 0.05, 0, 0.01]),
   };
@@ -343,6 +352,9 @@ function bhTopspinPose(n) {
     ],
     elbowL: [kf(n, [0, 0.25, 0.4, 0.5, 0.7, 1], [0.6, 0.85, 0.05, 0.2, 0.75, 0.55]), 0, 0],
     racket: [kf(n, [0, 0.25, 0.4, 1], [0.3, 0.7, -0.15, 0.2]), 0, 0],
+    // D1-tuned X-factor (backhand coils the opposite way) + two-handed wrist lag
+    chest: [0, kf(n, [0, 0.25, 0.4, 0.5, 0.7, 1], [0.10, 0.55, 0.15, -0.05, -0.18, -0.12]), 0],
+    wristR: [kf(n, [0, 0.25, 0.4, 0.5, 1], [0.0, -0.4, 0.0, 0.4, 0.12]), 0, 0],
     kneeBend: kf(n, [0, 0.25, 0.4, 0.5, 0.7, 1], [0.3, 0.65, 0.38, 0.25, 0.18, 0.22]),
     baseY: 0.83 - kf(n, [0, 0.25, 0.4, 0.5, 0.7, 1], [0.01, 0.10, 0.04, 0.05, 0, 0.01]),
   };
