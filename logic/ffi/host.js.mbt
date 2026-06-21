@@ -238,7 +238,7 @@ pub extern "js" fn host_serve_info(h : Host, ty : String, kmh : Double) -> Unit 
 // hitting-point quality 0..100 (non-serve hits), shown on the left
 ///|
 pub extern "js" fn host_hit_quality(h : Host, q : Int) -> Unit =
-  "(h,q)=>h.ui.hitQuality(q)"
+  "(h,q)=>{h.ui.hitQuality(q);h.input.haptic(q)}"
 
 ///|
 pub extern "js" fn host_set_recommended_shot(h : Host, ty : String) -> Unit =
