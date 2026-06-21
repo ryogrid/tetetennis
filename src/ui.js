@@ -369,6 +369,19 @@ const css = `
 #scoreboard .sb-head span:last-child  { width:24px; text-align:center; }
 #scoreboard .sb-g { display:inline-block; width:18px; text-align:center; }
 #scoreboard .sb-p { display:inline-block; width:24px; text-align:center; font-weight:700; }
+/* broadcast-style score-change animations (immersion 06 §6.1) */
+#scoreboard .sb-pop { animation: sbPop .45s ease; }
+#scoreboard .sb-flash { animation: sbFlash .85s ease; }
+@keyframes sbPop {
+  0% { transform: scale(1); color:#fff; }
+  28% { transform: scale(1.55); color:#e8f24b; }
+  100% { transform: scale(1); }
+}
+@keyframes sbFlash {
+  0% { transform: scale(1); color:#fff; text-shadow:none; }
+  22% { transform: scale(1.7); color:#ffd33b; text-shadow:0 0 10px rgba(255,211,59,.9); }
+  100% { transform: scale(1); text-shadow:none; }
+}
 /* results: diverging head-to-head stat bars */
 .sbar-head { display:flex; justify-content:space-between; width:540px; max-width:92vw; margin:4px auto 6px; font:700 12px sans-serif; letter-spacing:1px; }
 .sbars { display:flex; flex-direction:column; gap:9px; margin:6px 0; }
@@ -879,6 +892,7 @@ export function createUI({ onVirtualKey, onMoveAxis } = {}) {
 
   function showHUD() {
     hudShown = true;
+    prevScore.shown = false; // don't animate the opening 0-0 of a new match
     els.scoreboard.style.display = 'block';
     applyTouchVisibility();
     maybeShowCamHint();
@@ -903,6 +917,9 @@ export function createUI({ onVirtualKey, onMoveAxis } = {}) {
   // player/cpu names. serveNo is 1 or 2. The logic owns all score formatting,
   // so we split the combined "a-b" strings back onto the two name rows for the
   // familiar two-line scoreboard (deuce/ad/tiebreak fold into both columns).
+  // previous split score values, for the broadcast change-animation
+  let prevScore = { gp: '', gc: '', pp: '', pc: '', shown: false };
+
   function splitPair(s) {
     let body = s, prefix = '';
     if (s === 'Deuce') return ['40', '40'];
@@ -921,6 +938,16 @@ export function createUI({ onVirtualKey, onMoveAxis } = {}) {
       `<div class="row"><b>${c}</b><span><i class="sb-g">${gc}</i><i class="sb-p">${pc}</i></span></div>` +
       (serveNo === 2 ? '<div class="row" style="color:#e8a04b;font-size:12px">2nd serve</div>' : '') +
       (tb === 'TB' ? '<div class="row" style="color:#e8f24b;font-size:12px">Tiebreak</div>' : '');
+    // broadcast feel: pop the changed point, flash a won game
+    if (prevScore.shown) {
+      const gEls = els.scoreboard.querySelectorAll('.sb-g');
+      const pEls = els.scoreboard.querySelectorAll('.sb-p');
+      if (gp !== prevScore.gp && gEls[0]) gEls[0].classList.add('sb-flash');
+      if (gc !== prevScore.gc && gEls[1]) gEls[1].classList.add('sb-flash');
+      if (pp !== prevScore.pp && pEls[0]) pEls[0].classList.add('sb-pop');
+      if (pc !== prevScore.pc && pEls[1]) pEls[1].classList.add('sb-pop');
+    }
+    prevScore = { gp, gc, pp, pc, shown: true };
   }
 
   // practice HUD: replace the scoreboard with a single feed-settings read-out
