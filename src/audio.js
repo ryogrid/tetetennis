@@ -250,6 +250,59 @@ export function createAudio() {
     noise.connect(lp).connect(g2).connect(master);
   }
 
+  // Footstep tick: a short filtered-noise scuff flavoured by surface, panned by
+  // court x, volume scaled by player speed. (immersion 03 §3.4)
+  function sfxFootstep(speed, surfaceId, pan) {
+    if (!ctx || !whiteBuf) return;
+    const v = Math.min(0.04 + speed * 0.011, 0.15);
+    const out = ctx.createGain();
+    const panner = ctx.createStereoPanner ? ctx.createStereoPanner() : null;
+    if (panner) { panner.pan.value = Math.max(-1, Math.min(1, pan || 0)); out.connect(panner); panner.connect(master); }
+    else out.connect(master);
+    const n = noiseSrc(whiteBuf, 0.06);
+    const f = ctx.createBiquadFilter();
+    if (surfaceId === 'hard') { f.type = 'highpass'; f.frequency.value = 1600; }
+    else if (surfaceId === 'clay') { f.type = 'lowpass'; f.frequency.value = 700; }
+    else { f.type = 'lowpass'; f.frequency.value = 1100; }
+    const g = ctx.createGain();
+    env(g, v, 0.002, surfaceId === 'hard' ? 0.05 : 0.08);
+    n.connect(f).connect(g).connect(out);
+    // hard courts squeak at speed: a quick rising chirp
+    if (surfaceId === 'hard' && speed > 6) {
+      const t = ctx.currentTime;
+      const o = ctx.createOscillator();
+      o.type = 'sine';
+      o.frequency.setValueAtTime(900, t);
+      o.frequency.exponentialRampToValueAtTime(1550, t + 0.08);
+      const g2 = ctx.createGain();
+      env(g2, v * 0.5, 0.004, 0.09);
+      o.connect(g2).connect(out);
+      o.start(t); o.stop(t + 0.13);
+    }
+  }
+
+  // Clay slide: a longer band-passed pink-noise scrape for a sliding stop.
+  function sfxSlide(speed, pan) {
+    if (!ctx || !pinkBuf) return;
+    const v = Math.min(0.05 + speed * 0.01, 0.14);
+    const out = ctx.createGain();
+    const panner = ctx.createStereoPanner ? ctx.createStereoPanner() : null;
+    if (panner) { panner.pan.value = Math.max(-1, Math.min(1, pan || 0)); out.connect(panner); panner.connect(master); }
+    else out.connect(master);
+    const t = ctx.currentTime;
+    const n = noiseSrc(pinkBuf, 0.35);
+    const bp = ctx.createBiquadFilter();
+    bp.type = 'bandpass';
+    bp.frequency.setValueAtTime(1600, t);
+    bp.frequency.exponentialRampToValueAtTime(900, t + 0.3);
+    bp.Q.value = 0.6;
+    const g = ctx.createGain();
+    g.gain.setValueAtTime(0.0001, t);
+    g.gain.linearRampToValueAtTime(v, t + 0.06);
+    g.gain.exponentialRampToValueAtTime(0.0001, t + 0.34);
+    n.connect(bp).connect(g).connect(out);
+  }
+
   function sfxNet() {
     if (!ctx) return;
     const t = ctx.currentTime;
@@ -436,6 +489,6 @@ export function createAudio() {
     initAudio,
     sfxHit, sfxBounce, sfxCrowd, sfxNet, sfxOut, sfxFault,
     sfxToss, sfxMenu, sfxConfirm, sfxReachAlert, sfxPerfect,
-    ambient, setAmbientLevel,
+    ambient, setAmbientLevel, sfxFootstep, sfxSlide,
   };
 }

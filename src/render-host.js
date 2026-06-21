@@ -12,11 +12,17 @@ const SURFACE_IDS = ['clay', 'grass', 'hard'];
 const REACH_IDLE = 0x3988ff; // blue
 const REACH_HOT = 0xff50a0;  // pink (ball in range)
 
-export function createRenderHost(scene) {
+export function createRenderHost(scene, audio = null) {
   let court = null;
   let ball = null;
   const players = [null, null]; // [human(side 0), cpu(side 1)]
   let surfaceId = 'hard';
+
+  // footstep/slide SFX bookkeeping per side (immersion 03 §3.4)
+  const stepAcc = [0, 0];
+  const lastPos = [null, null];
+  const lastSpeed = [0, 0];
+  const slideCd = [0, 0];
 
   // open-court highlight: a translucent patch on the CPU's vacated side
   const openCourt = new THREE.Mesh(
@@ -117,6 +123,31 @@ export function createRenderHost(scene) {
       if (players[0]) players[0].tick(dt);
       if (players[1]) players[1].tick(dt);
       if (ball) ball.tick(dt);
+      // footstep / clay-slide SFX, derived from each rig's motion (no FFI)
+      if (audio) {
+        for (let side = 0; side < 2; side++) {
+          const p = players[side];
+          if (!p) { lastPos[side] = null; continue; }
+          const sp = Math.hypot(p.vel.x, p.vel.z);
+          const pan = Math.max(-1, Math.min(1, p.pos.x / 6));
+          const lp = lastPos[side];
+          if (lp) {
+            stepAcc[side] += Math.hypot(p.pos.x - lp.x, p.pos.z - lp.z);
+            if (stepAcc[side] >= 0.85 && sp > 1.2) {
+              audio.sfxFootstep && audio.sfxFootstep(sp, surfaceId, pan);
+              stepAcc[side] -= 0.85;
+            }
+            const decel = dt > 0 ? (lastSpeed[side] - sp) / dt : 0;
+            slideCd[side] -= dt;
+            if (surfaceId === 'clay' && sp > 3 && decel > 6 && slideCd[side] <= 0) {
+              audio.sfxSlide && audio.sfxSlide(Math.max(sp, lastSpeed[side]), pan);
+              slideCd[side] = 0.45;
+            }
+          }
+          lastPos[side] = { x: p.pos.x, z: p.pos.z };
+          lastSpeed[side] = sp;
+        }
+      }
     },
 
     // --- read access for the camera rig ---

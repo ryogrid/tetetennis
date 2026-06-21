@@ -51,7 +51,7 @@ const ui = createUI({
   onVirtualKey: (c, d) => input.setVirtualKey(c, d),
   onMoveAxis: (x, z) => input.setMoveAxis(x, z),
 });
-const render = createRenderHost(scene);
+const render = createRenderHost(scene, audio);
 const cameraRig = createCameraRig(camera, render);
 const minimap = createMinimap();
 
