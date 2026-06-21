@@ -16,6 +16,8 @@ export function createAudio() {
   let reverbSend = null; // wet bus
   const samples = {};    // optional decoded hit samples by shot type
   let hitBuffer = null;  // tennis-racket1.mp3, used for ALL hit sounds (serve/smash/stroke)
+  let ambientNodes = null; // continuous crowd murmur bed (immersion 03 §3.1)
+  let wantAmbient = false;  // ambient requested before the audio ctx existed
 
   // Procedural impulse response: decaying stereo noise.
   function makeReverbIR(sec, decay) {
@@ -64,6 +66,10 @@ export function createAudio() {
       b2 = 0.57000 * b2 + white * 1.0526913;
       p[i] = (b0 + b1 + b2 + white * 0.1848) * 0.25;
     }
+
+    // a match may have started before the first user gesture created the ctx;
+    // honour a pending ambient-bed request now that pinkBuf exists.
+    if (wantAmbient) ambient(true);
   }
 
   function noiseSrc(buf, dur) {
@@ -299,6 +305,51 @@ export function createAudio() {
     noise2.connect(bp).connect(g2).connect(master);
   }
 
+  // Continuous ambient crowd bed: a low looped pink-noise murmur through a
+  // slowly-breathing lowpass, so the stadium is never dead-silent between
+  // points. Started at match start, stopped at teardown. (immersion 03 §3.1)
+  let ambientGainTarget = 0.045;
+  function ambient(on) {
+    if (!ctx) { wantAmbient = on; return; } // defer until initAudio builds pinkBuf
+    wantAmbient = on;
+    if (on) {
+      if (ambientNodes || !pinkBuf) return; // already running / no buffer yet
+      const src = ctx.createBufferSource();
+      src.buffer = pinkBuf;
+      src.loop = true;
+      const lp = ctx.createBiquadFilter();
+      lp.type = 'lowpass';
+      lp.frequency.value = 480;
+      // slow LFO on the cutoff → a gentle "breathing" murmur, not a flat hiss
+      const lfo = ctx.createOscillator();
+      lfo.frequency.value = 0.07;
+      const lfoG = ctx.createGain();
+      lfoG.gain.value = 180;
+      lfo.connect(lfoG).connect(lp.frequency);
+      const g = ctx.createGain();
+      g.gain.setValueAtTime(0.0001, ctx.currentTime);
+      g.gain.setTargetAtTime(ambientGainTarget, ctx.currentTime, 1.5); // fade in
+      src.connect(lp).connect(g).connect(master);
+      src.start();
+      lfo.start();
+      ambientNodes = { src, lp, g, lfo };
+    } else {
+      if (!ambientNodes) return;
+      const { src, g, lfo } = ambientNodes;
+      const t = ctx.currentTime;
+      g.gain.setTargetAtTime(0.0001, t, 0.4); // fade out
+      try { src.stop(t + 2); lfo.stop(t + 2); } catch { /* already stopped */ }
+      ambientNodes = null;
+    }
+  }
+
+  // Live volume control for the ambient bed (used by the settings panel and by
+  // mid-rally crowd swells, immersion 03 §3.2 / 07 §7.1).
+  function setAmbientLevel(v) {
+    ambientGainTarget = Math.max(0, v);
+    if (ambientNodes) ambientNodes.g.gain.setTargetAtTime(ambientGainTarget, ctx.currentTime, 0.3);
+  }
+
   function beep(freq, when, dur, vol = 0.22) {
     const osc = ctx.createOscillator();
     osc.type = 'square';
@@ -385,5 +436,6 @@ export function createAudio() {
     initAudio,
     sfxHit, sfxBounce, sfxCrowd, sfxNet, sfxOut, sfxFault,
     sfxToss, sfxMenu, sfxConfirm, sfxReachAlert, sfxPerfect,
+    ambient, setAmbientLevel,
   };
 }

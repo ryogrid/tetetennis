@@ -35,10 +35,11 @@ pub extern "js" fn host_sfx_crowd(h : Host, intensity : Double) -> Unit =
 
 ///|
 pub extern "js" fn host_start_match(h : Host, surface_id : String, p_idx : Int, c_idx : Int) -> Unit =
-  "(h,s,p,c)=>h.render.startMatch(s,p,c)"
+  "(h,s,p,c)=>{h.render.startMatch(s,p,c);h.audio.ambient(true)}"
 
 ///|
-pub extern "js" fn host_teardown_match(h : Host) -> Unit = "(h)=>h.render.teardownMatch()"
+pub extern "js" fn host_teardown_match(h : Host) -> Unit =
+  "(h)=>{h.render.teardownMatch();h.audio.ambient(false)}"
 
 // ---------------- render: ball ----------------
 
