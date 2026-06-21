@@ -49,7 +49,21 @@ export function createRenderHost(scene) {
 
   function teardownMatch() {
     openCourt.visible = false;
-    if (court) { scene.remove(court); court = null; }
+    if (court) {
+      scene.remove(court);
+      // dispose court geometry/materials/textures (incl. the crowd) so a
+      // rematch's buildCourt() doesn't leak GPU resources.
+      court.traverse((o) => {
+        if (o.geometry) o.geometry.dispose();
+        if (o.material) {
+          for (const mtl of Array.isArray(o.material) ? o.material : [o.material]) {
+            if (mtl.map) mtl.map.dispose();
+            mtl.dispose();
+          }
+        }
+      });
+      court = null;
+    }
     for (let i = 0; i < players.length; i++) {
       if (players[i]) { players[i].dispose(); players[i] = null; }
     }
