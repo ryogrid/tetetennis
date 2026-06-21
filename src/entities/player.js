@@ -9,6 +9,18 @@ import * as THREE from 'three';
 
 const SWING_DUR = 0.45;
 
+// reusable temporaries for the contact-point aim (immersion 01 §1.4); shared
+// because updateVisual runs sequentially per rig, never concurrently.
+const _ikHead = new THREE.Vector3();
+const _ikSh = new THREE.Vector3();
+const _ikToHead = new THREE.Vector3();
+const _ikToBall = new THREE.Vector3();
+const _ikQd = new THREE.Quaternion();
+const _ikQs = new THREE.Quaternion();
+const _ikQsh = new THREE.Quaternion();
+const _ikQnew = new THREE.Quaternion();
+const _ikQpar = new THREE.Quaternion();
+
 const SKIN = 0xe8c39e;
 const SHORTS = 0x2b2b35;
 
@@ -515,6 +527,7 @@ export function createPlayerRig({ side, color, reach, scene }) {
     runPhase: 0,
     _sm: null,
     _smY: undefined,
+    _ball: null, // latest active ball world pos, for the contact-point aim
 
     setPlayer(x, z, vx, vz) {
       this.pos.x = x; this.pos.z = z;
@@ -539,7 +552,9 @@ export function createPlayerRig({ side, color, reach, scene }) {
     },
 
     // per-frame cosmetic advance: swing/serve clocks, run phase, then pose.
-    tick(dt) {
+    // `ballState` ({active,pos}|null) lets the swing aim at the real ball.
+    tick(dt, ballState) {
+      this._ball = ballState && ballState.active ? ballState.pos : null;
       if (this.swing) {
         this.swing.t += dt;
         if (this.swing.t >= SWING_DUR) this.swing = null;
@@ -657,6 +672,36 @@ export function createPlayerRig({ side, color, reach, scene }) {
         J.hips.position.y -= hop * 0.06;
         J.kneeR.rotation.x += hop * 0.5;
         J.kneeL.rotation.x += hop * 0.5;
+      }
+
+      // contact-point aim: during the contact window, rotate the racket shoulder
+      // so the racket head swings toward the REAL ball, blended in/out so the
+      // stylized swing is preserved everywhere else. World-space (so the CPU's
+      // 180° flip is handled), bounded by the blend weight so it can't break the
+      // pose. (immersion 01 §1.4)
+      if (this.swing && this._ball) {
+        const n = this.swing.t / SWING_DUR;
+        if (n > 0.28 && n < 0.52) {
+          const w = Math.sin(((n - 0.28) / 0.24) * Math.PI); // 0→1→0, peak ~n=0.40
+          root.updateMatrixWorld(true);
+          const head = _ikHead.set(0, -0.44, 0);
+          J.racket.localToWorld(head); // racket sweet-spot in world space
+          const sh = _ikSh.setFromMatrixPosition(J.shoulderR.matrixWorld);
+          const toBall = _ikToBall.set(
+            this._ball.x - sh.x, this._ball.y - sh.y, this._ball.z - sh.z);
+          const toHead = _ikToHead.set(head.x - sh.x, head.y - sh.y, head.z - sh.z);
+          const db = toBall.length();
+          if (db > 0.05 && db < 1.5 && toHead.length() > 0.05) {
+            toBall.normalize();
+            toHead.normalize();
+            _ikQd.setFromUnitVectors(toHead, toBall);   // rotation head→ball
+            _ikQs.identity().slerp(_ikQd, Math.min(w, 1) * 0.8); // partial, weighted
+            J.shoulderR.getWorldQuaternion(_ikQsh);
+            _ikQnew.multiplyQuaternions(_ikQs, _ikQsh); // new world orientation
+            J.shoulderR.parent.getWorldQuaternion(_ikQpar).invert();
+            J.shoulderR.quaternion.copy(_ikQpar.multiply(_ikQnew)); // back to local
+          }
+        }
       }
     },
 

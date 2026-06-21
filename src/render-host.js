@@ -123,8 +123,9 @@ export function createRenderHost(scene, audio = null) {
     // advance every rig's cosmetic pose/stride + the ball spin/pulse. main.js
     // calls this once per render frame, right before renderer.render.
     tick(dt) {
-      if (players[0]) players[0].tick(dt);
-      if (players[1]) players[1].tick(dt);
+      const bs = ball ? ball.state : null;
+      if (players[0]) players[0].tick(dt, bs);
+      if (players[1]) players[1].tick(dt, bs);
       if (ball) ball.tick(dt);
       // footstep / clay-slide SFX, derived from each rig's motion (no FFI)
       if (audio) {
