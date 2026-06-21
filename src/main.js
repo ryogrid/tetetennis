@@ -105,6 +105,30 @@ replayBadge.style.cssText = 'position:fixed;top:14px;left:50%;transform:translat
   + 'text-shadow:0 1px 4px #000';
 document.body.appendChild(replayBadge);
 
+// --- replay export / share (immersion 07 §7.3) ---
+let mediaRecorder = null;
+let recordedChunks = [];
+const clipBtn = document.createElement('button');
+clipBtn.textContent = '⤓ CLIP';
+clipBtn.title = 'Save a highlight clip';
+clipBtn.style.cssText = 'position:fixed;top:10px;right:56px;z-index:60;height:38px;'
+  + 'padding:0 10px;border-radius:8px;background:rgba(18,18,26,.72);color:#cfe;'
+  + 'border:1px solid rgba(255,255,255,.22);font:700 12px sans-serif;cursor:pointer';
+clipBtn.onclick = () => exportReplay();
+document.body.appendChild(clipBtn);
+const clipMsg = document.createElement('div');
+clipMsg.style.cssText = 'position:fixed;top:54px;right:10px;z-index:60;display:none;'
+  + 'padding:6px 10px;border-radius:6px;background:rgba(18,18,26,.85);color:#dde;'
+  + 'font:12px sans-serif';
+document.body.appendChild(clipMsg);
+let clipMsgTimer = null;
+function flashClipMsg(text) {
+  clipMsg.textContent = text;
+  clipMsg.style.display = 'block';
+  if (clipMsgTimer) clearTimeout(clipMsgTimer);
+  clipMsgTimer = setTimeout(() => { clipMsg.style.display = 'none'; }, 2200);
+}
+
 // latest notable-point descriptor (consumed by replay / highlight features)
 let lastHighlight = null;
 
@@ -195,9 +219,65 @@ function maybeStartReplay() {
 }
 
 function endReplay() {
+  const cb = replayState && replayState.onEnd;
   replayState = null;
   render.setReplayMode(false);
   replayBadge.style.display = 'none';
+  if (cb) cb();
+}
+
+// Record a highlight clip of the canvas during playback and offer it for
+// download / share. Feature-detected; degrades silently where unsupported
+// (MediaRecorder / captureStream are absent on parts of iOS Safari).
+function exportReplay() {
+  const canvas = renderer.domElement;
+  if (!canvas.captureStream || typeof MediaRecorder === 'undefined') {
+    flashClipMsg('Clip capture not supported here'); return;
+  }
+  if (replayState) return; // already playing something back
+  let clips;
+  if (highlights.length) {
+    clips = highlights.slice().sort((a, b) => b.rank - a.rank).slice(0, 5)
+      .map((x) => x.clip).reverse();
+  } else if (replay.frames() >= 60) {
+    clips = [replay.snapshot(165)];
+  } else { flashClipMsg('No footage to save yet'); return; }
+  recordedChunks = [];
+  let mime = 'video/webm;codecs=vp9';
+  if (!MediaRecorder.isTypeSupported || !MediaRecorder.isTypeSupported(mime)) mime = 'video/webm';
+  try {
+    const stream = canvas.captureStream(30);
+    mediaRecorder = new MediaRecorder(stream, { mimeType: mime });
+  } catch { flashClipMsg('Clip capture failed'); return; }
+  mediaRecorder.ondataavailable = (e) => { if (e.data && e.data.size) recordedChunks.push(e.data); };
+  mediaRecorder.onstop = finishClip;
+  mediaRecorder.start();
+  replayState = {
+    clips, ci: 0, t: 0, wall: 0, speed: 0.5,
+    onEnd: () => { if (mediaRecorder && mediaRecorder.state !== 'inactive') mediaRecorder.stop(); },
+  };
+  render.setReplayMode(true);
+  render.setHumanTransparent(false);
+  replayBadge.textContent = '● REC';
+  replayBadge.style.display = 'block';
+}
+
+function finishClip() {
+  const blob = new Blob(recordedChunks, { type: 'video/webm' });
+  const url = URL.createObjectURL(blob);
+  let file = null;
+  try { file = new File([blob], 'tetetennis-highlight.webm', { type: 'video/webm' }); } catch { /* no File ctor */ }
+  if (file && navigator.canShare && navigator.canShare({ files: [file] })) {
+    navigator.share({ files: [file], title: 'tetetennis highlight' })
+      .catch(() => {}).finally(() => URL.revokeObjectURL(url));
+    flashClipMsg('Sharing highlight…');
+  } else {
+    const a = document.createElement('a');
+    a.href = url; a.download = 'tetetennis-highlight.webm';
+    document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 4000);
+    flashClipMsg('Highlight saved');
+  }
 }
 
 // Drive one playback frame from the current clip: push a recorded row into the
