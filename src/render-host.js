@@ -160,6 +160,7 @@ export function createRenderHost(scene, audio = null) {
             slideCd[side] -= dt;
             if (surfaceId === 'clay' && sp > 3 && decel > 6 && slideCd[side] <= 0) {
               audio.sfxSlide && audio.sfxSlide(Math.max(sp, lastSpeed[side]), pan);
+              if (p.slide) p.slide(); // cosmetic braking slide on the rig
               slideCd[side] = 0.45;
             }
           }

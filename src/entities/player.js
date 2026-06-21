@@ -129,8 +129,21 @@ function buildRig(color) {
     knee.position.y = -0.40;
     hip.add(knee);
     knee.add(limbMesh(0.42, 0.06, SKIN));
+    // ankle + foot: the ankle counter-rotates to keep the foot flat on the
+    // ground despite hip/knee swing → believable footing (immersion 01 §1.1)
+    const ankle = new THREE.Group();
+    ankle.position.y = -0.42;
+    knee.add(ankle);
+    const foot = new THREE.Mesh(
+      new THREE.BoxGeometry(0.10, 0.06, 0.22),
+      new THREE.MeshLambertMaterial({ color: 0x222228 }),
+    );
+    foot.position.set(0, -0.03, 0.06);
+    foot.castShadow = true;
+    ankle.add(foot);
     joints['hip' + side] = hip;
     joints['knee' + side] = knee;
+    joints['ankle' + side] = ankle;
   }
 
   // Collect every body/racket material so the rig can be dimmed to translucent
@@ -550,6 +563,7 @@ export function createPlayerRig({ side, color, reach, scene }) {
     serveAnimSt: null, // {t}
     splitSt: null,     // {t} split-step hop in anticipation of the opponent's hit
     celebSt: null,     // {t, kind} between-points celebration
+    slideSt: null,     // {t} clay braking slide
     runPhase: 0,
     _sm: null,
     _smY: undefined,
@@ -583,6 +597,12 @@ export function createPlayerRig({ side, color, reach, scene }) {
       if (!this.swing && !this.serveAnimSt) this.celebSt = { t: 0, kind: kind || 'point' };
     },
 
+    // Clay slide: a brief braking crouch, triggered from render-host when a hard
+    // deceleration is detected on clay. (immersion 01 §1.3)
+    slide() {
+      if (!this.swing && !this.serveAnimSt) this.slideSt = { t: 0 };
+    },
+
     // per-frame cosmetic advance: swing/serve clocks, run phase, then pose.
     // `ballState` ({active,pos}|null) lets the swing aim at the real ball.
     tick(dt, ballState) {
@@ -603,8 +623,15 @@ export function createPlayerRig({ side, color, reach, scene }) {
         this.celebSt.t += dt;
         if (this.celebSt.t > 1.7) this.celebSt = null;
       }
+      if (this.slideSt) {
+        this.slideSt.t += dt;
+        if (this.slideSt.t > 0.5) this.slideSt = null;
+      }
       const sp = Math.hypot(this.vel.x, this.vel.z);
-      this.runPhase += dt * (4 + sp * 2.2);
+      // Distance-locked stride: advance the leg cycle by ground distance covered,
+      // not by time, so the feet stop skating (the #1 realism killer). One full
+      // cycle (2 steps) ≈ 1.6 m. (immersion 01 §1.5)
+      this.runPhase += (sp * dt / 1.6) * (Math.PI * 2);
       this.updateVisual(dt);
     },
 
@@ -783,6 +810,22 @@ export function createPlayerRig({ side, color, reach, scene }) {
             J.shoulderR.quaternion.copy(_ikQpar.multiply(_ikQnew)); // back to local
           }
         }
+      }
+
+      // clay braking slide: a quick crouch-and-settle (immersion 01 §1.3)
+      if (this.slideSt && !this.swing && !this.serveAnimSt) {
+        const s = Math.sin(Math.min(this.slideSt.t / 0.5, 1) * Math.PI); // 0→1→0
+        J.hips.position.y -= s * 0.05;
+        J.kneeR.rotation.x += s * 0.45;
+        J.kneeL.rotation.x += s * 0.45;
+        J.hips.rotation.x -= s * 0.12; // slight lean back
+      }
+
+      // keep the feet roughly flat on the ground despite hip/knee swing — the
+      // ankle counter-rotates the leg's accumulated pitch (immersion 01 §1.1/1.5)
+      if (J.ankleR) {
+        J.ankleR.rotation.x = -(J.hipR.rotation.x + J.kneeR.rotation.x) * 0.7;
+        J.ankleL.rotation.x = -(J.hipL.rotation.x + J.kneeL.rotation.x) * 0.7;
       }
     },
 
