@@ -2,6 +2,9 @@
 // game loop's brain; this layer builds the `host` object it drives via FFI and
 // runs the requestAnimationFrame loop.
 import * as THREE from 'three';
+import { EffectComposer } from 'three/examples/jsm/postprocessing/EffectComposer.js';
+import { RenderPass } from 'three/examples/jsm/postprocessing/RenderPass.js';
+import { UnrealBloomPass } from 'three/examples/jsm/postprocessing/UnrealBloomPass.js';
 import * as logic from '../_build/js/release/build/logic/game/game.js';
 import { buildLights } from './court.js';
 import { createCameraRig } from './camera.js';
@@ -35,7 +38,7 @@ const prefersReduced = window.matchMedia
   && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 const IMM_DEFAULTS = {
   lightMood: 'day', crowd: 1, grunts: true, footsteps: true, haptics: true, replays: true,
-  reducedMotion: false, captions: false, broadcast: false,
+  reducedMotion: false, captions: false, broadcast: false, postfx: false,
 };
 function loadImmSettings() {
   // reduced-motion defaults to the OS preference unless the user has chosen
@@ -55,10 +58,32 @@ const camera = new THREE.PerspectiveCamera(
 camera.position.set(0, 1.62, 12.5);
 camera.lookAt(0, 0.9, -6);
 
+// --- optional post-processing (immersion 05 §5.7): restrained bloom for a TV
+// look, behind a quality toggle (off by default; lazy-created on first enable). ---
+let composer = null;
+let postfxEnabled = false;
+function ensureComposer() {
+  if (composer) return;
+  composer = new EffectComposer(renderer);
+  composer.addPass(new RenderPass(scene, camera));
+  composer.addPass(new UnrealBloomPass(
+    new THREE.Vector2(window.innerWidth, window.innerHeight),
+    0.35, // strength — restrained
+    0.4,  // radius
+    0.85, // threshold — only bright highlights bloom
+  ));
+  composer.setSize(window.innerWidth, window.innerHeight);
+}
+function renderScene() {
+  if (postfxEnabled && composer) composer.render();
+  else renderer.render(scene, camera);
+}
+
 window.addEventListener('resize', () => {
   camera.aspect = window.innerWidth / window.innerHeight;
   camera.updateProjectionMatrix();
   renderer.setSize(window.innerWidth, window.innerHeight);
+  if (composer) composer.setSize(window.innerWidth, window.innerHeight);
 });
 
 const audio = createAudio();
@@ -85,6 +110,7 @@ function applyImmSetting(key, val) {
     case 'reducedMotion': reducedMotion = val; ui.setReducedMotion(val); break;
     case 'captions': captionsEnabled = val; break;
     case 'broadcast': cameraRig.setBroadcast(val); break;
+    case 'postfx': postfxEnabled = val; if (val) ensureComposer(); break;
   }
 }
 const ui = createUI({
@@ -321,7 +347,7 @@ function runReplayFrame(dt) {
   _rCam.set(13, 7, r.bz * 0.4); // elevated broadcast side angle
   camera.position.lerp(_rCam, 0.12);
   camera.lookAt(_rTarget);
-  renderer.render(scene, camera);
+  renderScene();
 }
 
 function frame(now) {
@@ -352,7 +378,7 @@ function frame(now) {
   // behind-player view → dim the human so the incoming ball stays visible
   const behind = render.isActive() && cameraRig.getMode() !== 'overhead';
   render.setHumanTransparent(behind);
-  renderer.render(scene, camera);
+  renderScene();
   minimap.update(
     render.getBall(),
     render.getPlayer(0),

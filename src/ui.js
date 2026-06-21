@@ -606,6 +606,7 @@ export function createUI({ onVirtualKey, onMoveAxis, settings, onSetting } = {})
       { key: 'reducedMotion', label: 'Reduced motion', opts: [[false, 'Off'], [true, 'On']] },
       { key: 'captions', label: 'Captions', opts: [[false, 'Off'], [true, 'On']] },
       { key: 'broadcast', label: 'Broadcast cam', opts: [[false, 'Off'], [true, 'On']] },
+      { key: 'postfx', label: 'Bloom (HQ)', opts: [[false, 'Off'], [true, 'On']] },
     ];
     function render() {
       panel.innerHTML = '<div style="font-weight:700;letter-spacing:1px;margin-bottom:8px;'
