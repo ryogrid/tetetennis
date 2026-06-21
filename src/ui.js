@@ -395,6 +395,17 @@ const css = `
   80% { opacity:1; }
   100% { opacity:0; transform:translateX(-50%) scale(1); }
 }
+/* Hawk-Eye close-call review inset (immersion 06 §6.6) */
+#hawkeye { position:fixed; bottom:12px; left:12px; z-index:45; display:none; width:140px;
+  padding:8px; border-radius:8px; background:rgba(10,10,16,.9);
+  border:1px solid rgba(255,255,255,.18); text-align:center; font:13px sans-serif;
+  color:#dde; animation: heIn .35s ease; }
+#hawkeye .he-head { font:700 11px sans-serif; letter-spacing:2px; color:#7fd; margin-bottom:4px; }
+#hawkeye svg { border-radius:4px; }
+#hawkeye .he-verdict { margin-top:5px; font-weight:800; letter-spacing:1px; }
+#hawkeye .he-in { color:#5dff7a; }
+#hawkeye .he-out { color:#ff5a5a; }
+@keyframes heIn { 0% { opacity:0; transform:scale(.7); } 100% { opacity:1; transform:scale(1); } }
 /* results: diverging head-to-head stat bars */
 .sbar-head { display:flex; justify-content:space-between; width:540px; max-width:92vw; margin:4px auto 6px; font:700 12px sans-serif; letter-spacing:1px; }
 .sbars { display:flex; flex-direction:column; gap:9px; margin:6px 0; }
@@ -500,6 +511,7 @@ export function createUI({ onVirtualKey, onMoveAxis, settings, onSetting } = {})
   els.scoreboard = div('scoreboard', hud);
   els.banner = div('banner', hud);
   els.bigmoment = div('bigmoment', hud);
+  els.hawkeye = div('hawkeye', hud);
   els.toast = div('toast', hud);
   els.shotbar = div('shotbar', hud);
   els.controls = div('controls', hud);
@@ -1054,6 +1066,36 @@ export function createUI({ onVirtualKey, onMoveAxis, settings, onSetting } = {})
   }
   function getSituation() { return currentSituation; }
 
+  // Hawk-Eye close-call inset: a zoomed top-down view of the nearest line with
+  // the ball mark offset by its true margin, plus an IN/OUT verdict. Driven by
+  // host_close_call when a bounce lands within ~10 cm of a boundary. (06 §6.6)
+  let hawkTimer = null;
+  function hawkEye(x, z, isIn) {
+    const SL = 4.115, BL = 11.885;
+    const dxs = Math.abs(x) - SL; // signed dist to sideline (+ outside)
+    const dzs = Math.abs(z) - BL; // signed dist to baseline
+    const vertical = Math.abs(dxs) <= Math.abs(dzs); // nearest = sideline?
+    const margin = vertical ? dxs : dzs;
+    const off = Math.max(-55, Math.min(55, margin * 700)); // px per metre, clamped
+    const cm = (Math.abs(margin) * 100).toFixed(1);
+    const dot = `<circle r="9" fill="#e9f24a" stroke="#222" stroke-width="1.5"`;
+    const svg = vertical
+      ? `<svg viewBox="0 0 120 120" width="120" height="120"><rect width="120" height="120" fill="#0a3a18"/>`
+        + `<line x1="60" y1="6" x2="60" y2="114" stroke="#fff" stroke-width="6"/>`
+        + `${dot} cx="${(60 + off).toFixed(1)}" cy="60"/></svg>`
+      : `<svg viewBox="0 0 120 120" width="120" height="120"><rect width="120" height="120" fill="#0a3a18"/>`
+        + `<line x1="6" y1="60" x2="114" y2="60" stroke="#fff" stroke-width="6"/>`
+        + `${dot} cx="60" cy="${(60 + off).toFixed(1)}"/></svg>`;
+    els.hawkeye.innerHTML = `<div class="he-head">HAWK-EYE</div>${svg}`
+      + `<div class="he-verdict ${isIn ? 'he-in' : 'he-out'}">${isIn ? 'IN' : 'OUT'} · ${cm} cm</div>`;
+    els.hawkeye.style.display = 'block';
+    els.hawkeye.style.animation = 'none';
+    void els.hawkeye.offsetWidth;
+    els.hawkeye.style.animation = '';
+    if (hawkTimer) clearTimeout(hawkTimer);
+    hawkTimer = setTimeout(() => { els.hawkeye.style.display = 'none'; }, 2600);
+  }
+
   // practice HUD: replace the scoreboard with a single feed-settings read-out
   function practiceHud(label) {
     els.scoreboard.innerHTML =
@@ -1205,6 +1247,6 @@ export function createUI({ onVirtualKey, onMoveAxis, settings, onSetting } = {})
     gauge, hideGauge, charge, hideCharge,
     hitQuality, hideHitQuality,
     moveHint, hideMoveHint,
-    pointSituation, getSituation,
+    pointSituation, getSituation, hawkEye,
   };
 }

@@ -1204,6 +1204,17 @@ fn point_end(self : Game, ms : MatchState, winner : @rules.Side, call_text : Str
 fn process_bounce(self : Game, ms : MatchState, px : Double, pz : Double, speed : Double) -> Unit {
   @ffi.host_sfx_bounce(self.host, speed, ms.surface_id)
   @ffi.host_bounce_fx(self.host, px, pz, speed, ms.surface_id)
+  // Hawk-Eye: a bounce within ~10 cm of the singles sideline/baseline
+  let ax = if px < 0.0 { -px } else { px }
+  let az = if pz < 0.0 { -pz } else { pz }
+  let dxs = ax - @physics.court_half_width
+  let dzs = az - @physics.court_half_len
+  let mx = if dxs < 0.0 { -dxs } else { dxs }
+  let mz = if dzs < 0.0 { -dzs } else { dzs }
+  if mx < 0.10 || mz < 0.10 {
+    let is_in = ax <= @physics.court_half_width && az <= @physics.court_half_len
+    @ffi.host_close_call(self.host, px, pz, is_in)
+  }
   @ffi.host_hide_landing(self.host)
   if ms.rally_phase == Over || ms.rally_phase == Idle {
     return

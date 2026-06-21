@@ -41,6 +41,11 @@ pub extern "js" fn host_sfx_crowd_react(h : Host, kind : String, intensity : Dou
 pub extern "js" fn host_bounce_fx(h : Host, x : Double, z : Double, speed : Double, surface : String) -> Unit =
   "(h,x,z,s,id)=>h.render.bounceFx(x,z,s,id)"
 
+///|
+// A bounce within a few cm of a singles boundary → Hawk-Eye review inset.
+pub extern "js" fn host_close_call(h : Host, x : Double, z : Double, is_in : Bool) -> Unit =
+  "(h,x,z,i)=>h.ui.hawkEye(x,z,i)"
+
 // ---------------- presentation / drama signals (output-only) ----------------
 
 ///|
