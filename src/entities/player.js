@@ -48,21 +48,34 @@ function buildRig(color) {
   pelvis.castShadow = true;
   hips.add(pelvis);
 
+  // chest carries the whole upper body so it can rotate independently of the
+  // hips → hip–shoulder separation / X-factor. Sits at the hips origin, so the
+  // torso/shoulder offsets below are unchanged. (immersion 01 §1.1)
+  const chest = new THREE.Group();
+  hips.add(chest);
+  joints.chest = chest;
+
   const torso = new THREE.Mesh(
     new THREE.CapsuleGeometry(0.13, 0.34, 4, 10),
     new THREE.MeshLambertMaterial({ color }),
   );
   torso.position.y = 0.30;
   torso.castShadow = true;
-  hips.add(torso);
+  chest.add(torso);
+
+  // neck lets the head tilt/turn (auto-driven toward the ball)
+  const neck = new THREE.Group();
+  neck.position.y = 0.52;
+  chest.add(neck);
+  joints.neck = neck;
 
   const head = new THREE.Mesh(
     new THREE.SphereGeometry(0.12, 12, 10),
     new THREE.MeshLambertMaterial({ color: SKIN }),
   );
-  head.position.y = 0.72;
+  head.position.y = 0.20; // 0.72 in the hips frame minus the neck offset
   head.castShadow = true;
-  hips.add(head);
+  neck.add(head);
 
   // arms (limbs extend -y from their joint). Limbs are deliberately thick:
   // the only rig the player ever sees is 12-24 m away in FPV.
@@ -70,7 +83,7 @@ function buildRig(color) {
     const sx = side === 'R' ? 1 : -1;
     const shoulder = new THREE.Group();
     shoulder.position.set(sx * 0.23, 0.52, 0);
-    hips.add(shoulder);
+    chest.add(shoulder);
     shoulder.add(limbMesh(0.28, 0.062, SKIN));
     const elbow = new THREE.Group();
     elbow.position.y = -0.28;
@@ -80,10 +93,15 @@ function buildRig(color) {
     joints['elbow' + side] = elbow;
   }
 
-  // racket on the right hand
+  // wrist between the forearm and the racket → racket-head lag + pronation
+  const wristR = new THREE.Group();
+  wristR.position.y = -0.26;
+  joints.elbowR.add(wristR);
+  joints.wristR = wristR;
+  // racket on the right hand (now hangs off the wrist, same head geometry)
   const racket = new THREE.Group();
-  racket.position.y = -0.26;
-  joints.elbowR.add(racket);
+  racket.position.y = 0;
+  wristR.add(racket);
   const handle = limbMesh(0.3, 0.028, 0x333333);
   racket.add(handle);
   const headRing = new THREE.Mesh(
@@ -138,6 +156,13 @@ function kf(t, times, values) {
     }
   }
   return values[values.length - 1];
+}
+
+// rest → peak (at normalized time `peak`) → rest, for proximal→distal
+// sequencing where authors set "when + how much" rather than aligning arrays.
+// (immersion 01 §1.2)
+function peakAt(n, peak, rest, amp) {
+  return kf(n, [0, peak, 1], [rest, amp, rest]);
 }
 
 // ---- per-shot-type swing keyframes (normalised time n, contact at 0.4) ----
@@ -595,6 +620,9 @@ export function createPlayerRig({ side, color, reach, scene }) {
       t.elbowR = [0.9, 0, 0];
       t.elbowL = [0.9, 0, 0];
       t.racket = [0.3, 0, 0];
+      t.chest = [0, 0, 0];   // X-factor: extra upper-body yaw over the hips
+      t.neck = [0.05, 0, 0]; // slight athletic look-down by default
+      t.wristR = [0, 0, 0];  // racket-head lag / pronation
       let baseY = 0.83;
 
       if (this.swing) {
@@ -619,6 +647,21 @@ export function createPlayerRig({ side, color, reach, scene }) {
             t.shoulderL = la.shoulderL;
             t.elbowL = la.elbowL;
           }
+          // X-factor: shoulders lead the hips. If a pose authors its own chest
+          // we honour it; otherwise split the hip yaw so the chest carries ~45%
+          // extra rotation and the hips/legs rotate less — hip–shoulder
+          // separation. (immersion 01 §1.1-1.2)
+          if (pose.chest) {
+            t.chest = pose.chest;
+          } else {
+            t.chest = [0, t.hips[1] * 0.45, 0];
+            t.hips[1] *= 0.55;
+          }
+          // racket-head lag: the wrist lays back through the takeback and whips
+          // through just after contact (only possible now the wrist exists)
+          const nn = this.swing.t / SWING_DUR;
+          t.wristR = pose.wristR
+            || [kf(nn, [0, 0.3, 0.4, 0.5, 1], [0.0, 0.5, 0.0, -0.4, -0.1]), 0, 0];
         }
       }
 
@@ -635,6 +678,21 @@ export function createPlayerRig({ side, color, reach, scene }) {
         t.kneeR[0] = sp.kneeBend;
         t.kneeL[0] = sp.kneeBend;
         baseY = sp.baseY;
+        // serve X-factor + wrist pronation snap across contact (n≈0.62)
+        t.chest = [0, t.hips[1] * 0.4, 0];
+        t.hips[1] *= 0.6;
+        t.wristR = [kf(n, [0, 0.5, 0.62, 0.78, 1], [0.2, 0.3, -0.3, 0.45, 0.2]), 0, 0];
+      }
+
+      // neck: gentle auto-track toward the ball (subtle on a featureless head,
+      // but wires the joint and tilts toward high/low balls). (immersion 01 §1.1)
+      if (this._ball) {
+        const fwd = isHuman ? 1 : -1;
+        const dx = (this._ball.x - this.pos.x) * fwd;
+        const dz = Math.max(0.5, Math.abs(this.pos.z - this._ball.z));
+        const yaw = Math.max(-0.6, Math.min(0.6, Math.atan2(dx, dz)));
+        const pitch = Math.max(-0.4, Math.min(0.4, -(this._ball.y - 1.45) * 0.12 + 0.05));
+        t.neck = [pitch, yaw, 0];
       }
 
       // smooth-apply the base pose. The filter state lives in this._sm (NOT
