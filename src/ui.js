@@ -382,6 +382,19 @@ const css = `
   22% { transform: scale(1.7); color:#ffd33b; text-shadow:0 0 10px rgba(255,211,59,.9); }
   100% { transform: scale(1); text-shadow:none; }
 }
+/* BREAK / MATCH POINT moment overlay (immersion 06 §6.2) */
+#bigmoment { position:fixed; top:23%; left:50%; transform:translateX(-50%); z-index:40;
+  font:800 40px sans-serif; letter-spacing:3px; pointer-events:none; display:none;
+  text-shadow:0 2px 12px rgba(0,0,0,.8); animation: bmIn 2.2s ease forwards; }
+#bigmoment.bm-break { color:#ff9b3d; }
+#bigmoment.bm-match { color:#ff4b4b; }
+@keyframes bmIn {
+  0% { opacity:0; transform:translateX(-50%) scale(.6); }
+  12% { opacity:1; transform:translateX(-50%) scale(1.12); }
+  20% { transform:translateX(-50%) scale(1); }
+  80% { opacity:1; }
+  100% { opacity:0; transform:translateX(-50%) scale(1); }
+}
 /* results: diverging head-to-head stat bars */
 .sbar-head { display:flex; justify-content:space-between; width:540px; max-width:92vw; margin:4px auto 6px; font:700 12px sans-serif; letter-spacing:1px; }
 .sbars { display:flex; flex-direction:column; gap:9px; margin:6px 0; }
@@ -486,6 +499,7 @@ export function createUI({ onVirtualKey, onMoveAxis, settings, onSetting } = {})
   els.menu = div('menu', hud, 'screen');
   els.scoreboard = div('scoreboard', hud);
   els.banner = div('banner', hud);
+  els.bigmoment = div('bigmoment', hud);
   els.toast = div('toast', hud);
   els.shotbar = div('shotbar', hud);
   els.controls = div('controls', hud);
@@ -1019,9 +1033,25 @@ export function createUI({ onVirtualKey, onMoveAxis, settings, onSetting } = {})
   }
 
   // Latest dramatic situation of the upcoming point ("match"|"break"|"deuce"|
-  // "normal"). Stored here; the BREAK/SET/MATCH overlay renders from it.
+  // "normal"). Drives the BREAK/SET/MATCH-POINT moment overlay, shown briefly at
+  // serve setup so it never occludes the live rally. (immersion 06 §6.2)
   let currentSituation = 'normal';
-  function pointSituation(kind) { currentSituation = kind || 'normal'; }
+  let bigMomentTimer = null;
+  function pointSituation(kind) {
+    currentSituation = kind || 'normal';
+    if (kind === 'match' || kind === 'break') {
+      els.bigmoment.textContent = kind === 'match' ? 'MATCH POINT' : 'BREAK POINT';
+      els.bigmoment.className = kind === 'match' ? 'bm-match' : 'bm-break';
+      els.bigmoment.style.display = 'block';
+      els.bigmoment.style.animation = 'none';
+      void els.bigmoment.offsetWidth; // reflow to retrigger the animation
+      els.bigmoment.style.animation = '';
+      if (bigMomentTimer) clearTimeout(bigMomentTimer);
+      bigMomentTimer = setTimeout(() => { els.bigmoment.style.display = 'none'; }, 2200);
+    } else {
+      els.bigmoment.style.display = 'none';
+    }
+  }
   function getSituation() { return currentSituation; }
 
   // practice HUD: replace the scoreboard with a single feed-settings read-out
