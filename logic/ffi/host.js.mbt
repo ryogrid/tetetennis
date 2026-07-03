@@ -337,6 +337,21 @@ pub extern "js" fn host_shot_held(h : Host) -> String = "(h)=>h.input.shotHeld()
 pub extern "js" fn host_is_down(h : Host, code : String) -> Bool =
   "(h,c)=>h.input.isDown(c)"
 
+// Touch-selected shot types (mobile F/T/S picker): "flat" | "topspin" | "slice".
+// Serve and stroke are remembered independently on the JS side.
+///|
+pub extern "js" fn host_touch_stroke(h : Host) -> String =
+  "(h)=>h.input.touchStroke()"
+
+///|
+pub extern "js" fn host_touch_serve(h : Host) -> String =
+  "(h)=>h.input.touchServe()"
+
+// Tell the UI which shot-type selection is active now: "serve" | "stroke".
+///|
+pub extern "js" fn host_set_shot_context(h : Host, c : String) -> Unit =
+  "(h,c)=>h.ui.setShotContext(c)"
+
 // ---------------- assist persistence ----------------
 
 ///|

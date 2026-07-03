@@ -116,6 +116,7 @@ function applyImmSetting(key, val) {
 const ui = createUI({
   onVirtualKey: (c, d) => input.setVirtualKey(c, d),
   onMoveAxis: (x, z) => input.setMoveAxis(x, z),
+  onSelectShot: (ctx, type) => (ctx === 'serve' ? input.setTouchServe(type) : input.setTouchStroke(type)),
   settings: immSettings,
   onSetting: applyImmSetting,
 });
