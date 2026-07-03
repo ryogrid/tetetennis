@@ -13,6 +13,11 @@ export function createInput(onFirstInput) {
   const axis = { x: 0, z: 0, active: false };
   let first = false;
   let hapticsEnabled = true; // contact-feel rumble/vibrate (immersion 06 §6.7)
+  // Touch shot-type selection (mobile): the on-screen F/T/S buttons pick these
+  // instead of a random choice. Serve and stroke are remembered independently
+  // (defaults: stroke=flat, serve=spin/topspin). Session-only; reset on reload.
+  let touchStrokeType = 'flat';
+  let touchServeType = 'topspin';
 
   function norm(code) { return ALIASES[code] || code; }
 
@@ -88,6 +93,12 @@ export function createInput(onFirstInput) {
         down.delete(code);
       }
     },
+    // touch-selected shot types (mobile F/T/S buttons); read by the logic in
+    // place of the old random pick. Strings match shotKey(): 'flat'|'topspin'|'slice'.
+    touchStroke() { return touchStrokeType; },
+    touchServe() { return touchServeType; },
+    setTouchStroke(t) { touchStrokeType = t; },
+    setTouchServe(t) { touchServeType = t; },
     // analog movement from the touch joystick (court coords); (0,0) = released
     setMoveAxis(x, z) {
       firstInput();

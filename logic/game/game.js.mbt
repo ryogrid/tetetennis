@@ -1302,9 +1302,22 @@ fn confirm_pressed(self : Game) -> Bool {
 }
 
 ///|
-fn rand_stroke(self : Game) -> @shots.ShotType {
-  let kinds : Array[@shots.ShotType] = [Flat, Topspin, Slice]
-  kinds[(self.rng.uniform() * 3.0).to_int()]
+// Touch (mobile) shot-type selections, chosen via the on-screen F/T/S picker.
+// These replace the old random pick; the JS side remembers serve and stroke
+// independently (defaults: stroke=Flat, serve=Topspin/"spin").
+fn touch_stroke_type(self : Game) -> @shots.ShotType {
+  match str_to_shot(@ffi.host_touch_stroke(self.host)) {
+    Some(t) => t
+    None => Flat
+  }
+}
+
+///|
+fn touch_serve_type(self : Game) -> @shots.ShotType {
+  match str_to_shot(@ffi.host_touch_serve(self.host)) {
+    Some(t) => t
+    None => Topspin
+  }
 }
 
 ///|
@@ -1348,7 +1361,7 @@ fn update_human_charge(self : Game, ms : MatchState, dt : Double) -> Unit {
       ph.charge = 0.0
       ph.charge_type = match kb {
         Some(t) => t
-        None => self.rand_stroke()
+        None => self.touch_stroke_type()
       }
     } else {
       @ffi.host_hide_charge(self.host)
@@ -1519,7 +1532,7 @@ fn handle_match_input(self : Game) -> Unit {
   } else if ms.point_state == Serving && server(ms) == @rules.P {
     match shot {
       Some(s) => self.do_serve(ms, s)
-      None => if touch_shot { self.do_serve(ms, self.rand_stroke()) }
+      None => if touch_shot { self.do_serve(ms, self.touch_serve_type()) }
     }
   }
   // Rally strokes use the hold-to-charge model handled in fixed_update
@@ -1938,6 +1951,17 @@ pub fn frame_update(dt : Double) -> Unit {
   } else {
     @ffi.host_hide_gauge(h, "power")
   }
+
+  // tell the touch shot-type picker whether it's selecting the serve or the
+  // stroke right now (your pending serve vs a rally). Sent every frame; the UI
+  // only touches the DOM when the value actually changes.
+  let shot_ctx = if (ms.point_state == PreServe || ms.point_state == Serving) &&
+    server(ms) == @rules.P {
+    "serve"
+  } else {
+    "stroke"
+  }
+  @ffi.host_set_shot_context(h, shot_ctx)
 
   // (the on-screen move-assist arrow has been removed)
 

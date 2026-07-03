@@ -228,6 +228,21 @@ const css = `
   right: 40px; bottom: 40px; width: 124px; height: 124px; font-size: 16px;
   background: rgba(44,64,30,.6);
 }
+/* shot-type picker (mobile): small F/T/S chips above the SHOT button. The
+   highlighted chip follows the current context — serve while you're serving,
+   stroke during a rally. (球種選択) */
+#tb-shottype {
+  position: absolute; right: 40px; bottom: 172px; display: flex; gap: 6px;
+  pointer-events: auto; touch-action: none;
+}
+#tb-shottype button {
+  pointer-events: auto; touch-action: none; width: 42px; height: 34px;
+  border-radius: 7px; font-size: 11px; font-weight: 700; letter-spacing: 1px;
+  background: rgba(18,18,28,.6); color: #ccc; border: 1px solid rgba(255,255,255,.25);
+}
+#tb-shottype button.sel {
+  background: #2f9c6a; color: #fff; border-color: #50e678;
+}
 #tossgauge {
   position: absolute; right: 22%; top: 50%; transform: translateY(-50%);
   width: 26px; height: 190px; display: none;
@@ -317,7 +332,10 @@ const css = `
   from { background-position: 0% 0; }
   to   { background-position: 220% 0; }
 }
-#tc-bar { position: absolute; top: 12px; right: 12px; display: none; gap: 8px; }
+/* second row, below the fixed ⚙ gear + ⤓ CLIP buttons (both top:10, z-index:60)
+   so the toolbar is no longer buried behind them; kept right-aligned to avoid
+   the top-left scoreboard. */
+#tc-bar { position: absolute; top: 56px; right: 12px; z-index: 55; display: none; gap: 8px; }
 #tc-bar button {
   pointer-events: auto; width: 44px; height: 38px; border-radius: 8px;
   background: rgba(18,18,28,.6); color: #ccc;
@@ -472,7 +490,7 @@ body.reduced-motion #scoreboard .sb-pop, body.reduced-motion #scoreboard .sb-fla
 @media (pointer: coarse) { .ts-word { font-size:40px; } }
 `;
 
-export function createUI({ onVirtualKey, onMoveAxis, settings, onSetting } = {}) {
+export function createUI({ onVirtualKey, onMoveAxis, onSelectShot, settings, onSetting } = {}) {
   const els = {};
   let bannerTimer = null;
   let toastTimer = null;
@@ -717,7 +735,7 @@ export function createUI({ onVirtualKey, onMoveAxis, settings, onSetting } = {})
   stick.addEventListener('pointercancel', stickRelease);
 
   // single shot button, bottom-right (right thumb): tosses + serves and hits;
-  // shot type is chosen by the logic on each press
+  // the shot type used is the one selected in the #tb-shottype picker below
   const shotBtn = div('tb-shot', els.touchui, 'tbtn');
   shotBtn.textContent = 'SHOT';
   shotBtn.addEventListener('pointerdown', (e) => {
@@ -729,6 +747,41 @@ export function createUI({ onVirtualKey, onMoveAxis, settings, onSetting } = {})
   const shotUp = () => { shotBtn.classList.remove('pressed'); onKey('TouchShot', false); };
   shotBtn.addEventListener('pointerup', shotUp);
   shotBtn.addEventListener('pointercancel', shotUp);
+
+  // shot-type picker (mobile): F/T/S chips just above SHOT. The selection is
+  // remembered separately for serve vs stroke (defaults: stroke=flat,
+  // serve=topspin/spin); shotCtx (pushed by the logic via setShotContext)
+  // decides which one a tap edits and which chip is highlighted.
+  const shotSel = { stroke: 'flat', serve: 'topspin' };
+  let shotCtx = 'stroke';
+  const shotTypeBar = div('tb-shottype', els.touchui);
+  const shotTypeBtns = {};
+  function refreshShotType() {
+    const active = shotSel[shotCtx];
+    for (const [type, btn] of Object.entries(shotTypeBtns)) {
+      btn.classList.toggle('sel', type === active);
+    }
+  }
+  for (const [type, label] of [['flat', 'FLAT'], ['topspin', 'TOP'], ['slice', 'SLICE']]) {
+    const b = document.createElement('button');
+    b.textContent = label;
+    b.addEventListener('pointerdown', (e) => {
+      e.preventDefault();
+      shotSel[shotCtx] = type;
+      if (onSelectShot) onSelectShot(shotCtx, type);
+      refreshShotType();
+    });
+    shotTypeBtns[type] = b;
+    shotTypeBar.appendChild(b);
+  }
+  refreshShotType();
+  // The logic calls this each frame with 'serve' (your serve is pending) or
+  // 'stroke' (rally); we only touch the DOM when it actually changes.
+  function setShotContext(ctx) {
+    if (ctx === shotCtx) return;
+    shotCtx = ctx;
+    refreshShotType();
+  }
 
   // camera + toggle + quit, top-right
   els.tcBar = div('tc-bar', hud);
@@ -1305,6 +1358,7 @@ export function createUI({ onVirtualKey, onMoveAxis, settings, onSetting } = {})
     showResults, hideMenu,
     showHUD, hideHUD, updateScore, practiceHud,
     banner, toast, flashShot, serveSpeedToast, serveInfo, setRecommendedShot,
+    setShotContext,
     gauge, hideGauge, charge, hideCharge,
     hitQuality, hideHitQuality,
     moveHint, hideMoveHint,

@@ -27,7 +27,7 @@ export function createMinimap() {
   canvas.height = H;
   Object.assign(canvas.style, {
     position: 'fixed',
-    top: '50px',      // below the tc-bar (top-right buttons)
+    top: '108px',     // below the tc-bar's second row (top-right buttons)
     right: '12px',
     zIndex: '10',
     borderRadius: '6px',
