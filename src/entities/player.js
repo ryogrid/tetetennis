@@ -417,48 +417,269 @@ function bhDropPose(n) {
 
 // ---- improved serve keyframes ----
 
+// Keep the serve as data so offline mocap tooling can replace just these arrays
+// without having to rewrite the evaluator logic in this file.
+const SERVE_POSE_TEMPLATE = {
+  hips: {
+    times: [0, 0.30, 0.50, 0.62, 1],
+    values: [
+      [0.08, -0.10, -0.34, 0.20, 0.12],
+      [-0.6, -0.85, -0.5, 0.0, 0.25, 0.2],
+      [0, 0, 0, 0, 0],
+    ],
+  },
+  shoulderL: {
+    times: [0, 0.30, 0.50, 1],
+    values: [
+      [0.3, 2.5, 2.75, 0.5],
+      [0, -0.2, -0.15, 0],
+      [-0.1, -0.1, -0.1, -0.1],
+    ],
+  },
+  elbowL: {
+    times: [0, 0.30, 1],
+    values: [
+      [0.3, 0.05, 0.3],
+      [0, 0, 0],
+      [0, 0, 0],
+    ],
+  },
+  shoulderR: {
+    times: [0, 0.30, 0.50, 0.62, 0.85, 1],
+    values: [
+      [0.35, 1.8, 2.4, 3.05, 1.4, 0.7],
+      [0.0, 0.0, 0.0, 0.0, 0.5, 0.7],
+      [0.25, 0.25, 0.25, 0.25, 0.95, 0.95],
+    ],
+  },
+  elbowR: {
+    times: [0, 0.30, 0.50, 0.62, 1],
+    values: [
+      [0.4, 1.5, 1.85, 0.05, 0.5],
+      [0, 0, 0, 0, 0],
+      [0, 0, 0, 0, 0],
+    ],
+  },
+  racket: {
+    times: [0, 0.45, 0.62, 0.78, 1],
+    values: [
+      [0.5, 0.9, 0.0, 0.55, 0.3],
+      [0, 0, 0, 0, 0],
+      [0, 0, 0, 0, 0],
+    ],
+  },
+  kneeBend: {
+    times: [0, 0.45, 0.62, 1],
+    values: [0.2, 0.78, 0.04, 0.22],
+  },
+  baseY: {
+    base: 0.83,
+    scale: -1,
+    times: [0, 0.45, 0.58, 0.66, 1],
+    values: [0.01, 0.15, 0.05, -0.07, 0.02],
+  },
+};
+
+// First-pass template extracted from movie/serve.mp4 after trimming around the
+// active motion window. Kept opt-in until it has been visually tuned.
+const IMPORTED_SERVE_POSE_TEMPLATE = {
+  hips: {
+    times: [0, 0.30, 0.50, 0.62, 0.85, 1],
+    values: [
+      [-1.000, -1.000, 0.800, 0.800, 0.800, 0.800],
+      [-1.200, -1.200, -1.200, -1.176, 1.160, 1.200],
+      [0, 0, 0, 0, 0, 0],
+    ],
+  },
+  shoulderL: {
+    times: [0, 0.30, 0.50, 0.62, 0.85, 1],
+    values: [
+      [0.102, 0.533, 0.925, 1.114, 2.751, 2.508],
+      [1.382, -0.467, -1.137, -1.018, 0.202, -1.195],
+      [0.019, 0.485, 0.509, 0.818, 0.384, 0.263],
+    ],
+  },
+  elbowL: {
+    times: [0, 0.30, 0.50, 0.62, 0.85, 1],
+    values: [
+      [0.022, 0.117, 0.204, 0.245, 0.605, 0.552],
+      [0, 0, 0, 0, 0, 0],
+      [0, 0, 0, 0, 0, 0],
+    ],
+  },
+  shoulderR: {
+    times: [0, 0.30, 0.50, 0.62, 0.85, 1],
+    values: [
+      [2.477, 2.290, 0.955, 0.753, 2.153, 2.369],
+      [-1.262, -1.308, -0.090, 0.010, 0.008, -0.814],
+      [-0.234, 0.289, 0.953, 0.753, 0.988, 0.590],
+    ],
+  },
+  elbowR: {
+    times: [0, 0.30, 0.50, 0.62, 0.85, 1],
+    values: [
+      [1.386, 1.304, 2.115, 0.782, 2.811, 1.600],
+      [0, 0, 0, 0, 0, 0],
+      [0, 0, 0, 0, 0, 0],
+    ],
+  },
+  racket: {
+    times: [0, 0.30, 0.50, 0.62, 0.85, 1],
+    values: [
+      [0.310, 0.267, 0.251, 0.444, 0.377, 0.106],
+      [0, 0, 0, 0, 0, 0],
+      [0, 0, 0, 0, 0, 0],
+    ],
+  },
+  kneeBend: {
+    times: [0, 0.30, 0.50, 0.62, 0.85, 1],
+    values: [0.200, 0.780, 0.551, 0.513, 0.342, 0.516],
+  },
+  baseY: {
+    base: 0.83,
+    scale: 1,
+    times: [0, 0.30, 0.50, 0.62, 0.85, 1],
+    values: [0.000, 0.001, 0.001, 0.001, 0.000, 0.001],
+  },
+};
+
+function retimeScalarSeries(srcTimes, srcValues, dstTimes) {
+  return dstTimes.map((t) => kf(t, srcTimes, srcValues));
+}
+
+function retimeVec3Template(src, dstTimes) {
+  return {
+    times: dstTimes,
+    values: src.values.map((axisValues) => retimeScalarSeries(src.times, axisValues, dstTimes)),
+  };
+}
+
+function blendSeries(base, imported, mix, lo = -Infinity, hi = Infinity) {
+  return base.map((value, index) => Math.max(lo, Math.min(hi, value * (1 - mix) + imported[index] * mix)));
+}
+
+function blendSeriesByMixes(base, imported, mixes, lo = -Infinity, hi = Infinity) {
+  return base.map((value, index) => {
+    const mix = mixes[index] ?? mixes[mixes.length - 1] ?? 0;
+    return Math.max(lo, Math.min(hi, value * (1 - mix) + imported[index] * mix));
+  });
+}
+
+function buildTunedServeTemplate(baseTpl, importedTpl) {
+  const times = importedTpl.hips.times;
+  const base = {
+    hips: retimeVec3Template(baseTpl.hips, times),
+    shoulderL: retimeVec3Template(baseTpl.shoulderL, times),
+    elbowL: retimeVec3Template(baseTpl.elbowL, times),
+    shoulderR: retimeVec3Template(baseTpl.shoulderR, times),
+    elbowR: retimeVec3Template(baseTpl.elbowR, times),
+    racket: retimeVec3Template(baseTpl.racket, times),
+    kneeBend: { times, values: retimeScalarSeries(baseTpl.kneeBend.times, baseTpl.kneeBend.values, times) },
+    baseY: { ...baseTpl.baseY, times, values: retimeScalarSeries(baseTpl.baseY.times, baseTpl.baseY.values, times) },
+  };
+
+  return {
+    hips: {
+      times,
+      values: [
+        blendSeriesByMixes(base.hips.values[0], importedTpl.hips.values[0], [0.02, 0.04, 0.08, 0.08, 0.04, 0.04], -0.38, 0.24),
+        blendSeriesByMixes(base.hips.values[1], importedTpl.hips.values[1], [0.03, 0.06, 0.10, 0.10, 0.06, 0.05], -0.95, 0.35),
+        [0, 0, 0, 0, 0, 0],
+      ],
+    },
+    shoulderL: {
+      times,
+      values: [
+        blendSeriesByMixes(base.shoulderL.values[0], importedTpl.shoulderL.values[0], [0.08, 0.10, 0.14, 0.16, 0.08, 0.06], 0.2, 2.85),
+        blendSeriesByMixes(base.shoulderL.values[1], importedTpl.shoulderL.values[1], [0.05, 0.08, 0.12, 0.12, 0.08, 0.06], -0.45, 0.10),
+        blendSeriesByMixes(base.shoulderL.values[2], importedTpl.shoulderL.values[2], [0.03, 0.08, 0.10, 0.12, 0.08, 0.05], -0.18, 0.18),
+      ],
+    },
+    elbowL: {
+      times,
+      values: [
+        blendSeriesByMixes(base.elbowL.values[0], importedTpl.elbowL.values[0], [0.04, 0.06, 0.08, 0.10, 0.08, 0.06], 0.05, 0.40),
+        [0, 0, 0, 0, 0, 0],
+        [0, 0, 0, 0, 0, 0],
+      ],
+    },
+    shoulderR: {
+      times,
+      values: [
+        blendSeriesByMixes(base.shoulderR.values[0], importedTpl.shoulderR.values[0], [0.06, 0.10, 0.14, 0.16, 0.10, 0.08], 0.35, 3.05),
+        blendSeriesByMixes(base.shoulderR.values[1], importedTpl.shoulderR.values[1], [0.04, 0.06, 0.08, 0.10, 0.08, 0.06], -0.12, 0.60),
+        blendSeriesByMixes(base.shoulderR.values[2], importedTpl.shoulderR.values[2], [0.04, 0.06, 0.10, 0.10, 0.08, 0.06], 0.20, 0.98),
+      ],
+    },
+    elbowR: {
+      times,
+      values: [
+        blendSeriesByMixes(base.elbowR.values[0], importedTpl.elbowR.values[0], [0.04, 0.06, 0.08, 0.10, 0.08, 0.06], 0.05, 1.9),
+        [0, 0, 0, 0, 0, 0],
+        [0, 0, 0, 0, 0, 0],
+      ],
+    },
+    racket: {
+      times,
+      values: [
+        blendSeriesByMixes(base.racket.values[0], importedTpl.racket.values[0], [0.04, 0.05, 0.08, 0.08, 0.06, 0.05], 0.0, 0.9),
+        [0, 0, 0, 0, 0, 0],
+        [0, 0, 0, 0, 0, 0],
+      ],
+    },
+    kneeBend: {
+      times,
+      values: blendSeriesByMixes(base.kneeBend.values, importedTpl.kneeBend.values, [0.00, 0.05, 0.08, 0.10, 0.08, 0.06], 0.18, 0.82),
+    },
+    baseY: {
+      base: baseTpl.baseY.base,
+      scale: baseTpl.baseY.scale,
+      times,
+      values: blendSeriesByMixes(base.baseY.values, importedTpl.baseY.values, [0.00, 0.00, 0.00, 0.02, 0.00, 0.00], -0.08, 0.16),
+    },
+  };
+}
+
+const TUNED_IMPORTED_SERVE_POSE_TEMPLATE = buildTunedServeTemplate(
+  SERVE_POSE_TEMPLATE,
+  IMPORTED_SERVE_POSE_TEMPLATE,
+);
+
+function getServePoseTemplate() {
+  let choice = 'rear-serve-01-trimmed';
+  try {
+    choice = window.localStorage.getItem('servePoseTemplate') || 'rear-serve-01-trimmed';
+  } catch {
+    // localStorage can fail in tests or restricted browser contexts.
+  }
+  if (choice === 'rear-serve-01-raw') return IMPORTED_SERVE_POSE_TEMPLATE;
+  if (choice === 'legacy-default') return SERVE_POSE_TEMPLATE;
+  if (choice === 'rear-serve-01-trimmed') return TUNED_IMPORTED_SERVE_POSE_TEMPLATE;
+  return TUNED_IMPORTED_SERVE_POSE_TEMPLATE;
+}
+
+function sampleVec3Template(n, spec) {
+  return spec.values.map((axisValues) => kf(n, spec.times, axisValues));
+}
+
+function servePoseFromTemplate(n, tpl) {
+  return {
+    hips: sampleVec3Template(n, tpl.hips),
+    shoulderL: sampleVec3Template(n, tpl.shoulderL),
+    elbowL: sampleVec3Template(n, tpl.elbowL),
+    shoulderR: sampleVec3Template(n, tpl.shoulderR),
+    elbowR: sampleVec3Template(n, tpl.elbowR),
+    racket: sampleVec3Template(n, tpl.racket),
+    kneeBend: kf(n, tpl.kneeBend.times, tpl.kneeBend.values),
+    baseY: tpl.baseY.base + tpl.baseY.scale * kf(n, tpl.baseY.times, tpl.baseY.values),
+  };
+}
+
 function servePose(n) {
   // n=0..1 mapped over ~1.1s active animation. Contact at n≈0.62.
   // Phases: sideways routine → toss + trophy (deep knee load) → kick-up + body
   // rotation to the highest contact → pronated follow-through across the left.
-  return {
-    hips: [
-      // pitch: settle → lean back under the ball at trophy → drive forward into court
-      kf(n, [0, 0.30, 0.50, 0.62, 1], [0.08, -0.10, -0.34, 0.20, 0.12]),
-      // yaw: sideways stance → coil → rotate square to the net at contact → continue
-      kf(n, [0, 0.30, 0.50, 0.62, 0.85, 1], [-0.6, -0.85, -0.5, 0.0, 0.25, 0.2]),
-      0,
-    ],
-    shoulderL: [
-      // left arm: tosses high & slightly forward, then drops across the body
-      kf(n, [0, 0.30, 0.50, 1], [0.3, 2.5, 2.75, 0.5]),
-      kf(n, [0, 0.30, 0.50, 1], [0, -0.2, -0.15, 0]),
-      -0.1,
-    ],
-    elbowL: [
-      kf(n, [0, 0.30, 1], [0.3, 0.05, 0.3]),
-      0, 0,
-    ],
-    shoulderR: [
-      kf(n, [0, 0.30, 0.50, 0.62, 0.85, 1], [0.35, 1.8, 2.4, 3.05, 1.4, 0.7]),
-      // follow-through swings the arm across to the left side of the body
-      kf(n, [0, 0.62, 0.85, 1], [0.0, 0.0, 0.5, 0.7]),
-      // pronation roll snaps over after contact
-      kf(n, [0, 0.62, 1], [0.25, 0.25, 0.95]),
-    ],
-    elbowR: [
-      kf(n, [0, 0.30, 0.50, 0.62, 1], [0.4, 1.5, 1.85, 0.05, 0.5]),
-      0, 0,
-    ],
-    racket: [
-      // set → cocked behind the head → snap up at contact → pronate down on finish
-      kf(n, [0, 0.45, 0.62, 0.78, 1], [0.5, 0.9, 0.0, 0.55, 0.3]),
-      0, 0,
-    ],
-    // deep knee load at the trophy, explosive extension (kick-up) into contact
-    kneeBend: kf(n, [0, 0.45, 0.62, 1], [0.2, 0.78, 0.04, 0.22]),
-    baseY: 0.83 - kf(n, [0, 0.45, 0.58, 0.66, 1], [0.01, 0.15, 0.05, -0.07, 0.02]),
-  };
+  return servePoseFromTemplate(n, getServePoseTemplate());
 }
 
 // ---- no-bounce keyframes: smash & volley ----
