@@ -836,18 +836,31 @@ function tunedStrokePose(basePose, importedPose, side, n) {
             ? 0.03
             : 0.015;
   const forehand = side === 'forehand';
-  const perChannel = {
-    hips: phaseMix * 0.22,
-    shoulderR: phaseMix * (forehand ? 0.82 : 0.72),
-    elbowR: phaseMix * (forehand ? 0.52 : 0.60),
-    shoulderL: phaseMix * (forehand ? 0.55 : 0.78),
-    elbowL: phaseMix * (forehand ? 0.32 : 0.42),
-    racket: phaseMix * 0.38,
-    chest: phaseMix * (forehand ? 0.48 : 0.52),
-    wristR: phaseMix * 0.28,
-    kneeBend: phaseMix * 0.18,
-    baseY: 0,
-  };
+  const perChannel = forehand
+    ? {
+        hips: phaseMix * 0.08,
+        shoulderR: phaseMix * 0.22,
+        elbowR: phaseMix * 0.14,
+        shoulderL: phaseMix * 0.10,
+        elbowL: phaseMix * 0.06,
+        racket: phaseMix * 0.24,
+        chest: phaseMix * 0.18,
+        wristR: phaseMix * 0.16,
+        kneeBend: phaseMix * 0.08,
+        baseY: 0,
+      }
+    : {
+        hips: phaseMix * 0.14,
+        shoulderR: phaseMix * 0.34,
+        elbowR: phaseMix * 0.24,
+        shoulderL: phaseMix * 0.58,
+        elbowL: phaseMix * 0.34,
+        racket: phaseMix * 0.28,
+        chest: phaseMix * 0.34,
+        wristR: phaseMix * 0.18,
+        kneeBend: phaseMix * 0.12,
+        baseY: 0,
+      };
   const blendAxis = (a, b, mix) => a.map((value, index) => value * (1 - mix) + b[index] * mix);
   const blended = {
     hips: blendAxis(basePose.hips, importedPose.hips, perChannel.hips),
@@ -863,9 +876,9 @@ function tunedStrokePose(basePose, importedPose, side, n) {
   };
   return clampStrokePose(blended, {
     hips: [-0.45, 0.45],
-    shoulderR: [-1.0, 3.05],
+    shoulderR: [-1.0, 2.85],
     elbowR: [0.05, 2.05],
-    shoulderL: [-1.0, 3.05],
+    shoulderL: [-1.0, 2.85],
     elbowL: [0.02, 1.05],
     racket: [-0.3, 1.1],
     chest: [-0.7, 0.7],
