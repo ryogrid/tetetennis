@@ -6,6 +6,10 @@
   "scripts": {
     "logic:build": "moon build --target js --release",
     "logic:test": "moon test",
+    "mocap:extract": "./.venv-mocap/bin/python scripts/mocap/extract_joint_track.py",
+    "mocap:stroke": "node scripts/mocap/extract-stroke-keyframes.mjs",
+    "mocap:trim": "./.venv-mocap/bin/python scripts/mocap/trim_joint_track.py",
+    "mocap:serve": "node scripts/mocap/extract-serve-keyframes.mjs",
     "predev": "npm run logic:build",
     "dev": "vite",
     "prebuild": "npm run logic:build",

@@ -192,7 +192,7 @@ function fhLeftArm(n) {
 
 function fhFlatPose(n) {
   // Level swing → arm rises through contact, finishes upper-left (left shoulder).
-  return {
+  const pose = {
     hips: [
       kf(n, [0, 0.25, 0.4, 0.5, 0.7, 1], [0.10, 0.15, 0.30, 0.24, 0.18, 0.12]),
       kf(n, [0, 0.25, 0.4, 0.5, 0.7, 1], [-0.3, -1.25, 0.3, 0.5, 0.8, 0.5]), // deeper unit-turn coil
@@ -211,11 +211,12 @@ function fhFlatPose(n) {
     kneeBend: kf(n, [0, 0.25, 0.4, 0.5, 0.7, 1], [0.3, 0.55, 0.35, 0.25, 0.20, 0.22]),
     baseY: 0.83 - kf(n, [0, 0.25, 0.4, 0.5, 0.7, 1], [0.02, 0.09, 0.03, 0.04, 0, 0.01]),
   };
+  return maybeImportedStrokePose(n, pose, 'forehand');
 }
 
 function fhTopspinPose(n) {
   // Steep low→high swing: racket drops below ball, windshield-wiper to upper-left.
-  return {
+  const pose = {
     hips: [
       kf(n, [0, 0.25, 0.4, 0.5, 0.7, 1], [0.10, 0.12, 0.32, 0.22, 0.16, 0.12]),
       kf(n, [0, 0.25, 0.4, 0.5, 0.7, 1], [-0.3, -1.2, 0.25, 0.45, 0.8, 0.5]),
@@ -238,6 +239,7 @@ function fhTopspinPose(n) {
     kneeBend: kf(n, [0, 0.25, 0.4, 0.5, 0.7, 1], [0.3, 0.65, 0.40, 0.25, 0.18, 0.22]),
     baseY: 0.83 - kf(n, [0, 0.25, 0.4, 0.5, 0.7, 1], [0.01, 0.10, 0.05, 0.05, 0, 0.01]),
   };
+  return maybeImportedStrokePose(n, pose, 'forehand');
 }
 
 function fhSlicePose(n) {
@@ -303,7 +305,7 @@ function fhDropPose(n) {
 
 function bhFlatPose(n) {
   // Double-handed: deep left coil, swing forward, finish upper-right (right shoulder).
-  return {
+  const pose = {
     hips: [
       kf(n, [0, 0.25, 0.4, 0.5, 0.7, 1], [0.10, 0.13, 0.28, 0.24, 0.18, 0.12]),
       // deeper coil (right shoulder under chin), then a restrained opening vs the forehand
@@ -327,11 +329,12 @@ function bhFlatPose(n) {
     kneeBend: kf(n, [0, 0.25, 0.4, 0.5, 0.7, 1], [0.3, 0.55, 0.35, 0.25, 0.20, 0.22]),
     baseY: 0.83 - kf(n, [0, 0.25, 0.4, 0.5, 0.7, 1], [0.02, 0.09, 0.03, 0.04, 0, 0.01]),
   };
+  return maybeImportedStrokePose(n, pose, 'backhand');
 }
 
 function bhTopspinPose(n) {
   // Double-handed topspin: steeper low→high, finish upper-right.
-  return {
+  const pose = {
     hips: [
       kf(n, [0, 0.25, 0.4, 0.5, 0.7, 1], [0.10, 0.12, 0.30, 0.22, 0.15, 0.12]),
       // deeper coil, restrained opening through contact
@@ -358,6 +361,7 @@ function bhTopspinPose(n) {
     kneeBend: kf(n, [0, 0.25, 0.4, 0.5, 0.7, 1], [0.3, 0.65, 0.38, 0.25, 0.18, 0.22]),
     baseY: 0.83 - kf(n, [0, 0.25, 0.4, 0.5, 0.7, 1], [0.01, 0.10, 0.04, 0.05, 0, 0.01]),
   };
+  return maybeImportedStrokePose(n, pose, 'backhand');
 }
 
 function bhSlicePose(n) {
@@ -582,17 +586,17 @@ function buildTunedServeTemplate(baseTpl, importedTpl) {
     hips: {
       times,
       values: [
-        blendSeriesByMixes(base.hips.values[0], importedTpl.hips.values[0], [0.02, 0.04, 0.08, 0.08, 0.04, 0.04], -0.38, 0.24),
-        blendSeriesByMixes(base.hips.values[1], importedTpl.hips.values[1], [0.03, 0.06, 0.10, 0.10, 0.06, 0.05], -0.95, 0.35),
+        blendSeriesByMixes(base.hips.values[0], importedTpl.hips.values[0], [0.00, 0.02, 0.04, 0.04, 0.02, 0.02], -0.38, 0.24),
+        blendSeriesByMixes(base.hips.values[1], importedTpl.hips.values[1], [0.02, 0.04, 0.07, 0.07, 0.04, 0.03], -0.95, 0.35),
         [0, 0, 0, 0, 0, 0],
       ],
     },
     shoulderL: {
       times,
       values: [
-        blendSeriesByMixes(base.shoulderL.values[0], importedTpl.shoulderL.values[0], [0.08, 0.10, 0.14, 0.16, 0.08, 0.06], 0.2, 2.85),
-        blendSeriesByMixes(base.shoulderL.values[1], importedTpl.shoulderL.values[1], [0.05, 0.08, 0.12, 0.12, 0.08, 0.06], -0.45, 0.10),
-        blendSeriesByMixes(base.shoulderL.values[2], importedTpl.shoulderL.values[2], [0.03, 0.08, 0.10, 0.12, 0.08, 0.05], -0.18, 0.18),
+        blendSeriesByMixes(base.shoulderL.values[0], importedTpl.shoulderL.values[0], [0.04, 0.08, 0.12, 0.14, 0.04, 0.03], 0.2, 2.85),
+        blendSeriesByMixes(base.shoulderL.values[1], importedTpl.shoulderL.values[1], [0.02, 0.06, 0.10, 0.10, 0.04, 0.03], -0.35, 0.08),
+        blendSeriesByMixes(base.shoulderL.values[2], importedTpl.shoulderL.values[2], [0.00, 0.04, 0.08, 0.08, 0.03, 0.02], -0.15, 0.12),
       ],
     },
     elbowL: {
@@ -606,15 +610,15 @@ function buildTunedServeTemplate(baseTpl, importedTpl) {
     shoulderR: {
       times,
       values: [
-        blendSeriesByMixes(base.shoulderR.values[0], importedTpl.shoulderR.values[0], [0.06, 0.10, 0.14, 0.16, 0.10, 0.08], 0.35, 3.05),
-        blendSeriesByMixes(base.shoulderR.values[1], importedTpl.shoulderR.values[1], [0.04, 0.06, 0.08, 0.10, 0.08, 0.06], -0.12, 0.60),
-        blendSeriesByMixes(base.shoulderR.values[2], importedTpl.shoulderR.values[2], [0.04, 0.06, 0.10, 0.10, 0.08, 0.06], 0.20, 0.98),
+        blendSeriesByMixes(base.shoulderR.values[0], importedTpl.shoulderR.values[0], [0.04, 0.08, 0.12, 0.14, 0.06, 0.04], 0.35, 3.05),
+        blendSeriesByMixes(base.shoulderR.values[1], importedTpl.shoulderR.values[1], [0.02, 0.04, 0.06, 0.08, 0.04, 0.03], -0.10, 0.60),
+        blendSeriesByMixes(base.shoulderR.values[2], importedTpl.shoulderR.values[2], [0.02, 0.04, 0.08, 0.08, 0.04, 0.03], 0.20, 0.98),
       ],
     },
     elbowR: {
       times,
       values: [
-        blendSeriesByMixes(base.elbowR.values[0], importedTpl.elbowR.values[0], [0.04, 0.06, 0.08, 0.10, 0.08, 0.06], 0.05, 1.9),
+        blendSeriesByMixes(base.elbowR.values[0], importedTpl.elbowR.values[0], [0.03, 0.05, 0.06, 0.08, 0.03, 0.02], 0.05, 1.9),
         [0, 0, 0, 0, 0, 0],
         [0, 0, 0, 0, 0, 0],
       ],
@@ -629,13 +633,13 @@ function buildTunedServeTemplate(baseTpl, importedTpl) {
     },
     kneeBend: {
       times,
-      values: blendSeriesByMixes(base.kneeBend.values, importedTpl.kneeBend.values, [0.00, 0.05, 0.08, 0.10, 0.08, 0.06], 0.18, 0.82),
+      values: blendSeriesByMixes(base.kneeBend.values, importedTpl.kneeBend.values, [0.00, 0.03, 0.02, 0.00, 0.04, 0.03], 0.18, 0.82),
     },
     baseY: {
       base: baseTpl.baseY.base,
       scale: baseTpl.baseY.scale,
       times,
-      values: blendSeriesByMixes(base.baseY.values, importedTpl.baseY.values, [0.00, 0.00, 0.00, 0.02, 0.00, 0.00], -0.08, 0.16),
+      values: base.baseY.values,
     },
   };
 }
@@ -680,6 +684,215 @@ function servePose(n) {
   // Phases: sideways routine → toss + trophy (deep knee load) → kick-up + body
   // rotation to the highest contact → pronated follow-through across the left.
   return servePoseFromTemplate(n, getServePoseTemplate());
+}
+
+const IMPORTED_FOREHAND_STROKE_TEMPLATE = {
+  hips: { times: [0, 0.25, 0.4, 0.5, 0.7, 1], values: [
+    [0.800, 0.800, 0.800, 0.800, 0.800, 0.800],
+    [1.500, 1.167, -0.007, 0.113, 0.073, 0.409],
+    [0, 0, 0, 0, 0, 0],
+  ] },
+  shoulderR: { times: [0, 0.25, 0.4, 0.5, 0.7, 1], values: [
+    [2.097, 2.238, 2.022, 2.295, 2.902, 3.047],
+    [-0.861, -0.530, 0.316, 0.309, -0.180, -0.872],
+    [0.843, 0.831, 1.100, 0.822, 0.236, 0.061],
+  ] },
+  elbowR: { times: [0, 0.25, 0.4, 0.5, 0.7, 1], values: [
+    [2.206, 2.512, 1.908, 1.958, 1.701, 0.913],
+    [0, 0, 0, 0, 0, 0],
+    [0, 0, 0, 0, 0, 0],
+  ] },
+  shoulderL: { times: [0, 0.25, 0.4, 0.5, 0.7, 1], values: [
+    [2.325, 2.333, 1.437, 1.700, 2.276, 2.882],
+    [-0.964, -0.359, 0.606, 0.827, 0.850, 1.057],
+    [-0.546, -0.775, 1.408, 1.381, 0.659, -0.130],
+  ] },
+  elbowL: { times: [0, 0.25, 0.4, 0.5, 0.7, 1], values: [
+    [0.512, 0.513, 0.316, 0.374, 0.501, 0.634],
+    [0, 0, 0, 0, 0, 0],
+    [0, 0, 0, 0, 0, 0],
+  ] },
+  racket: { times: [0, 0.25, 0.4, 0.5, 0.7, 1], values: [
+    [0.078, 0.133, 0.224, 0.239, 0.162, 0.008],
+    [0, 0, 0, 0, 0, 0],
+    [0, 0, 0, 0, 0, 0],
+  ] },
+  chest: { times: [0, 0.25, 0.4, 0.5, 0.7, 1], values: [
+    [0, 0, 0, 0, 0, 0],
+    [0.675, 0.525, -0.003, 0.051, 0.033, 0.184],
+    [0, 0, 0, 0, 0, 0],
+  ] },
+  wristR: { times: [0, 0.25, 0.4, 0.5, 0.7, 1], values: [
+    [0.363, 0.379, 0.324, 0.370, 0.493, 0.547],
+    [0, 0, 0, 0, 0, 0],
+    [0, 0, 0, 0, 0, 0],
+  ] },
+  kneeBend: { times: [0, 0.25, 0.4, 0.5, 0.7, 1], values: [0.220, 0.376, 0.670, 0.625, 0.384, 0.265] },
+  baseY: { base: 0.83, scale: 1, times: [0, 0.25, 0.4, 0.5, 0.7, 1], values: [0.000, 0.001, 0.002, 0.002, 0.001, 0.000] },
+};
+
+const IMPORTED_BACKHAND_STROKE_TEMPLATE = {
+  hips: { times: [0, 0.25, 0.4, 0.5, 0.7, 1], values: [
+    [0.800, 0.800, 0.800, 0.472, -0.800, -0.800],
+    [1.500, 1.500, 0.246, 0.175, 0.097, 0.444],
+    [0, 0, 0, 0, 0, 0],
+  ] },
+  shoulderR: { times: [0, 0.25, 0.4, 0.5, 0.7, 1], values: [
+    [2.131, 2.239, 1.729, 1.858, 2.248, 2.707],
+    [-0.584, -0.713, 0.207, 0.202, 0.172, -0.300],
+    [0.926, 0.764, 1.409, 1.278, 0.886, 0.417],
+  ] },
+  elbowR: { times: [0, 0.25, 0.4, 0.5, 0.7, 1], values: [
+    [2.379, 2.251, 1.680, 1.837, 2.124, 2.638],
+    [0, 0, 0, 0, 0, 0],
+    [0, 0, 0, 0, 0, 0],
+  ] },
+  shoulderL: { times: [0, 0.25, 0.4, 0.5, 0.7, 1], values: [
+    [2.303, 2.345, 0.977, 1.205, 2.023, 2.987],
+    [-1.407, -1.301, 0.253, 0.281, 0.299, 1.511],
+    [-0.179, -0.266, 0.961, 1.191, 1.101, -0.009],
+  ] },
+  elbowL: { times: [0, 0.25, 0.4, 0.5, 0.7, 1], values: [
+    [0.507, 0.516, 0.215, 0.265, 0.445, 0.657],
+    [0, 0, 0, 0, 0, 0],
+    [0, 0, 0, 0, 0, 0],
+  ] },
+  racket: { times: [0, 0.25, 0.4, 0.5, 0.7, 1], values: [
+    [0.113, 0.086, 0.267, 0.265, 0.207, 0.225],
+    [0, 0, 0, 0, 0, 0],
+    [0, 0, 0, 0, 0, 0],
+  ] },
+  chest: { times: [0, 0.25, 0.4, 0.5, 0.7, 1], values: [
+    [0, 0, 0, 0, 0, 0],
+    [0.675, 0.675, 0.111, 0.079, 0.044, 0.200],
+    [0, 0, 0, 0, 0, 0],
+  ] },
+  wristR: { times: [0, 0.25, 0.4, 0.5, 0.7, 1], values: [
+    [0.363, 0.388, 0.263, 0.287, 0.367, 0.447],
+    [0, 0, 0, 0, 0, 0],
+    [0, 0, 0, 0, 0, 0],
+  ] },
+  kneeBend: { times: [0, 0.25, 0.4, 0.5, 0.7, 1], values: [0.258, 0.227, 0.668, 0.670, 0.568, 0.220] },
+  baseY: { base: 0.83, scale: 1, times: [0, 0.25, 0.4, 0.5, 0.7, 1], values: [0.000, 0.000, 0.002, 0.002, 0.001, 0.000] },
+};
+
+function strokePoseFromTemplate(n, tpl) {
+  return {
+    hips: sampleVec3Template(n, tpl.hips),
+    shoulderR: sampleVec3Template(n, tpl.shoulderR),
+    elbowR: sampleVec3Template(n, tpl.elbowR),
+    shoulderL: sampleVec3Template(n, tpl.shoulderL),
+    elbowL: sampleVec3Template(n, tpl.elbowL),
+    racket: sampleVec3Template(n, tpl.racket),
+    chest: sampleVec3Template(n, tpl.chest),
+    wristR: sampleVec3Template(n, tpl.wristR),
+    kneeBend: kf(n, tpl.kneeBend.times, tpl.kneeBend.values),
+    baseY: tpl.baseY.base + tpl.baseY.scale * kf(n, tpl.baseY.times, tpl.baseY.values),
+  };
+}
+
+function blendStrokePose(basePose, importedPose, mix) {
+  const blendAxis = (a, b) => a.map((value, index) => value * (1 - mix) + b[index] * mix);
+  return {
+    hips: blendAxis(basePose.hips, importedPose.hips),
+    shoulderR: blendAxis(basePose.shoulderR, importedPose.shoulderR),
+    elbowR: blendAxis(basePose.elbowR, importedPose.elbowR),
+    shoulderL: blendAxis(basePose.shoulderL, importedPose.shoulderL),
+    elbowL: blendAxis(basePose.elbowL, importedPose.elbowL),
+    racket: blendAxis(basePose.racket, importedPose.racket),
+    chest: blendAxis(basePose.chest || [0, 0, 0], importedPose.chest || [0, 0, 0]),
+    wristR: blendAxis(basePose.wristR || [0, 0, 0], importedPose.wristR || [0, 0, 0]),
+    kneeBend: basePose.kneeBend * (1 - mix) + importedPose.kneeBend * mix,
+    baseY: basePose.baseY * (1 - mix) + importedPose.baseY * mix,
+  };
+}
+
+function clampStrokePose(pose, limits) {
+  const clampAxis = (values, [lo, hi]) => values.map((value) => Math.max(lo, Math.min(hi, value)));
+  return {
+    hips: clampAxis(pose.hips, limits.hips),
+    shoulderR: clampAxis(pose.shoulderR, limits.shoulderR),
+    elbowR: clampAxis(pose.elbowR, limits.elbowR),
+    shoulderL: clampAxis(pose.shoulderL, limits.shoulderL),
+    elbowL: clampAxis(pose.elbowL, limits.elbowL),
+    racket: clampAxis(pose.racket, limits.racket),
+    chest: clampAxis(pose.chest || [0, 0, 0], limits.chest),
+    wristR: clampAxis(pose.wristR || [0, 0, 0], limits.wristR),
+    kneeBend: Math.max(limits.kneeBend[0], Math.min(limits.kneeBend[1], pose.kneeBend)),
+    baseY: Math.max(limits.baseY[0], Math.min(limits.baseY[1], pose.baseY)),
+  };
+}
+
+function tunedStrokePose(basePose, importedPose, side, n) {
+  const phaseMix = n < 0.18
+    ? 0.015
+    : n < 0.34
+      ? 0.04
+      : n < 0.46
+        ? 0.075
+        : n < 0.62
+          ? 0.055
+          : n < 0.82
+            ? 0.03
+            : 0.015;
+  const forehand = side === 'forehand';
+  const perChannel = {
+    hips: phaseMix * 0.22,
+    shoulderR: phaseMix * (forehand ? 0.82 : 0.72),
+    elbowR: phaseMix * (forehand ? 0.52 : 0.60),
+    shoulderL: phaseMix * (forehand ? 0.55 : 0.78),
+    elbowL: phaseMix * (forehand ? 0.32 : 0.42),
+    racket: phaseMix * 0.38,
+    chest: phaseMix * (forehand ? 0.48 : 0.52),
+    wristR: phaseMix * 0.28,
+    kneeBend: phaseMix * 0.18,
+    baseY: 0,
+  };
+  const blendAxis = (a, b, mix) => a.map((value, index) => value * (1 - mix) + b[index] * mix);
+  const blended = {
+    hips: blendAxis(basePose.hips, importedPose.hips, perChannel.hips),
+    shoulderR: blendAxis(basePose.shoulderR, importedPose.shoulderR, perChannel.shoulderR),
+    elbowR: blendAxis(basePose.elbowR, importedPose.elbowR, perChannel.elbowR),
+    shoulderL: blendAxis(basePose.shoulderL, importedPose.shoulderL, perChannel.shoulderL),
+    elbowL: blendAxis(basePose.elbowL, importedPose.elbowL, perChannel.elbowL),
+    racket: blendAxis(basePose.racket, importedPose.racket, perChannel.racket),
+    chest: blendAxis(basePose.chest || [0, 0, 0], importedPose.chest || [0, 0, 0], perChannel.chest),
+    wristR: blendAxis(basePose.wristR || [0, 0, 0], importedPose.wristR || [0, 0, 0], perChannel.wristR),
+    kneeBend: basePose.kneeBend * (1 - perChannel.kneeBend) + importedPose.kneeBend * perChannel.kneeBend,
+    baseY: basePose.baseY,
+  };
+  return clampStrokePose(blended, {
+    hips: [-0.45, 0.45],
+    shoulderR: [-1.0, 3.05],
+    elbowR: [0.05, 2.05],
+    shoulderL: [-1.0, 3.05],
+    elbowL: [0.02, 1.05],
+    racket: [-0.3, 1.1],
+    chest: [-0.7, 0.7],
+    wristR: [-0.45, 0.45],
+    kneeBend: [0.18, 0.70],
+    baseY: [0.70, 0.92],
+  });
+}
+
+function getStrokePoseMode(side) {
+  const key = side === 'forehand' ? 'forehandStrokeTemplate' : 'backhandStrokeTemplate';
+  try {
+    return window.localStorage.getItem(key) || `${side}-tuned`;
+  } catch {
+    return `${side}-tuned`;
+  }
+}
+
+function maybeImportedStrokePose(n, basePose, side) {
+  const mode = getStrokePoseMode(side);
+  const imported = side === 'forehand'
+    ? strokePoseFromTemplate(n, IMPORTED_FOREHAND_STROKE_TEMPLATE)
+    : strokePoseFromTemplate(n, IMPORTED_BACKHAND_STROKE_TEMPLATE);
+  if (mode === `${side}-raw`) return imported;
+  if (mode === 'legacy-default') return basePose;
+  if (mode === `${side}-tuned`) return tunedStrokePose(basePose, imported, side, n);
+  return tunedStrokePose(basePose, imported, side, n);
 }
 
 // ---- no-bounce keyframes: smash & volley ----

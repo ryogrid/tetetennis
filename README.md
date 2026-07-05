@@ -195,3 +195,90 @@ backends, then `moon build` + the Vite build.
 
 All graphics are procedural and sound effects are synthesized at runtime with
 the Web Audio API — no asset downloads.
+
+## Offline motion authoring
+
+The player animation system is procedural. If you want to import a real-world
+serve motion, the intended path is to extract and clean the joint track
+offline, then map sampled phases back into `src/entities/player.js` rather than
+shipping clip playback.
+
+An initial scaffold lives under `scripts/mocap/`:
+
+```bash
+npm run mocap:extract -- --input path/to/serve.mp4
+npm run mocap:serve -- --input path/to/cleaned-serve.json
+```
+
+The extractor is Python-based and uses MediaPipe Pose. Install its
+dependencies with `python3 -m pip install -r scripts/mocap/requirements.txt`.
+
+To also emit a paste-ready servePose snippet:
+
+```bash
+npm run mocap:serve -- --input path/to/cleaned-serve.json --emit-js
+```
+
+That script does not run pose estimation itself. It samples a cleaned serve
+track at the same phases the current `servePose` already uses and emits an
+authoring-aid JSON to help replace the hand-authored values.
+
+The intended end-to-end flow is:
+
+```bash
+npm run mocap:extract -- --input path/to/serve.mp4 --output path/to/serve.cleaned.json
+npm run mocap:serve -- --input path/to/serve.cleaned.json --emit-js
+```
+
+The tuned imported serve template is the default now. To force that setting
+again in-game:
+
+```js
+localStorage.setItem('servePoseTemplate', 'rear-serve-01-trimmed')
+location.reload()
+```
+
+To compare the untuned raw extraction:
+
+```js
+localStorage.setItem('servePoseTemplate', 'rear-serve-01-raw')
+location.reload()
+```
+
+Forehand and backhand flat/topspin now default to the tuned imported templates.
+To force that setting again:
+
+```js
+localStorage.setItem('forehandStrokeTemplate', 'forehand-tuned')
+localStorage.setItem('backhandStrokeTemplate', 'backhand-tuned')
+location.reload()
+```
+
+Or switch both to the raw extracted stroke templates:
+
+```js
+localStorage.setItem('forehandStrokeTemplate', 'forehand-raw')
+localStorage.setItem('backhandStrokeTemplate', 'backhand-raw')
+location.reload()
+```
+
+To revert only the stroke motions to the original authored defaults:
+
+```js
+localStorage.setItem('forehandStrokeTemplate', 'legacy-default')
+localStorage.setItem('backhandStrokeTemplate', 'legacy-default')
+location.reload()
+```
+
+And to return to the original hand-authored serve:
+
+```js
+localStorage.setItem('servePoseTemplate', 'legacy-default')
+location.reload()
+```
+
+There is also a committed sample input you can run end-to-end:
+
+```bash
+npm run mocap:serve -- --input scripts/mocap/examples/serve-flat-sample.cleaned.json
+```
