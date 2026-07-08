@@ -39,6 +39,15 @@ for (const fn of ['init', 'fixedUpdate', 'menuCmd', 'setCpuMode', 'getMatchStats
   }
 }
 const hasParams = typeof logic.setParam === 'function'; // arrives in Stage C
+const hasPolicy = typeof logic.setMatchPolicy === 'function'; // per-side balance-study policy
+
+// Balance-study per-side shot policy: force a side to a single stroke type, with
+// Slice on the return of serve, and optionally flip who serves first.
+const SHOT_CODES = { none: 0, flat: 1, topspin: 2, slice: 3 };
+const shotCode = (v) =>
+  v == null ? 0 : typeof v === 'number' ? v | 0 : SHOT_CODES[v] ?? 0;
+const hasPolicyFields = (m) =>
+  m.force_p != null || m.force_c != null || m.return_slice != null || m.first_server != null;
 
 function runMatch(m, params, maxSteps) {
   const state = { done: false };
@@ -57,6 +66,20 @@ function runMatch(m, params, maxSteps) {
     process.exit(1);
   }
   logic.setCpuMode(1);
+  if (hasPolicy) {
+    // Set every match (defaults = off) so no policy leaks between matches in a
+    // reused worker process. Must precede the final menuCmd('go') that starts
+    // the match, since start_match snapshots the policy onto the two AIs.
+    logic.setMatchPolicy(
+      shotCode(m.force_p),
+      shotCode(m.force_c),
+      m.return_slice ? 1 : 0,
+      m.first_server === 'c' ? 1 : 0,
+    );
+  } else if (hasPolicyFields(m)) {
+    console.error('bundle has no setMatchPolicy export but job requests a shot policy; run: npm run logic:build');
+    process.exit(1);
+  }
   logic.menuCmd('play', 0, 0);
   logic.menuCmd('set', MATCH_ROWS.mode, 0); // MATCH (never rely on the default)
   logic.menuCmd('set', MATCH_ROWS.surface, SURFACES[m.surface]);
@@ -88,6 +111,11 @@ function validateMatch(m, i) {
   if (!(String(m.games) in GAMES)) fail('games must be 2, 4 or 6');
   if (!Number.isInteger(m.you) || m.you < 0 || m.you > 4) fail('you must be 0..4');
   if (!Number.isInteger(m.opp) || m.opp < 0 || m.opp > 4) fail('opp must be 0..4');
+  const okShot = (v) => v == null || v in SHOT_CODES || (Number.isInteger(v) && v >= 0 && v <= 3);
+  if (!okShot(m.force_p)) fail(`force_p must be one of ${Object.keys(SHOT_CODES)} or 0..3`);
+  if (!okShot(m.force_c)) fail(`force_c must be one of ${Object.keys(SHOT_CODES)} or 0..3`);
+  if (m.first_server != null && m.first_server !== 'p' && m.first_server !== 'c')
+    fail("first_server must be 'p' or 'c'");
 }
 
 // Doc-03 invariants; violations warn (never fatal mid-study).

@@ -62,6 +62,23 @@ def load_config(path: Path) -> dict:
     has_mirror = any(m.get("you") == m.get("opp") for m in matchups)
     errors += validate_fitness(cfg.get("fitness", []), has_mirror)
 
+    shot_policy = {"none", "flat", "topspin", "slice"}
+    for i, mu in enumerate(matchups):
+        force = mu.get("force")
+        if force is None:
+            continue
+        if not isinstance(force, dict):
+            errors.append(f"run.matchups[{i}].force must be an object")
+            continue
+        for side in ("a", "b"):
+            v = force.get(side)
+            if v is not None and v not in shot_policy:
+                errors.append(
+                    f"run.matchups[{i}].force.{side}: must be one of {sorted(shot_policy)}"
+                )
+        if force.get("return") not in (None, "slice", "none"):
+            errors.append(f"run.matchups[{i}].force.return: must be 'slice' or 'none'")
+
     val = cfg.get("validation", {})
     if val:
         run_seeds = set(
@@ -159,18 +176,32 @@ def evaluate(
     matchups = run["matchups"]
     matches = []
     for mi, mu in enumerate(matchups):
-        for seed in seeds:
-            matches.append(
-                {
-                    "seed": seed,
-                    "you": mu["you"],
-                    "opp": mu["opp"],
-                    "surface": mu["surface"],
-                    "difficulty": mu["difficulty"],
-                    "games": run.get("games", 4),
-                    "_matchup": mi,
-                }
-            )
+        # Optional per-side shot policy for balance studies. "a" -> side P (you),
+        # "b" -> side C (opp); "return":"slice" plays Slice on the return of
+        # serve; "alternate_server" flips first server by seed parity so the
+        # win-rate reflects shot merit, not serve order.
+        force = mu.get("force") or {}
+        ret_slice = 1 if force.get("return") == "slice" else 0
+        alternate = bool(force.get("alternate_server"))
+        for si, seed in enumerate(seeds):
+            m = {
+                "seed": seed,
+                "you": mu["you"],
+                "opp": mu["opp"],
+                "surface": mu["surface"],
+                "difficulty": mu["difficulty"],
+                "games": run.get("games", 4),
+                "_matchup": mi,
+            }
+            if force:
+                if force.get("a") is not None:
+                    m["force_p"] = force["a"]
+                if force.get("b") is not None:
+                    m["force_c"] = force["b"]
+                m["return_slice"] = ret_slice
+                if alternate:
+                    m["first_server"] = "p" if si % 2 == 0 else "c"
+            matches.append(m)
     results = run_jobs(
         engine_params,
         [{k: v for k, v in m.items() if k != "_matchup"} for m in matches],

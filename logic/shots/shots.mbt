@@ -18,9 +18,14 @@ pub(all) enum ShotType {
 ///|
 pub fn shot_def(t : ShotType) -> (Double, Double, Double) {
   match t {
-    Flat => (1.00, 0.0, 16.0)
-    Topspin => (0.85, 10.0, 32.0)
-    Slice => (0.76, 1.0, 16.0)
+    Flat => (@tuning.t.flat_speed_mul, 0.0, @tuning.t.flat_theta_max)
+    Topspin =>
+      (
+        @tuning.t.topspin_speed_mul,
+        @tuning.t.topspin_theta_min,
+        @tuning.t.topspin_theta_max,
+      )
+    Slice => (@tuning.t.slice_speed_mul, 1.0, 16.0)
     Lob => (1.00, 28.0, 55.0)
     Drop => (0.50, 26.0, 32.0)
   }

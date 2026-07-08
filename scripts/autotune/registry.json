@@ -362,6 +362,70 @@
       "file": "logic/tuning/tuning.mbt",
       "symbol": "tactical_shot_type trigger scale",
       "kind": "scale"
+    },
+    "flat_speed_mul": {
+      "default": 1.00,
+      "min": 0.85,
+      "max": 1.10,
+      "file": "logic/tuning/tuning.mbt",
+      "symbol": "shot_def Flat speed_mul",
+      "kind": "absolute"
+    },
+    "topspin_speed_mul": {
+      "default": 0.85,
+      "min": 0.65,
+      "max": 1.05,
+      "file": "logic/tuning/tuning.mbt",
+      "symbol": "shot_def Topspin speed_mul",
+      "kind": "absolute"
+    },
+    "slice_speed_mul": {
+      "default": 0.76,
+      "min": 0.60,
+      "max": 0.95,
+      "file": "logic/tuning/tuning.mbt",
+      "symbol": "shot_def Slice speed_mul",
+      "kind": "absolute"
+    },
+    "flat_theta_max": {
+      "default": 16.0,
+      "min": 10.0,
+      "max": 24.0,
+      "file": "logic/tuning/tuning.mbt",
+      "symbol": "shot_def Flat launch-angle ceiling (deg)",
+      "kind": "absolute"
+    },
+    "topspin_theta_min": {
+      "default": 10.0,
+      "min": 4.0,
+      "max": 18.0,
+      "file": "logic/tuning/tuning.mbt",
+      "symbol": "shot_def Topspin launch-angle floor (deg)",
+      "kind": "absolute"
+    },
+    "topspin_theta_max": {
+      "default": 32.0,
+      "min": 22.0,
+      "max": 44.0,
+      "file": "logic/tuning/tuning.mbt",
+      "symbol": "shot_def Topspin launch-angle ceiling (deg)",
+      "kind": "absolute"
+    },
+    "net_margin_drive": {
+      "default": 0.05,
+      "min": 0.02,
+      "max": 0.20,
+      "file": "logic/tuning/tuning.mbt",
+      "symbol": "solve_shot net clearance, drive (flat)",
+      "kind": "absolute"
+    },
+    "net_margin_control": {
+      "default": 0.25,
+      "min": 0.10,
+      "max": 0.45,
+      "file": "logic/tuning/tuning.mbt",
+      "symbol": "solve_shot net clearance, control (spin shots)",
+      "kind": "absolute"
     }
   },
   "virtual_params": {
