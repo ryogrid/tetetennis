@@ -272,6 +272,56 @@ pub fn predict_hit_point(
   None
 }
 
+// The DESCENDING contact point: after the first bounce on `side_z_sign`'s side
+// the ball rises past waist height, then falls back through it on its way to the
+// second bounce. Returns that falling waist crossing (only when the arc actually
+// reached waist height, i.e. there is a genuine second contact opportunity).
+///|
+pub fn predict_hit_point_fall(
+  b : Ball,
+  surface : Surface,
+  side_z_sign : Double,
+  max_t~ : Double = 6.0,
+) -> Landing? {
+  let sim = copy_ball(b)
+  let ev : Array[Event] = []
+  let mut bounces_on_side = 0
+  let mut reached_waist = false
+  for t = 0.0; t < max_t; t = t + predict_dt {
+    ev.clear()
+    step_ball(sim, predict_dt, surface, ev)
+    for e in ev {
+      match e {
+        Bounce(_, _, ez, _) =>
+          if @vec.dsign(ez) == side_z_sign {
+            bounces_on_side = bounces_on_side + 1
+          }
+        Net(_) => ()
+      }
+    }
+    if bounces_on_side >= 2 {
+      break // only between the first and second bounce
+    }
+    if bounces_on_side >= 1 && @vec.dsign(sim.pz) == side_z_sign {
+      if sim.py >= ideal_contact_h {
+        reached_waist = true
+      }
+      if reached_waist && sim.vy < 0.0 && sim.py <= ideal_contact_h {
+        return Some({
+          x: sim.px,
+          y: sim.py,
+          z: sim.pz,
+          t,
+          vx: sim.vx,
+          vy: sim.vy,
+          vz: sim.vz,
+        })
+      }
+    }
+  }
+  None
+}
+
 // Candidate contact points between the first and second bounce on that side.
 ///|
 pub fn sample_hit_points(
