@@ -25,9 +25,9 @@
 
   "fitness": [
     { "metric": "side_a_win_pct",  "target": 60, "robust": true, "z": 1.0, "weight": 1.0, "scale": 6.0 },
-    { "metric": "avg_rally_shots", "min": 3,   "max": 9,    "weight": 0.3, "scale": 2.0 },
+    { "metric": "avg_rally_shots", "min": 3,   "max": 11,   "weight": 0.3, "scale": 2.0 },
     { "metric": "winner_pct",      "min": 15,  "max": 45,   "weight": 0.2, "scale": 8.0 },
-    { "metric": "unforced_pct",    "min": 25,  "max": 60,   "weight": 0.2, "scale": 8.0 },
+    { "metric": "unforced_pct",    "min": 25,  "max": 68,   "weight": 0.2, "scale": 8.0 },
     { "metric": "match_duration_s","min": 240, "max": 1200, "weight": 0.2, "scale": 120 }
   ],
 
