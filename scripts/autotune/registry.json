@@ -3,7 +3,7 @@
   "params": {
     "aero_cd": {
       "default": 0.45310567212718433,
-      "min": 0.4,
+      "min": 0.3,
       "max": 0.7,
       "file": "logic/tuning/tuning.mbt",
       "symbol": "aero_cd (used in ball.mbt/solver.mbt drag)",
