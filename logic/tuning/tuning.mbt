@@ -1,8 +1,9 @@
 // Runtime-tunable parameter registry for the autotune pipeline
 // (autotune_design/02-parameter-registry.md). Leaf package: physics/shots/ai
-// read it; it imports nothing. Defaults equal the historical source literals
-// (scales are exactly 1.0), so behavior with no set_param calls is
-// bit-identical to the pre-registry build.
+// read it; it imports nothing. Ten fields carry autotuned values (marked
+// `// autotuned (was X)` below) from the 200-trial study, trial 29; every
+// other default equals the original source literal. See
+// autotune_design/06-apply-back-and-verification.md.
 //
 // cpu_p flags that side P is AI-driven (CPU-vs-CPU mode); it is set by
 // setCpuMode, never by set_param, and reset_params does not touch it.
@@ -79,24 +80,24 @@ fn defaults() -> Tuning {
     topspin_rpm_slope: 2600.0,
     slice_rpm_base: 1500.0,
     slice_rpm_slope: 1800.0,
-    err_mul_hi: 1.6,
-    err_mul_slope: 1.2,
-    run_speed_scale: 1.0,
+    err_mul_hi: 2.1918957106234385, // autotuned (was 1.6)
+    err_mul_slope: 1.1997643420980673, // autotuned (was 1.2)
+    run_speed_scale: 0.9544280645989575, // autotuned (was 1.0)
     run_accel_scale: 1.0,
     reach_scale: 1.0,
-    stroke_err_x: 0.30,
-    stroke_err_z: 0.55,
+    stroke_err_x: 0.584114629431531, // autotuned (was 0.30)
+    stroke_err_z: 1.181082565719928, // autotuned (was 0.55)
     stroke_err_spin: 0.06,
     stroke_err_speed: 0.03,
-    err_quality_gain: 2.2,
+    err_quality_gain: 3.4954172043571705, // autotuned (was 2.2)
     mishit_q_max: 0.3,
-    mishit_prob: 0.35,
+    mishit_prob: 0.26072720125734405, // autotuned (was 0.35)
     q_speed_floor: 0.65,
     jam_threshold: 26.0,
     jam_scale: 14.0,
     aim_x_scale: 2.8,
     rally_depth_min: 4.5,
-    rally_depth_max: 11.2,
+    rally_depth_max: 11.046198030546185, // autotuned (was 11.2)
     serve_err_x: 0.30,
     serve_err_z: 0.35,
     serve_err_speed: 0.025,
@@ -106,9 +107,9 @@ fn defaults() -> Tuning {
     serve_stat_slope: 0.36,
     serve_sweet_lo: 0.70,
     serve_sweet_hi: 0.88,
-    ai_pos_err_scale: 1.0,
+    ai_pos_err_scale: 1.1599322463928479, // autotuned (was 1.0)
     ai_jitter_scale: 1.0,
-    ai_react_scale: 1.0,
+    ai_react_scale: 1.5176944481154784, // autotuned (was 1.0)
     ai_choice_noise_scale: 1.0,
     ai_tactical_scale: 1.0,
     cpu_p: false,
