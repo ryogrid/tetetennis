@@ -1,5 +1,9 @@
 node_modules/
 dist/
+# autotune pipeline (scripts/autotune)
+.venv-autotune/
+autotune_out/
+scripts/autotune/__pycache__/
 scripts/shots/
 old/scripts/shots/
 # MoonBit build output

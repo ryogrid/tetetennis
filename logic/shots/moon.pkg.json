@@ -5,6 +5,7 @@
     "tetetetennis/logic/rng",
     "tetetetennis/logic/rules",
     "tetetetennis/logic/assist",
+    "tetetetennis/logic/tuning",
     "moonbitlang/core/math"
   ]
 }

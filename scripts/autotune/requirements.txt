@@ -1,0 +1,2 @@
+optuna>=3.4
+numpy

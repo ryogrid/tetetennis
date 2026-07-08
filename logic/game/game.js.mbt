@@ -248,6 +248,13 @@ struct MatchState {
   mut was_in_reach : Bool
   practice : Practice? // None = scored match; Some = practice feed session
   events : Array[@physics.Event]
+  // CPU-vs-CPU autotune mode (autotune.js.mbt); ai_p is Some only then
+  ai_p : @ai.Ai?
+  mut p_serve_plan : @ai.ServePlan?
+  p_view_ball : @physics.Ball // scratch mirrored view for the P-side AI
+  point_log : Array[PointRecord]
+  mut last_end_kind : Int // 0 winner, 1 unforced, 2 double fault, 3 other
+  mut point_start_t : Double // ms.time at the point's first serve attempt; <0 = unset
 }
 
 ///|
@@ -270,6 +277,8 @@ struct Game {
   mut paused : Bool
   mut time_scale : Double
   mut ms : MatchState?
+  mut cpu_vs_cpu : Bool // autotune: side P is AI-driven (autotune.js.mbt)
+  mut last_report : String // JSON report of the last completed match
 }
 
 // Number of shot-type choices on the practice shot screen (5 strokes / 3 serves).
@@ -644,7 +653,17 @@ fn start_match(self : Game) -> Unit {
   let char_p = @shots.characters[self.sel_player]
   let char_c = @shots.characters[self.sel_opp]
   let ai = @ai.create_ai(char_c, @ai.difficulties[self.sel_difficulty].id)
-  let human = create_player(@rules.P, char_p, 1.0)
+  // autotune CPU-vs-CPU: side P gets its own AI and the AI speed multiplier
+  let ai_p : @ai.Ai? = if self.cpu_vs_cpu && !self.is_practice {
+    @assist.set_assist_level(Off)
+    Some(@ai.create_ai(char_p, @ai.difficulties[self.sel_difficulty].id))
+  } else {
+    None
+  }
+  let human = match ai_p {
+    Some(a) => create_player(@rules.P, char_p, a.diff.speed_mul)
+    None => create_player(@rules.P, char_p, 1.0)
+  }
   let cpu = create_player(@rules.C, char_c, ai.diff.speed_mul)
   let practice : Practice? = if self.is_practice {
     Some({ feed: self.prac_feed, shot: self.prac_shot, depth: self.prac_depth })
@@ -687,6 +706,12 @@ fn start_match(self : Game) -> Unit {
     was_in_reach: false,
     practice,
     events: [],
+    ai_p,
+    p_serve_plan: None,
+    p_view_ball: @physics.make_ball(),
+    point_log: [],
+    last_end_kind: 3,
+    point_start_t: -1.0,
   }
   self.ms = Some(ms)
   self.state = Match
@@ -788,7 +813,14 @@ fn position_for_serve(self : Game, ms : MatchState) -> Unit {
   let box_cx = (box.x_min + box.x_max) / 2.0
   // the CPU receiver reads the serve angle (sharper at higher difficulty); the
   // human receiver uses the neutral bisector and then moves themselves
-  let shift = if rc == @rules.C { @ai.return_shift_factor(ms.ai) } else { 1.4 }
+  let shift = if rc == @rules.C {
+    @ai.return_shift_factor(ms.ai)
+  } else {
+    match ms.ai_p {
+      Some(a) => @ai.return_shift_factor(a) // CPU-vs-CPU: symmetric read
+      None => 1.4
+    }
+  }
   ent(ms, rc).place(box_cx * shift, -sv_sign * (@physics.court_half_len + 0.7))
   // practice stroke feed isn't a serve: the receiver waits at centre baseline
   match ms.practice {
@@ -811,6 +843,7 @@ fn position_for_serve(self : Game, ms : MatchState) -> Unit {
   ms.point_state = PreServe
   ms.state_timer = 0.0
   ms.cpu_serve_plan = None
+  ms.p_serve_plan = None
   ent(ms, sv).end_serve_anim()
   @ffi.host_serve_anim(self.host, side_int(sv), false)
   // tell the presentation layer how tense the upcoming point is
@@ -821,6 +854,9 @@ fn position_for_serve(self : Game, ms : MatchState) -> Unit {
 
 ///|
 fn start_toss(self : Game, ms : MatchState) -> Unit {
+  if ms.point_start_t < 0.0 {
+    ms.point_start_t = ms.time // first serve attempt (lets/2nd serves keep it)
+  }
   let sv = server(ms)
   let e = ent(ms, sv)
   let sv_sign = match sv {
@@ -1098,6 +1134,7 @@ fn fault(self : Game, ms : MatchState) -> Unit {
       @rules.C => ms.stats.c_double_faults = ms.stats.c_double_faults + 1
     }
     self.record_error(ms, server(ms))
+    ms.last_end_kind = 2 // refine: unforced error of the double-fault kind
     self.point_end(ms, receiver(ms), "")
   }
 }
@@ -1107,6 +1144,7 @@ fn fault(self : Game, ms : MatchState) -> Unit {
 ///|
 fn record_winner(self : Game, ms : MatchState, side : @rules.Side) -> Unit {
   @ffi.host_sfx_crowd_react(self.host, "cheer", 0.7)
+  ms.last_end_kind = 0
   match side {
     @rules.P => ms.stats.p_winners = ms.stats.p_winners + 1
     @rules.C => ms.stats.c_winners = ms.stats.c_winners + 1
@@ -1116,6 +1154,7 @@ fn record_winner(self : Game, ms : MatchState, side : @rules.Side) -> Unit {
 ///|
 fn record_error(self : Game, ms : MatchState, side : @rules.Side) -> Unit {
   @ffi.host_sfx_crowd_react(self.host, "groan", 0.55)
+  ms.last_end_kind = 1
   match side {
     @rules.P => ms.stats.p_unforced = ms.stats.p_unforced + 1
     @rules.C => ms.stats.c_unforced = ms.stats.c_unforced + 1
@@ -1166,6 +1205,17 @@ fn point_end(self : Game, ms : MatchState, winner : @rules.Side, call_text : Str
   st.p_came_net = false
   st.c_came_net = false
   let pre_server = ms.m.server
+  // per-point log for the autotune match report (autotune.js.mbt)
+  ms.point_log.push({
+    server: side_int(pre_server),
+    serve_number: ms.serve_number,
+    winner: side_int(winner),
+    rally_shots: rally_len,
+    end_kind: ms.last_end_kind,
+    duration: if ms.point_start_t >= 0.0 { ms.time - ms.point_start_t } else { 0.0 },
+  })
+  ms.last_end_kind = 3
+  ms.point_start_t = -1.0
   let ev = @rules.add_point(ms.m, winner)
   // notable-point signal for replays / highlight ranking / tension audio
   let is_game = ev == @rules.Game || ev == @rules.SetWon
@@ -1423,6 +1473,9 @@ fn should_safety_hit(self : Game, ms : MatchState) -> Bool {
 ///|
 pub fn handle_input() -> Unit {
   let self = g()
+  if self.cpu_vs_cpu {
+    return // CPU-vs-CPU: menus are driven via menu_cmd; no host input exists
+  }
   let h = self.host
   match self.state {
     MenuTitle =>
@@ -1560,42 +1613,72 @@ pub fn fixed_update(dt : Double) -> Unit {
     ms.serve_meter = serve_meter_value(ms.serve_meter_t)
   }
 
-  // human movement (+ optional positioning magnetism)
-  let mut hx = @ffi.host_move_x(self.host)
-  let mut hz = @ffi.host_move_z(self.host)
-  // While charging, d-pad controls aim only — no movement
-  if ms.human.charging {
-    hx = 0.0
-    hz = 0.0
-  }
-  if (ms.point_state == PreServe || ms.point_state == Serving) && server(ms) == @rules.P {
-    hz = 0.0 // slide along the baseline only
-  }
-  if @assist.assist_full() &&
-    ms.point_state == Rally &&
-    ms.last_hit_by == Some(@rules.C) &&
-    ms.has_sweet {
-    let dx = ms.sweet_x - ms.human.pos_x
-    let dz = ms.sweet_z - ms.human.pos_z
-    let dist = @vec.hypot2(dx, dz)
-    let input_mag = @vec.hypot2(hx, hz)
-    if dist < magnet_radius && dist > 0.05 && input_mag < magnet_input_cut {
-      let pull = magnet_strength * (1.0 - input_mag / magnet_input_cut)
-      hx = hx + dx / dist * pull
-      hz = hz + dz / dist * pull
-      let mag = @vec.hypot2(hx, hz)
-      if mag > 1.0 {
-        hx = hx / mag
-        hz = hz / mag
+  if self.cpu_vs_cpu && !is_practice_ms(ms) {
+    // P-side AI drive (mirror of the C block below; see autotune.js.mbt)
+    if ms.point_state == Rally && ms.rally_phase != Over {
+      let mv = @ai.update_ai(p_ai(ms), p_ai_ctx(ms), self.rng)
+      if mv.swing {
+        let fh = b.px - ms.human.pos_x >= 0.0 // P faces -z
+        if ms.human.start_swing(mv.swing_type, fh) {
+          ms.human.pending_type = mv.swing_type
+          ms.human.pending_aim_x = -mv.swing_aim_x // un-mirror
+          ms.human.pending_aim_depth = mv.swing_aim_depth
+          let motion = @shots.swing_motion(
+            ms.bounces, b.py, b.pz, mv.swing_type, volley_forecourt,
+          )
+          @ffi.host_start_swing(self.host, 0, shot_type_str(mv.swing_type), fh, motion)
+        }
+      }
+      ms.human.update(dt, -mv.x, -mv.z) // un-mirror movement
+    } else {
+      ms.human.update(dt, 0.0, 0.0)
+    }
+    if (ms.point_state == PreServe || ms.point_state == Serving) &&
+      server(ms) == @rules.P {
+      // pin the AI server's stance like the C branch below pins C's
+      ms.human.pos_x = @shots.serve_stance_x(@rules.P, ms.court_side)
+      ms.human.pos_z = @physics.court_half_len + 0.4
+    }
+  } else {
+    // human movement (+ optional positioning magnetism)
+    let mut hx = @ffi.host_move_x(self.host)
+    let mut hz = @ffi.host_move_z(self.host)
+    // While charging, d-pad controls aim only — no movement
+    if ms.human.charging {
+      hx = 0.0
+      hz = 0.0
+    }
+    if (ms.point_state == PreServe || ms.point_state == Serving) && server(ms) == @rules.P {
+      hz = 0.0 // slide along the baseline only
+    }
+    if @assist.assist_full() &&
+      ms.point_state == Rally &&
+      ms.last_hit_by == Some(@rules.C) &&
+      ms.has_sweet {
+      let dx = ms.sweet_x - ms.human.pos_x
+      let dz = ms.sweet_z - ms.human.pos_z
+      let dist = @vec.hypot2(dx, dz)
+      let input_mag = @vec.hypot2(hx, hz)
+      if dist < magnet_radius && dist > 0.05 && input_mag < magnet_input_cut {
+        let pull = magnet_strength * (1.0 - input_mag / magnet_input_cut)
+        hx = hx + dx / dist * pull
+        hz = hz + dz / dist * pull
+        let mag = @vec.hypot2(hx, hz)
+        if mag > 1.0 {
+          hx = hx / mag
+          hz = hz / mag
+        }
       }
     }
+    ms.human.update(dt, hx, hz)
   }
-  ms.human.update(dt, hx, hz)
   ms.stats.p_run = ms.stats.p_run +
     @vec.hypot2(ms.human.vel_x, ms.human.vel_z) * dt
   ms.stats.c_run = ms.stats.c_run +
     @vec.hypot2(ms.cpu.vel_x, ms.cpu.vel_z) * dt
-  if (ms.point_state == PreServe || ms.point_state == Serving) && server(ms) == @rules.P {
+  if !self.cpu_vs_cpu &&
+    (ms.point_state == PreServe || ms.point_state == Serving) &&
+    server(ms) == @rules.P {
     let sx = @shots.serve_stance_x(@rules.P, ms.court_side)
     if sx > 0.0 {
       ms.human.pos_x = @vec.clampd(ms.human.pos_x, 0.2, 3.9)
@@ -1652,7 +1735,9 @@ pub fn fixed_update(dt : Double) -> Unit {
 
   // human charge / release (hold to charge, release to swing); Full assist
   // auto-charges + auto-releases at the sweet spot below.
-  self.update_human_charge(ms, dt)
+  if !self.cpu_vs_cpu {
+    self.update_human_charge(ms, dt)
+  }
 
   // auto-swing assist (full assist only): auto-release at the sweet spot
   if @assist.assist_full() &&
@@ -1687,7 +1772,17 @@ pub fn fixed_update(dt : Double) -> Unit {
 
   // swing contacts: human gets a forgiving timing window; CPU is exact.
   let ph = ms.human
-  if ph.swinging && !ph.contact_done && ph.swing_t >= swing_contact_t - swing_window {
+  if self.cpu_vs_cpu {
+    // CPU-vs-CPU: side P contacts exactly, mirroring the C block below
+    if ph.swinging && !ph.contact_done && ph.swing_t >= swing_contact_t {
+      ph.contact_done = true
+      self.attempt_contact(
+        ms, @rules.P, ph.pending_type, ph.pending_aim_x, ph.pending_aim_depth,
+        power_mul=1.0,
+      )
+      |> ignore
+    }
+  } else if ph.swinging && !ph.contact_done && ph.swing_t >= swing_contact_t - swing_window {
     let aim_x = @ffi.host_move_x(self.host)
     let aim_depth = -@ffi.host_move_z(self.host)
     // Charge adds a bonus on top of the full no-charge baseline.
@@ -1738,6 +1833,14 @@ pub fn fixed_update(dt : Double) -> Unit {
               @ai.choose_serve(ms.ai, ms.serve_number == 2, self.rng),
             )
             self.start_toss(ms)
+          } else if self.cpu_vs_cpu &&
+            server(ms) == @rules.P &&
+            ms.state_timer > 1.0 {
+            // CPU-vs-CPU: the P-side AI serves with the same plan machinery
+            ms.p_serve_plan = Some(
+              @ai.choose_serve(p_ai(ms), ms.serve_number == 2, self.rng),
+            )
+            self.start_toss(ms)
           }
       }
     }
@@ -1750,6 +1853,15 @@ pub fn fixed_update(dt : Double) -> Unit {
         Some(plan) =>
           if sv == @rules.C && b.vy < 0.0 && b.py <= contact_h {
             ms.cpu_serve_plan = None
+            self.execute_serve(ms, plan.type_, plan.power, plan.preset, 0.0, 0.0)
+            return
+          }
+        None => ()
+      }
+      match ms.p_serve_plan {
+        Some(plan) =>
+          if sv == @rules.P && b.vy < 0.0 && b.py <= contact_h {
+            ms.p_serve_plan = None
             self.execute_serve(ms, plan.type_, plan.power, plan.preset, 0.0, 0.0)
             return
           }
@@ -1867,6 +1979,10 @@ fn point_over_step(self : Game, ms : MatchState, dt : Double) -> Unit {
         }
         let diff_name = @ai.difficulties[self.sel_difficulty].name
         let stats_str = stats_string(ms)
+        if self.cpu_vs_cpu {
+          // snapshot before teardown_match destroys the MatchState
+          self.last_report = build_report(ms, Some(w))
+        }
         self.teardown_match()
         @ffi.host_show_results(
           self.host, win_name, lose_name, g_str, w == @rules.P, diff_name, stats_str,
@@ -2137,8 +2253,11 @@ pub fn game_init(host : @ffi.Host, seed : Int) -> Unit {
     paused: false,
     time_scale: 1.0,
     ms: None,
+    cpu_vs_cpu: false,
+    last_report: "",
   }
   the_game.val = Some(self)
+  @tuning.set_cpu_p(false) // init resets CPU mode; setCpuMode re-enables it
   // restore assist preference (persisted by the JS layer)
   match @ffi.host_load_assist(host) {
     "off" => @assist.set_assist_level(Off)

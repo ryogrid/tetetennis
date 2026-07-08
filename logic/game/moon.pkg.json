@@ -7,6 +7,7 @@
     "tetetetennis/logic/shots",
     "tetetetennis/logic/ai",
     "tetetetennis/logic/assist",
+    "tetetetennis/logic/tuning",
     "tetetetennis/logic/ffi",
     "moonbitlang/core/math"
   ],
@@ -19,7 +20,12 @@
         "fixed_update:fixedUpdate",
         "frame_update:frameUpdate",
         "get_time_scale:getTimeScale",
-        "menu_cmd:menuCmd"
+        "menu_cmd:menuCmd",
+        "set_cpu_mode:setCpuMode",
+        "get_match_stats:getMatchStats",
+        "set_param:setParam",
+        "get_param:getParam",
+        "reset_params:resetParams"
       ]
     }
   }

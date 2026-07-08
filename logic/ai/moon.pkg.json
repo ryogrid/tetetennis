@@ -1,5 +1,6 @@
 {
   "import": [
+    "tetetetennis/logic/tuning",
     "tetetetennis/logic/vec",
     "tetetetennis/logic/physics",
     "tetetetennis/logic/rng",

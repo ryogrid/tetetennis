@@ -153,14 +153,17 @@ pub fn compute_serve(
   let mut target_x = tx
   let mut target_z = z_deep
   // Power meter: speed grows with p; accuracy peaks in the sweet band
-  // [0.70, 0.88], scales down below it, and collapses in the overpower zone.
+  // [sweet_lo, sweet_hi] (defaults [0.70, 0.88]), scales down
+  // below it, and collapses in the overpower zone.
+  let sweet_lo = @tuning.t.serve_sweet_lo
+  let sweet_hi = @tuning.t.serve_sweet_hi
   let p = @vec.clampd(power, 0.0, 1.0)
-  let acc = if p <= 0.70 {
-    0.5 + 0.5 * p / 0.70
-  } else if p <= 0.88 {
+  let acc = if p <= sweet_lo {
+    0.5 + 0.5 * p / sweet_lo
+  } else if p <= sweet_hi {
     1.0
   } else {
-    @vec.dmax(0.35, 1.0 - (p - 0.88) / 0.12 * 0.6)
+    @vec.dmax(0.35, 1.0 - (p - sweet_hi) / (1.0 - sweet_hi) * 0.6)
   }
   let mut speed = @physics.serve_power_speed(stats.srv, p) * def_speed_mul
 
@@ -186,10 +189,11 @@ pub fn compute_serve(
   }
 
   // error model (same shape as strokes); accuracy from the power band
-  let err_mul = @physics.err_mul_base(stats.ctl) * (1.0 + 2.2 * (1.0 - acc))
-  target_x = target_x + rng.draw() * 0.30 * err_mul
-  target_z = target_z + box.z_sign * rng.draw() * 0.35 * err_mul
-  speed = speed * (1.0 + rng.draw() * 0.025 * err_mul)
+  let err_mul = @physics.err_mul_base(stats.ctl) *
+    (1.0 + @tuning.t.err_quality_gain * (1.0 - acc))
+  target_x = target_x + rng.draw() * @tuning.t.serve_err_x * err_mul
+  target_z = target_z + box.z_sign * rng.draw() * @tuning.t.serve_err_z * err_mul
+  speed = speed * (1.0 + rng.draw() * @tuning.t.serve_err_speed * err_mul)
   let w_total = @vec.dabs(spin_rpm) * @physics.rpm_to_rads
   let lateral = spin_rpm * @physics.rpm_to_rads * (1.0 - y_spin_frac)
   let y_spin = w_total * y_spin_frac * y_spin_sign
