@@ -162,6 +162,10 @@ struct MatchStats {
   mut points_played : Int
   mut total_rally_shots : Int
   mut rally_shots : Int // shots in the current point
+  // rally groundstroke first bounces (in-bounds; serves excluded) and how many
+  // landed behind the service line (|z| >= court_service_line)
+  mut total_first_bounces : Int
+  mut deep_first_bounces : Int
   mut p_first_serves : Int
   mut p_first_in : Int
   mut c_first_serves : Int
@@ -188,6 +192,8 @@ fn new_match_stats() -> MatchStats {
     points_played: 0,
     total_rally_shots: 0,
     rally_shots: 0,
+    total_first_bounces: 0,
+    deep_first_bounces: 0,
     p_first_serves: 0,
     p_first_in: 0,
     c_first_serves: 0,
@@ -1370,6 +1376,11 @@ fn process_bounce(self : Game, ms : MatchState, px : Double, pz : Double, speed 
     let in_z = @vec.dabs(pz) <= @physics.court_half_len + @physics.line_grace
     if in_x && in_z {
       ms.bounces = 1
+      // this in-bounds rally shot's first bounce; deep = behind the service line
+      ms.stats.total_first_bounces = ms.stats.total_first_bounces + 1
+      if @vec.dabs(pz) >= @physics.court_service_line {
+        ms.stats.deep_first_bounces = ms.stats.deep_first_bounces + 1
+      }
     } else {
       @ffi.host_sfx(self.host, "sfxOut")
       let w = match last {

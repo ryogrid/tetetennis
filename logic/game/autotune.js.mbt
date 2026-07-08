@@ -169,6 +169,8 @@ fn build_report(ms : MatchState, w : @rules.Side?) -> String {
   "\"duration_s\":\{ms.time}," +
   "\"points_played\":\{s.points_played}," +
   "\"total_rally_shots\":\{s.total_rally_shots}," +
+  "\"total_first_bounces\":\{s.total_first_bounces}," +
+  "\"deep_first_bounces\":\{s.deep_first_bounces}," +
   "\"p\":" +
   side_json(
     s.p_winners, s.p_unforced, s.p_double_faults, s.p_first_serves, s.p_first_in,

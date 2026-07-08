@@ -1,0 +1,53 @@
+{
+  "_comment": "Deep-rally study: on hard court, Ace (idx 4) vs Ace (idx 4), normal play (no forced shot policy). The objective drives the physics so that ~80% of rally shots' FIRST bounce lands BEHIND the service line (|z| >= 6.40, toward the baseline). Runs on top of the reduced movement (run_speed_scale 0.859) and ball speed (ball_speed_scale 0.85) game defaults, which are NOT searched here. Copy to e.g. autotune.deepbounce.config.json and run: .venv-autotune/bin/python scripts/autotune/tune.py --config autotune.deepbounce.config.json . Every number is editable.",
+
+  "_bounds_note": "Search ranges are kept inside physically-valid regions; both extreme corners of this box were verified to pass all moon-test invariants (ITF rebound, flat solver accuracy at reduced speed, stretched-contact, shallow-feed). Widen a range only after re-checking `moon test` — notably aero_cd upper >0.60 fails the flat solver reach (rally_depth_min >7.0 forces every stroke too deep and breaks the shallow-feed/stretched tests). The aero_cd floor was lowered 0.45 -> 0.30 to give the ball more carry toward the deep target (less drag); both extreme corners with aero_cd=0.30 still pass all invariants (a lower Cd is unphysically flat but tests-valid, so it trades ball realism for depth).",
+
+  "search_space": {
+    "rally_depth_min":      { "min": 5.0,  "max": 7.0 },
+    "rally_depth_max":      { "min": 10.0, "max": 12.2 },
+    "aero_cd":              { "min": 0.30, "max": 0.60 },
+    "aero_spin_decay_tau":  { "min": 5.0,  "max": 9.0 },
+    "aero_cl_max":          { "min": 0.32, "max": 0.42 },
+    "topspin_rpm_base":     { "min": 1800, "max": 2500 },
+    "topspin_rpm_slope":    { "min": 1800, "max": 2700 },
+    "topspin_theta_min":    { "min": 8.0,  "max": 13.0 },
+    "topspin_theta_max":    { "min": 25.0, "max": 28.0 },
+    "flat_theta_max":       { "min": 12.0, "max": 20.0 },
+    "topspin_speed_mul":    { "min": 0.80, "max": 1.05 },
+    "slice_speed_mul":      { "min": 0.65, "max": 0.88 }
+  },
+
+  "fixed_params": {},
+
+  "fitness": [
+    { "metric": "deep_first_bounce_pct", "target": 80,             "weight": 1.0, "scale": 8.0 },
+    { "metric": "avg_rally_shots",       "min": 3,   "max": 12,    "weight": 0.3, "scale": 2.0 },
+    { "metric": "winner_pct",            "min": 15,  "max": 55,    "weight": 0.2, "scale": 8.0 },
+    { "metric": "unforced_pct",          "min": 20,  "max": 60,    "weight": 0.2, "scale": 8.0 },
+    { "metric": "match_duration_s",      "min": 240, "max": 1200,  "weight": 0.2, "scale": 120 }
+  ],
+
+  "run": {
+    "n_trials": 200,
+    "matches_per_trial": 24,
+    "seed_base": 1000,
+    "workers": 4,
+    "games": 4,
+    "max_steps_per_match": 600000,
+    "sampler_seed": 42,
+    "timeout_weight": 50.0,
+    "max_consecutive_failures": 5,
+    "matchups": [
+      { "you": 4, "opp": 4, "surface": "hard", "difficulty": "normal" }
+    ]
+  },
+
+  "validation": {
+    "top_k": 5,
+    "seed_base": 100000,
+    "matches_per_matchup": 48
+  },
+
+  "output_dir": "autotune_deepbounce_out"
+}

@@ -422,6 +422,9 @@ pub fn compute_stroke(
   } else {
     0.0
   }
+  // uniform ball-speed reduction across every shot category (flat/topspin/slice/
+  // volley/smash/lob/drop all funnel through `speed`); default scale 1.0.
+  speed = speed * @tuning.t.ball_speed_scale
   let solved = @physics.solve_shot(
     from_x=ball_x,
     from_y=@vec.dmax(ball_y, 0.15),

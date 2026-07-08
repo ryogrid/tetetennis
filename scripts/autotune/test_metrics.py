@@ -44,6 +44,8 @@ def canned_report():
         "duration_s": 300.0,
         "points_played": len(points),
         "total_rally_shots": sum(p["rally_shots"] for p in points),
+        "total_first_bounces": 10,
+        "deep_first_bounces": 8,
         "p": {
             "winners": 4, "unforced": 3, "double_faults": 0,
             "first_serves": 5, "first_in": 4, "run_m": 400.0,
@@ -88,6 +90,7 @@ def main():
     approx(m["points_per_match"], 10.0)
     approx(m["game_margin"], 2.0)
     approx(m["win_balance_pct"], 80.0)  # P wins 8 of 10 points
+    approx(m["deep_first_bounce_pct"], 80.0)  # 8 of 10 first bounces are deep
 
     # aggregation: win_balance only over mirror matchups
     agg = aggregate_matchups([m, m], [True, False])

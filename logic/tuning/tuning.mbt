@@ -30,6 +30,7 @@ pub(all) struct Tuning {
   mut run_speed_scale : Double
   mut run_accel_scale : Double
   mut reach_scale : Double
+  mut ball_speed_scale : Double // uniform launch-speed multiplier, all shot types
   // stroke model
   mut stroke_err_x : Double
   mut stroke_err_z : Double
@@ -84,24 +85,25 @@ pub(all) struct Tuning {
 ///|
 fn defaults() -> Tuning {
   {
-    aero_cd: 0.55,
-    aero_cl_max: 0.3897008818410628, // autotuned topspin study (was 0.31722006791969354)
-    aero_spin_decay_tau: 7.0,
+    aero_cd: 0.31089216457460167, // autotuned deep-bounce study @0.85 (was 0.45310567212718433)
+    aero_cl_max: 0.3571037650734606, // autotuned deep-bounce study @0.85 (was 0.33451858546304547)
+    aero_spin_decay_tau: 7.443152373112438, // autotuned deep-bounce study @0.85 (was 7.366882600513013)
     bounce_v_ref: 7.663922610666696, // autotuned topspin study (was 8.592068172949306)
     bounce_slope: 0.014631407032846796, // autotuned topspin study (was 0.015001942533694603)
     bounce_min_frac: 0.6476881754507375, // autotuned topspin study (was 0.6168453650051086)
     spin_bounce_vertical: 0.006979847383437907, // autotuned topspin study (was 0.008354272614227123)
     flat_speed_base: 18.0,
     flat_speed_slope: 7.0,
-    topspin_rpm_base: 1849.7385249979263, // autotuned topspin study (was 2069.4478139041503)
-    topspin_rpm_slope: 2270.1756397266868, // autotuned topspin study (was 2276.626387837988)
+    topspin_rpm_base: 1863.0891274701878, // autotuned deep-bounce study @0.85 (was 2480.2718697744863)
+    topspin_rpm_slope: 2100.686854336542, // autotuned deep-bounce study @0.85 (was 2173.084200705)
     slice_rpm_base: 1500.0,
     slice_rpm_slope: 1800.0,
     err_mul_hi: 2.1918957106234385, // autotuned (was 1.6)
     err_mul_slope: 1.1997643420980673, // autotuned (was 1.2)
-    run_speed_scale: 0.9544280645989575, // autotuned (was 1.0)
+    run_speed_scale: 0.85898525813906175, // 0.9x movement (was autotuned 0.9544280645989575)
     run_accel_scale: 1.0,
     reach_scale: 1.0,
+    ball_speed_scale: 0.85, // 0.85x ball speed, all shot types
     stroke_err_x: 0.584114629431531, // autotuned (was 0.30)
     stroke_err_z: 1.181082565719928, // autotuned (was 0.55)
     stroke_err_spin: 0.06,
@@ -113,8 +115,8 @@ fn defaults() -> Tuning {
     jam_threshold: 26.0,
     jam_scale: 14.0,
     aim_x_scale: 2.8,
-    rally_depth_min: 5.568895870405448, // autotuned topspin study (was 4.778879342520293)
-    rally_depth_max: 11.18244812975767, // autotuned topspin study (was 11.78789176257743)
+    rally_depth_min: 6.997701135780842, // autotuned deep-bounce study @0.85 (was 6.961895945952685)
+    rally_depth_max: 10.54314665682049, // autotuned deep-bounce study @0.85 (was 11.823958465742205)
     serve_err_x: 0.30,
     serve_err_z: 0.35,
     serve_err_speed: 0.025,
@@ -130,11 +132,11 @@ fn defaults() -> Tuning {
     ai_choice_noise_scale: 1.0,
     ai_tactical_scale: 1.0,
     flat_speed_mul: 1.0397473195599976, // autotuned topspin study (was 0.9918469490595508)
-    topspin_speed_mul: 0.850388705143911, // autotuned topspin study (was 1.0323938212953652)
-    slice_speed_mul: 0.8524944187945614, // autotuned topspin study (was 0.7001049733126442)
-    flat_theta_max: 16.50702865792861, // autotuned topspin study (was 14.050105305200743)
-    topspin_theta_min: 12.417501841664368, // autotuned topspin study (was 9.338068284957794)
-    topspin_theta_max: 27.667851452192764, // autotuned topspin study (was 28.357518332926666)
+    topspin_speed_mul: 0.9706625367679675, // autotuned deep-bounce study @0.85 (was 0.802574641649022)
+    slice_speed_mul: 0.8708850727690064, // autotuned deep-bounce study @0.85 (was 0.8456295860318103)
+    flat_theta_max: 15.322430782113093, // autotuned deep-bounce study @0.85 (was 17.797177880906574)
+    topspin_theta_min: 10.879682944439548, // autotuned deep-bounce study @0.85 (was 12.844926980930687)
+    topspin_theta_max: 27.82677728073671, // autotuned deep-bounce study @0.85 (was 27.794344855666537)
     net_margin_drive: 0.05089422918478888, // autotuned topspin study (was 0.16760682648027334)
     net_margin_control: 0.19700713906237843, // autotuned topspin study (was 0.27530100490744747)
     cpu_p: false,
@@ -197,6 +199,7 @@ pub fn reset_params() -> Unit {
   t.run_speed_scale = d.run_speed_scale
   t.run_accel_scale = d.run_accel_scale
   t.reach_scale = d.reach_scale
+  t.ball_speed_scale = d.ball_speed_scale
   t.stroke_err_x = d.stroke_err_x
   t.stroke_err_z = d.stroke_err_z
   t.stroke_err_spin = d.stroke_err_spin
@@ -256,6 +259,7 @@ pub fn set_param(name : String, v : Double) -> Bool {
     "run_speed_scale" => t.run_speed_scale = v
     "run_accel_scale" => t.run_accel_scale = v
     "reach_scale" => t.reach_scale = v
+    "ball_speed_scale" => t.ball_speed_scale = v
     "stroke_err_x" => t.stroke_err_x = v
     "stroke_err_z" => t.stroke_err_z = v
     "stroke_err_spin" => t.stroke_err_spin = v
@@ -318,6 +322,7 @@ pub fn get_param(name : String) -> Double {
     "run_speed_scale" => t.run_speed_scale
     "run_accel_scale" => t.run_accel_scale
     "reach_scale" => t.reach_scale
+    "ball_speed_scale" => t.ball_speed_scale
     "stroke_err_x" => t.stroke_err_x
     "stroke_err_z" => t.stroke_err_z
     "stroke_err_spin" => t.stroke_err_spin
