@@ -10,7 +10,7 @@
       "kind": "absolute"
     },
     "aero_cl_max": {
-      "default": 0.4,
+      "default": 0.31722006791969354,
       "min": 0.25,
       "max": 0.55,
       "file": "logic/tuning/tuning.mbt",
@@ -26,7 +26,7 @@
       "kind": "absolute"
     },
     "bounce_v_ref": {
-      "default": 7.1,
+      "default": 8.592068172949306,
       "min": 5.0,
       "max": 10.0,
       "file": "logic/tuning/tuning.mbt",
@@ -34,7 +34,7 @@
       "kind": "absolute"
     },
     "bounce_slope": {
-      "default": 0.012,
+      "default": 0.015001942533694603,
       "min": 0.005,
       "max": 0.02,
       "file": "logic/tuning/tuning.mbt",
@@ -42,7 +42,7 @@
       "kind": "absolute"
     },
     "bounce_min_frac": {
-      "default": 0.65,
+      "default": 0.6168453650051086,
       "min": 0.5,
       "max": 0.8,
       "file": "logic/tuning/tuning.mbt",
@@ -50,7 +50,7 @@
       "kind": "absolute"
     },
     "spin_bounce_vertical": {
-      "default": 0.004,
+      "default": 0.008354272614227123,
       "min": 0.0,
       "max": 0.01,
       "file": "logic/tuning/tuning.mbt",
@@ -74,7 +74,7 @@
       "kind": "base+slope"
     },
     "topspin_rpm_base": {
-      "default": 2200.0,
+      "default": 2069.4478139041503,
       "min": 1500.0,
       "max": 3000.0,
       "file": "logic/tuning/tuning.mbt",
@@ -82,7 +82,7 @@
       "kind": "base+slope"
     },
     "topspin_rpm_slope": {
-      "default": 2600.0,
+      "default": 2276.626387837988,
       "min": 1500.0,
       "max": 3500.0,
       "file": "logic/tuning/tuning.mbt",
@@ -235,7 +235,7 @@
       "kind": "absolute"
     },
     "rally_depth_min": {
-      "default": 4.5,
+      "default": 4.778879342520293,
       "min": 3.5,
       "max": 6.0,
       "file": "logic/tuning/tuning.mbt",
@@ -243,7 +243,7 @@
       "kind": "absolute"
     },
     "rally_depth_max": {
-      "default": 11.046198030546185,
+      "default": 11.78789176257743,
       "min": 10.0,
       "max": 12.5,
       "file": "logic/tuning/tuning.mbt",
@@ -364,15 +364,15 @@
       "kind": "scale"
     },
     "flat_speed_mul": {
-      "default": 1.00,
+      "default": 0.9918469490595508,
       "min": 0.85,
-      "max": 1.10,
+      "max": 1.1,
       "file": "logic/tuning/tuning.mbt",
       "symbol": "shot_def Flat speed_mul",
       "kind": "absolute"
     },
     "topspin_speed_mul": {
-      "default": 0.85,
+      "default": 1.0323938212953652,
       "min": 0.65,
       "max": 1.05,
       "file": "logic/tuning/tuning.mbt",
@@ -380,15 +380,15 @@
       "kind": "absolute"
     },
     "slice_speed_mul": {
-      "default": 0.76,
-      "min": 0.60,
+      "default": 0.7001049733126442,
+      "min": 0.6,
       "max": 0.95,
       "file": "logic/tuning/tuning.mbt",
       "symbol": "shot_def Slice speed_mul",
       "kind": "absolute"
     },
     "flat_theta_max": {
-      "default": 16.0,
+      "default": 14.050105305200743,
       "min": 10.0,
       "max": 24.0,
       "file": "logic/tuning/tuning.mbt",
@@ -396,7 +396,7 @@
       "kind": "absolute"
     },
     "topspin_theta_min": {
-      "default": 10.0,
+      "default": 9.338068284957794,
       "min": 4.0,
       "max": 18.0,
       "file": "logic/tuning/tuning.mbt",
@@ -404,7 +404,7 @@
       "kind": "absolute"
     },
     "topspin_theta_max": {
-      "default": 32.0,
+      "default": 28.357518332926666,
       "min": 22.0,
       "max": 44.0,
       "file": "logic/tuning/tuning.mbt",
@@ -412,16 +412,16 @@
       "kind": "absolute"
     },
     "net_margin_drive": {
-      "default": 0.05,
+      "default": 0.16760682648027334,
       "min": 0.02,
-      "max": 0.20,
+      "max": 0.2,
       "file": "logic/tuning/tuning.mbt",
       "symbol": "solve_shot net clearance, drive (flat)",
       "kind": "absolute"
     },
     "net_margin_control": {
-      "default": 0.25,
-      "min": 0.10,
+      "default": 0.27530100490744747,
+      "min": 0.1,
       "max": 0.45,
       "file": "logic/tuning/tuning.mbt",
       "symbol": "solve_shot net clearance, control (spin shots)",
