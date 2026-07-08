@@ -23,12 +23,15 @@
 
   "fixed_params": {},
 
+  "_fitness_note": "60% win rate stays the primary objective (weight 1.0, robust). The realism guards are STRENGTHENED (higher weights, tighter ranges) so the search cannot reach 60% via degenerate short/winner-heavy play: a solution that hits 60% but with e.g. avg_rally 1.6 / winner 71% now costs far more than a realistic 60%. Because the win-rate penalty grows quadratically with distance from 60, being far off is still punished most; the guards break ties among near-60% candidates toward realistic tennis. If no realistic ~60% region exists, the study will report the best compromise (that itself is useful signal).",
+
   "fitness": [
-    { "metric": "side_a_win_pct",  "target": 60, "robust": true, "z": 1.0, "weight": 1.0, "scale": 6.0 },
-    { "metric": "avg_rally_shots", "min": 3,   "max": 11,   "weight": 0.3, "scale": 2.0 },
-    { "metric": "winner_pct",      "min": 15,  "max": 45,   "weight": 0.2, "scale": 8.0 },
-    { "metric": "unforced_pct",    "min": 25,  "max": 68,   "weight": 0.2, "scale": 8.0 },
-    { "metric": "match_duration_s","min": 240, "max": 1200, "weight": 0.2, "scale": 120 }
+    { "metric": "side_a_win_pct",   "target": 60, "robust": true, "z": 1.0, "weight": 1.0, "scale": 6.0 },
+    { "metric": "avg_rally_shots",  "min": 4,   "max": 11,   "weight": 1.0, "scale": 2.0 },
+    { "metric": "winner_pct",       "min": 20,  "max": 45,   "weight": 0.7, "scale": 6.0 },
+    { "metric": "unforced_pct",     "min": 28,  "max": 60,   "weight": 0.5, "scale": 6.0 },
+    { "metric": "double_fault_pct", "min": 1,   "max": 10,   "weight": 0.3, "scale": 3.0 },
+    { "metric": "match_duration_s", "min": 300, "max": 1200, "weight": 0.3, "scale": 120 }
   ],
 
   "run": {
