@@ -85,16 +85,16 @@ pub(all) struct Tuning {
 fn defaults() -> Tuning {
   {
     aero_cd: 0.55,
-    aero_cl_max: 0.31722006791969354, // autotuned topspin study (was 0.4)
+    aero_cl_max: 0.3897008818410628, // autotuned topspin study (was 0.31722006791969354)
     aero_spin_decay_tau: 7.0,
-    bounce_v_ref: 8.592068172949306, // autotuned topspin study (was 7.1)
-    bounce_slope: 0.015001942533694603, // autotuned topspin study (was 0.012)
-    bounce_min_frac: 0.6168453650051086, // autotuned topspin study (was 0.65)
-    spin_bounce_vertical: 0.008354272614227123, // autotuned topspin study (was 0.004)
+    bounce_v_ref: 7.663922610666696, // autotuned topspin study (was 8.592068172949306)
+    bounce_slope: 0.014631407032846796, // autotuned topspin study (was 0.015001942533694603)
+    bounce_min_frac: 0.6476881754507375, // autotuned topspin study (was 0.6168453650051086)
+    spin_bounce_vertical: 0.006979847383437907, // autotuned topspin study (was 0.008354272614227123)
     flat_speed_base: 18.0,
     flat_speed_slope: 7.0,
-    topspin_rpm_base: 2069.4478139041503, // autotuned topspin study (was 2200.0)
-    topspin_rpm_slope: 2276.626387837988, // autotuned topspin study (was 2600.0)
+    topspin_rpm_base: 1849.7385249979263, // autotuned topspin study (was 2069.4478139041503)
+    topspin_rpm_slope: 2270.1756397266868, // autotuned topspin study (was 2276.626387837988)
     slice_rpm_base: 1500.0,
     slice_rpm_slope: 1800.0,
     err_mul_hi: 2.1918957106234385, // autotuned (was 1.6)
@@ -113,8 +113,8 @@ fn defaults() -> Tuning {
     jam_threshold: 26.0,
     jam_scale: 14.0,
     aim_x_scale: 2.8,
-    rally_depth_min: 4.778879342520293, // autotuned topspin study (was 4.5)
-    rally_depth_max: 11.78789176257743, // autotuned topspin study (was 11.046198030546185)
+    rally_depth_min: 5.568895870405448, // autotuned topspin study (was 4.778879342520293)
+    rally_depth_max: 11.18244812975767, // autotuned topspin study (was 11.78789176257743)
     serve_err_x: 0.30,
     serve_err_z: 0.35,
     serve_err_speed: 0.025,
@@ -129,14 +129,14 @@ fn defaults() -> Tuning {
     ai_react_scale: 1.5176944481154784, // autotuned (was 1.0)
     ai_choice_noise_scale: 1.0,
     ai_tactical_scale: 1.0,
-    flat_speed_mul: 0.9918469490595508, // autotuned topspin study (was 1.0)
-    topspin_speed_mul: 1.0323938212953652, // autotuned topspin study (was 0.85)
-    slice_speed_mul: 0.7001049733126442, // autotuned topspin study (was 0.76)
-    flat_theta_max: 14.050105305200743, // autotuned topspin study (was 16.0)
-    topspin_theta_min: 9.338068284957794, // autotuned topspin study (was 10.0)
-    topspin_theta_max: 28.357518332926666, // autotuned topspin study (was 32.0)
-    net_margin_drive: 0.16760682648027334, // autotuned topspin study (was 0.05)
-    net_margin_control: 0.27530100490744747, // autotuned topspin study (was 0.25)
+    flat_speed_mul: 1.0397473195599976, // autotuned topspin study (was 0.9918469490595508)
+    topspin_speed_mul: 0.850388705143911, // autotuned topspin study (was 1.0323938212953652)
+    slice_speed_mul: 0.8524944187945614, // autotuned topspin study (was 0.7001049733126442)
+    flat_theta_max: 16.50702865792861, // autotuned topspin study (was 14.050105305200743)
+    topspin_theta_min: 12.417501841664368, // autotuned topspin study (was 9.338068284957794)
+    topspin_theta_max: 27.667851452192764, // autotuned topspin study (was 28.357518332926666)
+    net_margin_drive: 0.05089422918478888, // autotuned topspin study (was 0.16760682648027334)
+    net_margin_control: 0.19700713906237843, // autotuned topspin study (was 0.27530100490744747)
     cpu_p: false,
     force_type_p: 0,
     force_type_c: 0,
