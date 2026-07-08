@@ -81,14 +81,14 @@ pub fn accel(
   if speed < 1.0e-6 {
     return (ax, ay, az)
   }
-  let drag = aero_k * aero_cd * speed
+  let drag = aero_k * @tuning.t.aero_cd * speed
   ax = ax - drag * vx
   ay = ay - drag * vy
   az = az - drag * vz
   let w_mag = @vec.hypot3(sx, sy, sz)
   if w_mag > 1.0 {
     let s_ = ball_r * w_mag / speed
-    let cl = @vec.dmin(1.0 / (2.0 + 1.0 / s_), aero_cl_max)
+    let cl = @vec.dmin(1.0 / (2.0 + 1.0 / s_), @tuning.t.aero_cl_max)
     let k = aero_k * cl * speed / w_mag // includes 1/|w| for the unit axis
     ax = ax + k * (sy * vz - sz * vy)
     ay = ay + k * (sz * vx - sx * vz)
@@ -115,7 +115,7 @@ pub fn step_ball(
   b.px = b.px + b.vx * dt
   b.py = b.py + b.vy * dt
   b.pz = b.pz + b.vz * dt
-  let decay = @math.exp(-dt / aero_spin_decay_tau)
+  let decay = @math.exp(-dt / @tuning.t.aero_spin_decay_tau)
   b.sx = b.sx * decay
   b.sy = b.sy * decay
   b.sz = b.sz * decay

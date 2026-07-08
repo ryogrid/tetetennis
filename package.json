@@ -12,7 +12,8 @@
     "build": "vite build",
     "preview": "vite preview",
     "test": "moon test",
-    "test:js": "moon test --target js"
+    "test:js": "moon test --target js",
+    "autotune:match": "node scripts/autotune/run_match.mjs"
   },
   "dependencies": {
     "three": "^0.165.0"

@@ -1,5 +1,6 @@
 {
   "import": [
+    "tetetetennis/logic/tuning",
     "tetetetennis/logic/vec",
     "moonbitlang/core/math"
   ]

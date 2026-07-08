@@ -50,19 +50,19 @@ fn sim_flight(
   let mut px = px0; let mut py = py0; let mut pz = pz0
   let mut vx = vx0; let mut vy = vy0; let mut vz = vz0
   let mut sx = sx0; let mut sy = sy0; let mut sz = sz0
-  let decay = @math.exp(-sim_dt / aero_spin_decay_tau)
+  let decay = @math.exp(-sim_dt / @tuning.t.aero_spin_decay_tau)
   for t = 0.0; t < sim_max_t; t = t + sim_dt {
     let speed = @vec.hypot3(vx, vy, vz)
     let mut ax = 0.0; let mut ay = -g; let mut az = 0.0
     if speed > 1.0e-6 {
-      let drag = aero_k * aero_cd * speed
+      let drag = aero_k * @tuning.t.aero_cd * speed
       ax = ax - drag * vx
       ay = ay - drag * vy
       az = az - drag * vz
       let w_mag = @vec.hypot3(sx, sy, sz)
       if w_mag > 1.0 {
         let s_ = ball_r * w_mag / speed
-        let cl = @vec.dmin(1.0 / (2.0 + 1.0 / s_), aero_cl_max)
+        let cl = @vec.dmin(1.0 / (2.0 + 1.0 / s_), @tuning.t.aero_cl_max)
         let k = aero_k * cl * speed / w_mag
         ax = ax + k * (sy * vz - sz * vy)
         ay = ay + k * (sz * vx - sx * vz)
@@ -97,20 +97,20 @@ fn net_cross_y(
   let mut px = px0; let mut py = py0; let mut pz = pz0
   let mut vx = vx0; let mut vy = vy0; let mut vz = vz0
   let mut sx = sx0; let mut sy = sy0; let mut sz = sz0
-  let decay = @math.exp(-sim_dt / aero_spin_decay_tau)
+  let decay = @math.exp(-sim_dt / @tuning.t.aero_spin_decay_tau)
   for t = 0.0; t < sim_max_t; t = t + sim_dt {
     let prev_pz = pz
     let speed = @vec.hypot3(vx, vy, vz)
     let mut ax = 0.0; let mut ay = -g; let mut az = 0.0
     if speed > 1.0e-6 {
-      let drag = aero_k * aero_cd * speed
+      let drag = aero_k * @tuning.t.aero_cd * speed
       ax = ax - drag * vx
       ay = ay - drag * vy
       az = az - drag * vz
       let w_mag = @vec.hypot3(sx, sy, sz)
       if w_mag > 1.0 {
         let s_ = ball_r * w_mag / speed
-        let cl = @vec.dmin(1.0 / (2.0 + 1.0 / s_), aero_cl_max)
+        let cl = @vec.dmin(1.0 / (2.0 + 1.0 / s_), @tuning.t.aero_cl_max)
         let k = aero_k * cl * speed / w_mag
         ax = ax + k * (sy * vz - sz * vy)
         ay = ay + k * (sz * vx - sx * vz)

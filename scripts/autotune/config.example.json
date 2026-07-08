@@ -1,0 +1,52 @@
+{
+  "search_space": {
+    "stroke_err_x":     { "min": 0.15, "max": 0.60 },
+    "stroke_err_z":     { "min": 0.30, "max": 1.20 },
+    "err_mul_hi":       { "min": 1.2,  "max": 2.2 },
+    "err_mul_lo":       { "min": 0.2,  "max": 1.0 },
+    "mishit_prob":      { "min": 0.10, "max": 0.60 },
+    "err_quality_gain": { "min": 1.5,  "max": 4.0 },
+    "rally_depth_max":  { "min": 10.5, "max": 12.5 },
+    "run_speed_scale":  { "min": 0.70, "max": 1.10 },
+    "ai_pos_err_scale": { "min": 0.8,  "max": 2.5 },
+    "ai_react_scale":   { "min": 0.8,  "max": 2.5 }
+  },
+
+  "fixed_params": {},
+
+  "fitness": [
+    { "metric": "avg_rally_shots",    "min": 3,   "max": 8,   "weight": 1.0, "scale": 2.0 },
+    { "metric": "winner_pct",         "target": 30,            "weight": 1.0, "scale": 5.0 },
+    { "metric": "unforced_pct",       "min": 30,  "max": 55,  "weight": 0.8, "scale": 5.0 },
+    { "metric": "double_fault_pct",   "min": 1,   "max": 8,   "weight": 0.5, "scale": 2.0 },
+    { "metric": "first_serve_in_pct", "min": 55,  "max": 75,  "weight": 0.5, "scale": 5.0 },
+    { "metric": "service_hold_pct",   "min": 55,  "max": 85,  "weight": 0.8, "scale": 5.0 },
+    { "metric": "match_duration_s",   "min": 300, "max": 900, "weight": 0.6, "scale": 60 },
+    { "metric": "win_balance_pct",    "target": 50,            "weight": 0.4, "scale": 5.0 }
+  ],
+
+  "run": {
+    "n_trials": 200,
+    "matches_per_trial": 8,
+    "seed_base": 1000,
+    "workers": 4,
+    "games": 4,
+    "max_steps_per_match": 600000,
+    "sampler_seed": 42,
+    "timeout_weight": 50.0,
+    "max_consecutive_failures": 5,
+    "matchups": [
+      { "you": 4, "opp": 4, "surface": "hard", "difficulty": "normal" },
+      { "you": 0, "opp": 3, "surface": "hard", "difficulty": "normal" },
+      { "you": 1, "opp": 2, "surface": "clay", "difficulty": "normal" }
+    ]
+  },
+
+  "validation": {
+    "top_k": 5,
+    "seed_base": 100000,
+    "matches_per_matchup": 24
+  },
+
+  "output_dir": "autotune_out"
+}

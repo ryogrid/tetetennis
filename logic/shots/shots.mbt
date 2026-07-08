@@ -116,13 +116,8 @@ pub fn swing_motion(
   }
 }
 
-// Fast-ball jam / counter (Appendix A.3).
-///|
-let jam_threshold : Double = 26.0 // incoming pace (m/s) above which jamming starts
-
-///|
-let jam_scale : Double = 14.0 // m/s of excess pace that saturates the jam term
-
+// Fast-ball jam / counter (Appendix A.3): thresholds live in @tuning
+// (jam_threshold 26 m/s, jam_scale 14 m/s).
 ///|
 pub(all) struct ContactQuality {
   q : Double
@@ -148,7 +143,7 @@ pub fn contact_quality(
   let d = @vec.hypot2(ball_x - player_x, ball_z - player_z)
   let h = ball_y
   let reach = @physics.reach(stats.rea)
-  let human = side == @rules.P
+  let human = side == @rules.P && !@tuning.cpu_p_active()
   let reach_eff = reach + (if human { reach_grace } else { 0.0 })
   let h_max = 1.15 + reach_eff
   if d > reach_eff || h > h_max {
@@ -176,7 +171,7 @@ pub fn contact_quality(
   let v_in = @vec.hypot3(vx, vy, vz)
   let q_speed = @vec.clampd(
     1.0 - (v_in - 18.0) / 55.0,
-    if aid { 0.80 } else { 0.65 },
+    if aid { 0.80 } else { @tuning.t.q_speed_floor },
     1.0,
   )
   let q = q_dist * q_height * q_speed
@@ -249,11 +244,15 @@ pub fn compute_stroke(
     Drop => 2.2 // dies just past the net
   }
   let base_z = type_z - (1.0 - q) * 1.5
-  // Drop is allowed to target much shorter than the rally floor of 4.5 m.
-  let min_depth = if typ == Drop { 1.5 } else { 4.5 }
-  let mut tx = @vec.clampd(aim_x, -1.0, 1.0) * 2.8
+  // Drop is allowed to target much shorter than the rally depth floor.
+  let min_depth = if typ == Drop { 1.5 } else { @tuning.t.rally_depth_min }
+  let mut tx = @vec.clampd(aim_x, -1.0, 1.0) * @tuning.t.aim_x_scale
   let mut tz = z_sign *
-    @vec.clampd(base_z + @vec.clampd(aim_depth, -1.0, 1.0) * 2.4, min_depth, 11.2)
+    @vec.clampd(
+      base_z + @vec.clampd(aim_depth, -1.0, 1.0) * 2.4,
+      min_depth,
+      @tuning.t.rally_depth_max,
+    )
   let flat_speed = @physics.max_flat_speed(stats.pow) * (0.52 + 0.48 * q)
   let mut speed = 0.0
   let mut spin_rpm = 0.0
@@ -348,16 +347,18 @@ pub fn compute_stroke(
   // a volley is a precise block -> much tighter aim
   let aim_acc = (if perfect { 0.6 } else { 1.0 }) * (if do_volley { 0.4 } else { 1.0 })
   // error model
-  let err_mul = @physics.err_mul_base(stats.ctl) * (1.0 + 2.2 * (1.0 - q))
-  tx = tx + rng.draw() * 0.30 * err_mul * aim_acc
-  tz = tz + z_sign * (rng.draw() * 0.55 * err_mul * aim_acc)
+  let err_mul = @physics.err_mul_base(stats.ctl) *
+    (1.0 + @tuning.t.err_quality_gain * (1.0 - q))
+  tx = tx + rng.draw() * @tuning.t.stroke_err_x * err_mul * aim_acc
+  tz = tz + z_sign * (rng.draw() * @tuning.t.stroke_err_z * err_mul * aim_acc)
   tz = z_sign *
     @vec.clampd(@vec.dabs(tz), 2.0, @physics.court_half_len + 2.5)
-  spin_rpm = spin_rpm * (1.0 + rng.draw() * 0.06 * err_mul)
-  speed = speed * (1.0 + rng.draw() * 0.03 * err_mul)
+  spin_rpm = spin_rpm * (1.0 + rng.draw() * @tuning.t.stroke_err_spin * err_mul)
+  speed = speed * (1.0 + rng.draw() * @tuning.t.stroke_err_speed * err_mul)
   let mut mishit = false
   let mut yaw_err = 0.0
-  if q < 0.3 && rng.uniform() < (if aid { 0.15 } else { 0.35 }) {
+  if q < @tuning.t.mishit_q_max &&
+    rng.uniform() < (if aid { 0.15 } else { @tuning.t.mishit_prob }) {
     mishit = true
     yaw_err = (rng.uniform() - 0.5) * 0.5
     speed = speed * 0.55
@@ -367,7 +368,7 @@ pub fn compute_stroke(
   // weak looping sitter (worst for topspin, best blocked with slice, reduced by
   // charge prep and good posture) or, when handled cleanly, is redirected faster.
   let in_pace = @vec.hypot3(vx, vy, vz)
-  let pace_over = @vec.dmax(0.0, in_pace - jam_threshold)
+  let pace_over = @vec.dmax(0.0, in_pace - @tuning.t.jam_threshold)
   if pace_over > 0.0 {
     let weakness = match typ {
       Slice => 0.35
@@ -377,7 +378,7 @@ pub fn compute_stroke(
       Drop => 1.30
     }
     let jam = @vec.clampd(
-      pace_over / jam_scale * weakness * (1.0 - 0.7 * cc) * (0.5 + 0.5 * (1.0 - q)),
+      pace_over / @tuning.t.jam_scale * weakness * (1.0 - 0.7 * cc) * (0.5 + 0.5 * (1.0 - q)),
       0.0,
       1.0,
     )

@@ -111,10 +111,25 @@ pub(all) struct Ai {
 
 ///|
 pub fn create_ai(character : @shots.Character, difficulty_id : String) -> Ai {
+  // Snapshot the difficulty preset with the autotune skill scales applied
+  // (all default 1.0 -> the snapshot equals the preset bit-for-bit). setParam
+  // always precedes start_match, so the snapshot sees the final values.
+  let d0 = difficulty_by_id(difficulty_id)
+  let d : Difficulty = {
+    id: d0.id,
+    name: d0.name,
+    desc: d0.desc,
+    pos_err: d0.pos_err * @tuning.t.ai_pos_err_scale,
+    jitter: d0.jitter * @tuning.t.ai_jitter_scale,
+    react: d0.react * @tuning.t.ai_react_scale,
+    speed_mul: d0.speed_mul,
+    serve_q: d0.serve_q,
+    choice_noise: d0.choice_noise * @tuning.t.ai_choice_noise_scale,
+  }
   {
     stats: character.stats,
     style: character.style,
-    diff: difficulty_by_id(difficulty_id),
+    diff: d,
     pred_stamp: -1,
     has_pred: false,
     pred_x: 0.0,
@@ -233,11 +248,12 @@ fn tactical_shot_type(
   roll : Double,
   diff_id : String,
 ) -> @shots.ShotType? {
-  let p = match diff_id {
+  let p = (match diff_id {
     "hard" => 0.8
     "easy" => 0.35
     _ => 0.6
-  }
+  }) *
+    @tuning.t.ai_tactical_scale
   if human_z < net_play_z {
     if roll < p {
       Some(Lob) // over the net-rusher's head (else a passing groundstroke)
@@ -322,7 +338,7 @@ fn choose_stroke(ai : Ai, ctx : AiCtx, pred_x : Double, pred_z : Double, rng : @
     Topspin => 9.8
     _ => 9.2
   }
-  let plan_x = best_tx / 2.8
+  let plan_x = best_tx / @tuning.t.aim_x_scale
   // tactical override: lob a net-rusher, drop on a deep camper
   match tactical_shot_type(human_z, rng.uniform(), ai.diff.id) {
     Some(Lob) => { type_: Lob, aim_x: plan_x, aim_depth: 1.0 }

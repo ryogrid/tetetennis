@@ -9,8 +9,8 @@ let alpha : Double = 2.0 / 5.0
 // less energy the harder it hits; anchored at the ITF drop-test speed).
 ///|
 pub fn effective_ey(ey : Double, vy_in_abs : Double) -> Double {
-  let f = 1.0 - bounce_slope * (vy_in_abs - bounce_v_ref)
-  ey * @vec.dmax(bounce_min_frac, @vec.dmin(1.0, f))
+  let f = 1.0 - @tuning.t.bounce_slope * (vy_in_abs - @tuning.t.bounce_v_ref)
+  ey * @vec.dmax(@tuning.t.bounce_min_frac, @vec.dmin(1.0, f))
 }
 
 ///|
@@ -59,7 +59,7 @@ pub fn apply_bounce(b : Ball, surface : Surface) -> Unit {
     // ω×ŷ = (-ωz, 0, ωx). Project onto horizontal direction.
     let proj = -b.sz * dx + b.sx * dz
     if proj > 0.0 {
-      b.vy = b.vy + proj * spin_bounce_vertical
+      b.vy = b.vy + proj * @tuning.t.spin_bounce_vertical
     }
   }
 }

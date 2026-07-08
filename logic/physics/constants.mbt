@@ -129,17 +129,17 @@ pub fn surface_by_id(id : String) -> Surface {
 // Character stat (0-100) -> physics mappings (old STATS_MAP).
 ///|
 pub fn max_flat_speed(pow : Double) -> Double {
-  18.0 + 7.0 * pow / 100.0
+  @tuning.t.flat_speed_base + @tuning.t.flat_speed_slope * pow / 100.0
 }
 
 ///|
 pub fn topspin_rpm(spn : Double) -> Double {
-  2200.0 + 2600.0 * spn / 100.0
+  @tuning.t.topspin_rpm_base + @tuning.t.topspin_rpm_slope * spn / 100.0
 }
 
 ///|
 pub fn slice_rpm(slc : Double) -> Double {
-  1500.0 + 1800.0 * slc / 100.0
+  @tuning.t.slice_rpm_base + @tuning.t.slice_rpm_slope * slc / 100.0
 }
 
 ///|
@@ -159,8 +159,9 @@ pub let serve_speed_max : Double = 54.0
 
 ///|
 pub fn serve_power_speed(srv : Double, p : Double) -> Double {
-  let base = serve_speed_min + (serve_speed_max - serve_speed_min) * p
-  base * (0.82 + 0.36 * srv / 100.0)
+  let base = @tuning.t.serve_speed_min +
+    (@tuning.t.serve_speed_max - @tuning.t.serve_speed_min) * p
+  base * (@tuning.t.serve_stat_base + @tuning.t.serve_stat_slope * srv / 100.0)
 }
 
 // Overhead smash: a high forecourt flat slammed down. Much faster than a
@@ -172,22 +173,22 @@ pub fn smash_speed(pow : Double) -> Double {
 
 ///|
 pub fn run_speed(spd : Double) -> Double {
-  (5.2 + 2.6 * spd / 100.0) * 1.5
+  (5.2 + 2.6 * spd / 100.0) * 1.5 * @tuning.t.run_speed_scale
 }
 
 ///|
 pub fn run_accel(spd : Double) -> Double {
-  (9.0 + 6.0 * spd / 100.0) * 1.5
+  (9.0 + 6.0 * spd / 100.0) * 1.5 * @tuning.t.run_accel_scale
 }
 
 ///|
 pub fn err_mul_base(ctl : Double) -> Double {
-  1.6 - 1.2 * ctl / 100.0
+  @tuning.t.err_mul_hi - @tuning.t.err_mul_slope * ctl / 100.0
 }
 
 ///|
 pub fn reach(rea : Double) -> Double {
-  (1.25 + 0.25 * rea / 100.0) * 1.5
+  (1.25 + 0.25 * rea / 100.0) * 1.5 * @tuning.t.reach_scale
 }
 
 ///|
