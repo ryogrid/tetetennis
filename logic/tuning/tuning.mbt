@@ -85,17 +85,17 @@ pub(all) struct Tuning {
 ///|
 fn defaults() -> Tuning {
   {
-    aero_cd: 0.4505573763029307, // autotuned deep-bounce study (was 0.55)
-    aero_cl_max: 0.3663241484276051, // autotuned deep-bounce study (was 0.3897008818410628)
-    aero_spin_decay_tau: 8.308867925959662, // autotuned deep-bounce study (was 7.0)
+    aero_cd: 0.45310567212718433, // autotuned deep-bounce study @0.85 (was 0.4505573763029307)
+    aero_cl_max: 0.33451858546304547, // autotuned deep-bounce study @0.85 (was 0.3663241484276051)
+    aero_spin_decay_tau: 7.366882600513013, // autotuned deep-bounce study @0.85 (was 8.308867925959662)
     bounce_v_ref: 7.663922610666696, // autotuned topspin study (was 8.592068172949306)
     bounce_slope: 0.014631407032846796, // autotuned topspin study (was 0.015001942533694603)
     bounce_min_frac: 0.6476881754507375, // autotuned topspin study (was 0.6168453650051086)
     spin_bounce_vertical: 0.006979847383437907, // autotuned topspin study (was 0.008354272614227123)
     flat_speed_base: 18.0,
     flat_speed_slope: 7.0,
-    topspin_rpm_base: 2415.7685057005815, // autotuned deep-bounce study (was 1849.7385249979263)
-    topspin_rpm_slope: 2625.687614294426, // autotuned deep-bounce study (was 2270.1756397266868)
+    topspin_rpm_base: 2480.2718697744863, // autotuned deep-bounce study @0.85 (was 2415.7685057005815)
+    topspin_rpm_slope: 2173.084200705, // autotuned deep-bounce study @0.85 (was 2625.687614294426)
     slice_rpm_base: 1500.0,
     slice_rpm_slope: 1800.0,
     err_mul_hi: 2.1918957106234385, // autotuned (was 1.6)
@@ -115,8 +115,8 @@ fn defaults() -> Tuning {
     jam_threshold: 26.0,
     jam_scale: 14.0,
     aim_x_scale: 2.8,
-    rally_depth_min: 6.975578166735333, // autotuned deep-bounce study (was 5.568895870405448)
-    rally_depth_max: 11.926279635003059, // autotuned deep-bounce study (was 11.18244812975767)
+    rally_depth_min: 6.961895945952685, // autotuned deep-bounce study @0.85 (was 6.975578166735333)
+    rally_depth_max: 11.823958465742205, // autotuned deep-bounce study @0.85 (was 11.926279635003059)
     serve_err_x: 0.30,
     serve_err_z: 0.35,
     serve_err_speed: 0.025,
@@ -132,11 +132,11 @@ fn defaults() -> Tuning {
     ai_choice_noise_scale: 1.0,
     ai_tactical_scale: 1.0,
     flat_speed_mul: 1.0397473195599976, // autotuned topspin study (was 0.9918469490595508)
-    topspin_speed_mul: 0.80121703257231, // autotuned deep-bounce study (was 0.850388705143911)
-    slice_speed_mul: 0.7219894498620548, // autotuned deep-bounce study (was 0.8524944187945614)
-    flat_theta_max: 15.844627840952768, // autotuned deep-bounce study (was 16.50702865792861)
-    topspin_theta_min: 12.603150253005877, // autotuned deep-bounce study (was 12.417501841664368)
-    topspin_theta_max: 27.60834660246409, // autotuned deep-bounce study (was 27.667851452192764)
+    topspin_speed_mul: 0.802574641649022, // autotuned deep-bounce study @0.85 (was 0.80121703257231)
+    slice_speed_mul: 0.8456295860318103, // autotuned deep-bounce study @0.85 (was 0.7219894498620548)
+    flat_theta_max: 17.797177880906574, // autotuned deep-bounce study @0.85 (was 15.844627840952768)
+    topspin_theta_min: 12.844926980930687, // autotuned deep-bounce study @0.85 (was 12.603150253005877)
+    topspin_theta_max: 27.794344855666537, // autotuned deep-bounce study @0.85 (was 27.60834660246409)
     net_margin_drive: 0.05089422918478888, // autotuned topspin study (was 0.16760682648027334)
     net_margin_control: 0.19700713906237843, // autotuned topspin study (was 0.27530100490744747)
     cpu_p: false,
