@@ -30,6 +30,7 @@ pub(all) struct Tuning {
   mut run_speed_scale : Double
   mut run_accel_scale : Double
   mut reach_scale : Double
+  mut ball_speed_scale : Double // uniform launch-speed multiplier, all shot types
   // stroke model
   mut stroke_err_x : Double
   mut stroke_err_z : Double
@@ -99,9 +100,10 @@ fn defaults() -> Tuning {
     slice_rpm_slope: 1800.0,
     err_mul_hi: 2.1918957106234385, // autotuned (was 1.6)
     err_mul_slope: 1.1997643420980673, // autotuned (was 1.2)
-    run_speed_scale: 0.9544280645989575, // autotuned (was 1.0)
+    run_speed_scale: 0.85898525813906175, // 0.9x movement (was autotuned 0.9544280645989575)
     run_accel_scale: 1.0,
     reach_scale: 1.0,
+    ball_speed_scale: 0.8, // 0.8x ball speed, all shot types
     stroke_err_x: 0.584114629431531, // autotuned (was 0.30)
     stroke_err_z: 1.181082565719928, // autotuned (was 0.55)
     stroke_err_spin: 0.06,
@@ -197,6 +199,7 @@ pub fn reset_params() -> Unit {
   t.run_speed_scale = d.run_speed_scale
   t.run_accel_scale = d.run_accel_scale
   t.reach_scale = d.reach_scale
+  t.ball_speed_scale = d.ball_speed_scale
   t.stroke_err_x = d.stroke_err_x
   t.stroke_err_z = d.stroke_err_z
   t.stroke_err_spin = d.stroke_err_spin
@@ -256,6 +259,7 @@ pub fn set_param(name : String, v : Double) -> Bool {
     "run_speed_scale" => t.run_speed_scale = v
     "run_accel_scale" => t.run_accel_scale = v
     "reach_scale" => t.reach_scale = v
+    "ball_speed_scale" => t.ball_speed_scale = v
     "stroke_err_x" => t.stroke_err_x = v
     "stroke_err_z" => t.stroke_err_z = v
     "stroke_err_spin" => t.stroke_err_spin = v
@@ -318,6 +322,7 @@ pub fn get_param(name : String) -> Double {
     "run_speed_scale" => t.run_speed_scale
     "run_accel_scale" => t.run_accel_scale
     "reach_scale" => t.reach_scale
+    "ball_speed_scale" => t.ball_speed_scale
     "stroke_err_x" => t.stroke_err_x
     "stroke_err_z" => t.stroke_err_z
     "stroke_err_spin" => t.stroke_err_spin

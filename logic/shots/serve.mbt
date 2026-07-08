@@ -197,6 +197,8 @@ pub fn compute_serve(
   let w_total = @vec.dabs(spin_rpm) * @physics.rpm_to_rads
   let lateral = spin_rpm * @physics.rpm_to_rads * (1.0 - y_spin_frac)
   let y_spin = w_total * y_spin_frac * y_spin_sign
+  // uniform ball-speed reduction (same scale as strokes); default 1.0
+  speed = speed * @tuning.t.ball_speed_scale
   let mut solved = @physics.solve_shot(
     from_x~,
     from_y~,

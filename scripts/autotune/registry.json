@@ -123,11 +123,19 @@
       "search_via": "err_mul_lo"
     },
     "run_speed_scale": {
-      "default": 0.9544280645989575,
+      "default": 0.85898525813906175,
       "min": 0.7,
       "max": 1.3,
       "file": "logic/tuning/tuning.mbt",
       "symbol": "run_speed multiplier",
+      "kind": "scale"
+    },
+    "ball_speed_scale": {
+      "default": 0.8,
+      "min": 0.6,
+      "max": 1.0,
+      "file": "logic/tuning/tuning.mbt",
+      "symbol": "uniform launch-speed multiplier (all shot types)",
       "kind": "scale"
     },
     "run_accel_scale": {

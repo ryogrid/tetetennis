@@ -72,6 +72,10 @@ def compute_metrics(reports: list[dict]) -> dict[str, float]:
     net_won = sum(r["p"]["net_won"] + r["c"]["net_won"] for r in reports)
     run_m = sum(r["p"]["run_m"] + r["c"]["run_m"] for r in reports)
 
+    # rally first-bounce depth: fraction landing behind the service line
+    total_fb = sum(r.get("total_first_bounces", 0) for r in reports)
+    deep_fb = sum(r.get("deep_first_bounces", 0) for r in reports)
+
     second_serve_pts = [p for p in points if p["serve_number"] == 2]
 
     # service games from server runs; exclude tiebreak points (the rules
@@ -121,6 +125,8 @@ def compute_metrics(reports: list[dict]) -> dict[str, float]:
         / len(reports),
         "run_m_per_point": run_m / n_points,
         "win_balance_pct": pct(lambda p: p["winner"] == "p"),
+        # % of in-bounds rally first bounces landing behind the service line
+        "deep_first_bounce_pct": 100.0 * deep_fb / total_fb if total_fb else 0.0,
         # Per-MATCH win rate for side A (= P = "you"); only meaningful on a
         # mirror matchup where the sides differ solely by an imposed policy
         # (e.g. topspin-only vs flat-only). side_a_win_n carries the sample size
@@ -153,6 +159,7 @@ METRIC_NAMES = frozenset(
         "win_balance_pct",
         "side_a_win_pct",
         "side_a_win_n",
+        "deep_first_bounce_pct",
     }
 )
 
