@@ -103,7 +103,7 @@ fn defaults() -> Tuning {
     run_speed_scale: 0.85898525813906175, // 0.9x movement (was autotuned 0.9544280645989575)
     run_accel_scale: 1.0,
     reach_scale: 1.0,
-    ball_speed_scale: 0.8, // 0.8x ball speed, all shot types
+    ball_speed_scale: 0.85, // 0.85x ball speed, all shot types
     stroke_err_x: 0.584114629431531, // autotuned (was 0.30)
     stroke_err_z: 1.181082565719928, // autotuned (was 0.55)
     stroke_err_spin: 0.06,

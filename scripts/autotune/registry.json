@@ -131,7 +131,7 @@
       "kind": "scale"
     },
     "ball_speed_scale": {
-      "default": 0.8,
+      "default": 0.85,
       "min": 0.6,
       "max": 1.0,
       "file": "logic/tuning/tuning.mbt",
