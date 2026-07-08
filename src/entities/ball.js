@@ -457,19 +457,20 @@ export function createBallEntity(scene) {
         sweetCount.visible = false;
       }
     },
-    // arr: flat [x,y,z,afterBounce, ...]; idealIdx (optional) marks the
-    // waist-height point of the arc — drawn bigger and orange
-    showTrail(arr, idealIdx = -1) {
+    // arr: flat [x,y,z,afterBounce, ...]; idealIdx / idealIdx2 (optional) mark the
+    // rising and descending waist-height contact points — drawn bigger and orange
+    showTrail(arr, idealIdx = -1, idealIdx2 = -1) {
       const n = Math.min((arr.length / 4) | 0, TRAIL_CAP);
       for (let i = 0; i < n; i++) {
         const o = i * 4;
         const x = arr[o], y = arr[o + 1], z = arr[o + 2];
         const afterBounce = arr[o + 3];
-        const sc = i === idealIdx ? 2.2 : 1;
+        const ideal = i === idealIdx || i === idealIdx2;
+        const sc = ideal ? 2.2 : 1;
         _m.makeScale(sc, sc, sc);
         _m.setPosition(x, Math.max(y, 0.04), z);
         trail.setMatrixAt(i, _m);
-        trail.setColorAt(i, i === idealIdx ? _cIdeal : (afterBounce ? _cPost : _cPre));
+        trail.setColorAt(i, ideal ? _cIdeal : (afterBounce ? _cPost : _cPre));
       }
       trail.count = n;
       trail.instanceMatrix.needsUpdate = true;

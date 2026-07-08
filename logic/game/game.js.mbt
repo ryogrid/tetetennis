@@ -238,6 +238,10 @@ struct MatchState {
   mut sweet_hit_valid : Bool
   mut sweet_hit_t : Double
   mut sweet_hit_clock : Double
+  // The descending contact opportunity (ball falling back through waist height
+  // toward the second bounce), shared clock with the rising one above.
+  mut sweet_hit_valid2 : Bool
+  mut sweet_hit_t2 : Double
   mut time : Double
   mut state_timer : Double
   mut serve_meter : Double // current oscillating power-meter value [0,1]
@@ -696,6 +700,8 @@ fn start_match(self : Game) -> Unit {
     sweet_hit_valid: false,
     sweet_hit_t: 0.0,
     sweet_hit_clock: 0.0,
+    sweet_hit_valid2: false,
+    sweet_hit_t2: 0.0,
     time: 0.0,
     state_timer: 0.0,
     serve_meter: 0.0,
@@ -768,26 +774,59 @@ fn show_trajectory_trail(self : Game, ms : MatchState) -> Unit {
   }
   let from = if already_bounced { 0.0 } else { traj.bounce_t - 0.45 }
   let buf : Array[Double] = []
-  let mut ideal_idx = -1
-  let mut best = 0.25
+  let ys : Array[Double] = []
+  let after : Array[Bool] = []
   let mut shown = 0
   for p in traj.points {
     if p.t >= from && p.z > 0.3 {
-      if p.after_bounce {
-        let dh = @vec.dabs(p.y - @physics.ideal_contact_h)
-        if dh < best {
-          best = dh
-          ideal_idx = shown
-        }
-      }
       buf.push(p.x)
       buf.push(p.y)
       buf.push(p.z)
       buf.push(if p.after_bounce { 1.0 } else { 0.0 })
+      ys.push(p.y)
+      after.push(p.after_bounce)
       shown = shown + 1
     }
   }
-  @ffi.host_show_trail(self.host, buf, ideal_idx)
+  // Apex of the after-bounce arc splits the two best-hit points: the rising
+  // crossing of waist height (before/at the apex) and the descending one (after
+  // it, on the way to the second bounce). Each is the after-bounce sample
+  // closest to waist height on its side, within the same tolerance.
+  let mut apex_i = -1
+  let mut apex_y = -1.0
+  for i = 0; i < shown; i = i + 1 {
+    if after[i] && ys[i] > apex_y {
+      apex_y = ys[i]
+      apex_i = i
+    }
+  }
+  let mut ideal_idx = -1
+  let mut best = 0.25
+  for i = 0; i <= apex_i; i = i + 1 {
+    if after[i] {
+      let dh = @vec.dabs(ys[i] - @physics.ideal_contact_h)
+      if dh < best {
+        best = dh
+        ideal_idx = i
+      }
+    }
+  }
+  // Only mark the descending point when the arc truly reached waist height (a
+  // genuine second opportunity), matching predict_hit_point_fall.
+  let mut ideal_idx2 = -1
+  if apex_y >= @physics.ideal_contact_h {
+    let mut best2 = 0.25
+    for i = apex_i + 1; i < shown; i = i + 1 {
+      if after[i] {
+        let dh = @vec.dabs(ys[i] - @physics.ideal_contact_h)
+        if dh < best2 {
+          best2 = dh
+          ideal_idx2 = i
+        }
+      }
+    }
+  }
+  @ffi.host_show_trail(self.host, buf, ideal_idx, ideal_idx2)
 }
 
 // ---------------- point flow ----------------
@@ -1940,6 +1979,15 @@ fn rally_step(self : Game, ms : MatchState, dt : Double) -> Unit {
         ms.sweet_hit_valid = false
       }
     }
+    // The second (descending) contact opportunity, if the arc reaches waist
+    // height. Shares sweet_hit_clock, so remaining = sweet_hit_t2 - clock.
+    match @physics.predict_hit_point_fall(b, ms.surface, 1.0) {
+      Some(hp2) => {
+        ms.sweet_hit_t2 = hp2.t
+        ms.sweet_hit_valid2 = true
+      }
+      None => ms.sweet_hit_valid2 = false
+    }
     self.show_trajectory_trail(ms)
   }
 }
@@ -2001,6 +2049,26 @@ fn time_to_contact(ms : MatchState) -> Double? {
     return None
   }
   Some(ms.sweet_hit_t - ms.sweet_hit_clock)
+}
+
+// Remaining time to the NEXT upcoming best-hit point for the shrinking ring:
+// the rising crossing first, then (once that window has closed) the descending
+// crossing toward the second bounce. beststart is where the ring reaches zero.
+fn ring_remaining(ms : MatchState, beststart : Double) -> Double? {
+  if !ms.sweet_hit_valid || ms.last_hit_by != Some(@rules.C) {
+    return None
+  }
+  let rem1 = ms.sweet_hit_t - ms.sweet_hit_clock
+  if rem1 > beststart {
+    return Some(rem1)
+  }
+  if ms.sweet_hit_valid2 {
+    let rem2 = ms.sweet_hit_t2 - ms.sweet_hit_clock
+    if rem2 > beststart {
+      return Some(rem2)
+    }
+  }
+  None
 }
 
 ///|
@@ -2084,12 +2152,13 @@ pub fn frame_update(dt : Double) -> Unit {
   // swing timing feedback + recommended shot. The on-court ring shrinks from the
   // reach radius (frac=1) to zero exactly at the START of the best-hit window
   // (t = swing_contact_t + timing_tol); after that it stays hidden until the next
-  // incoming ball.
+  // best-hit point. There are up to two per incoming ball: the rising crossing
+  // after the bounce, then the descending one toward the second bounce.
   let ttc = time_to_contact(ms)
   let beststart = swing_contact_t + timing_tol
-  match ttc {
+  match ring_remaining(ms, beststart) {
     Some(t) =>
-      if t <= timing_window && t > beststart {
+      if t <= timing_window {
         let ring_frac = @vec.clampd((t - beststart) / (timing_window - beststart), 0.0, 1.0)
         @ffi.host_set_timing_ring(h, true, ring_frac)
       } else {

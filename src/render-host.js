@@ -88,7 +88,7 @@ export function createRenderHost(scene, audio = null) {
     setSweet(show, x, y, z, cdShow, cdFrac, cdGood) {
       if (ball) ball.setSweet(show, x, y, z, cdShow, cdFrac, cdGood);
     },
-    showTrail(arr, idealIdx) { if (ball) ball.showTrail(arr, idealIdx); },
+    showTrail(arr, idealIdx, idealIdx2) { if (ball) ball.showTrail(arr, idealIdx, idealIdx2); },
     hideTrail() { if (ball) ball.hideTrail(); },
     bounceFx(x, z, speed, surface) { if (ball) ball.bounceFx(x, z, speed, surface); },
 
