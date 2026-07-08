@@ -107,6 +107,10 @@ pub(all) struct Ai {
   mut home_x : Double
   mut home_z : Double
   mut at_net : Bool // rushing/holding the net this exchange
+  // Balance-study shot policy (default off): force every rally stroke to this
+  // type, and play Slice on the return of serve when return_slice is set.
+  mut forced_type : @shots.ShotType?
+  mut return_slice : Bool
 }
 
 ///|
@@ -150,6 +154,8 @@ pub fn create_ai(character : @shots.Character, difficulty_id : String) -> Ai {
     home_x: 0.0,
     home_z: -12.3,
     at_net: false,
+    forced_type: None,
+    return_slice: false,
   }
 }
 
@@ -214,6 +220,7 @@ pub(all) struct AiCtx {
   game_time : Double
   can_hit : Bool
   bounced : Bool
+  is_return : Bool // this stroke is the return of serve (rally_shots == 0)
 }
 
 ///|
@@ -291,7 +298,23 @@ fn choose_stroke(ai : Ai, ctx : AiCtx, pred_x : Double, pred_z : Double, rng : @
     (2.6, 5.0, 0.0, 1.0),
     (human_x * 0.5, 9.5, 0.0, 0.0),
   ]
-  let types : Array[@shots.ShotType] = [Flat, Topspin, Slice]
+  // Balance-study policy: Slice on the return of serve, else a single forced
+  // type; otherwise the normal Flat/Topspin/Slice choice. When forced, the
+  // tactical Lob/Drop override below is skipped so "Topspin only" is literal.
+  let return_forced = ctx.is_return && ai.return_slice
+  let policy_forced = return_forced ||
+    (match ai.forced_type {
+      Some(_) => true
+      None => false
+    })
+  let types : Array[@shots.ShotType] = if return_forced {
+    [Slice]
+  } else {
+    match ai.forced_type {
+      Some(ft) => [ft]
+      None => [Flat, Topspin, Slice]
+    }
+  }
   let mut best_u = -1.0e18
   let mut best_type : @shots.ShotType = Flat
   let mut best_tx = 0.0
@@ -339,11 +362,19 @@ fn choose_stroke(ai : Ai, ctx : AiCtx, pred_x : Double, pred_z : Double, rng : @
     _ => 9.2
   }
   let plan_x = best_tx / @tuning.t.aim_x_scale
+  let default_plan : StrokePlan = {
+    type_: best_type,
+    aim_x: plan_x,
+    aim_depth: (best_tz - base_z) / 2.4,
+  }
+  if policy_forced {
+    return default_plan
+  }
   // tactical override: lob a net-rusher, drop on a deep camper
   match tactical_shot_type(human_z, rng.uniform(), ai.diff.id) {
     Some(Lob) => { type_: Lob, aim_x: plan_x, aim_depth: 1.0 }
     Some(Drop) => { type_: Drop, aim_x: plan_x, aim_depth: -1.0 }
-    _ => { type_: best_type, aim_x: plan_x, aim_depth: (best_tz - base_z) / 2.4 }
+    _ => default_plan
   }
 }
 

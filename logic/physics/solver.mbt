@@ -417,7 +417,11 @@ pub fn solve_shot(
   let side_sign = if target_z < from_z { 1.0 } else { -1.0 }
 
   // net_margin: how much clearance above net required
-  let net_margin = if is_drive { 0.05 } else { 0.25 }
+  let net_margin = if is_drive {
+    @tuning.t.net_margin_drive
+  } else {
+    @tuning.t.net_margin_control
+  }
 
   // apex for control shots
   let apex = @vec.dmax(1.8, @vec.dmin(5.0, 1.8 + (theta_max_deg - 10.0) * 0.07))

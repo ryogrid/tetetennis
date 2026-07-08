@@ -651,6 +651,18 @@ fn refresh_score(self : Game, ms : MatchState) -> Unit {
 }
 
 ///|
+// Map a balance-study shot-policy code to a forced type (0=none / 1=flat /
+// 2=topspin / 3=slice).
+fn policy_type(code : Int) -> @shots.ShotType? {
+  match code {
+    1 => Some(Flat)
+    2 => Some(Topspin)
+    3 => Some(Slice)
+    _ => None
+  }
+}
+
+///|
 fn start_match(self : Game) -> Unit {
   let surface_id = surface_ids[self.sel_surface]
   let surface = @physics.surface_by_id(surface_id)
@@ -664,6 +676,16 @@ fn start_match(self : Game) -> Unit {
   } else {
     None
   }
+  // Balance-study per-side shot policy (default off): side C = ai, side P = ai_p.
+  ai.forced_type = policy_type(@tuning.t.force_type_c)
+  ai.return_slice = @tuning.t.return_slice
+  match ai_p {
+    Some(a) => {
+      a.forced_type = policy_type(@tuning.t.force_type_p)
+      a.return_slice = @tuning.t.return_slice
+    }
+    None => ()
+  }
   let human = match ai_p {
     Some(a) => create_player(@rules.P, char_p, a.diff.speed_mul)
     None => create_player(@rules.P, char_p, 1.0)
@@ -674,8 +696,15 @@ fn start_match(self : Game) -> Unit {
   } else {
     None
   }
-  // practice: the CPU is the permanent feeder; points never alternate the server
-  let first_server = if self.is_practice { @rules.C } else { @rules.P }
+  // practice: the CPU is the permanent feeder; points never alternate the server.
+  // Otherwise side P serves first unless a balance study set first_server = 1 (C).
+  let first_server = if self.is_practice {
+    @rules.C
+  } else if @tuning.t.first_server == 1 {
+    @rules.C
+  } else {
+    @rules.P
+  }
   let ms : MatchState = {
     human,
     cpu,
@@ -1744,6 +1773,7 @@ pub fn fixed_update(dt : Double) -> Unit {
         game_time: ms.time,
         can_hit: b.active && ms.last_hit_by == Some(@rules.P),
         bounced: ms.bounces > 0,
+        is_return: ms.point_state == Rally && ms.stats.rally_shots == 0,
       },
       self.rng,
     )

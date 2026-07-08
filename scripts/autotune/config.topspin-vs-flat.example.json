@@ -1,0 +1,64 @@
+{
+  "_comment": "Balance study: on clay, Ace (idx 4) vs Ace (idx 4). Side A (you) plays Topspin only, side B (opp) plays Flat only, both Slice on the return of serve. The objective rewards parameter sets where A's per-MATCH win rate is near 60% (topspin the slightly-better percentage play), with a sample-size penalty so a near-60% seen over too few matches does not score well. First server alternates by seed so the 60% reflects shot merit, not serve order. Copy to e.g. autotune.topspin.config.json and run: .venv-autotune/bin/python scripts/autotune/tune.py --config autotune.topspin.config.json . Every number here is editable.",
+
+  "_bounds_note": "Search ranges are TIGHTENED to physically-valid regions so the optimizer cannot reach its objective via invalid physics. The prior wide ranges let the winner break unit-tested invariants: the ITF ball-rebound spec (bounce_v_ref too low / bounce_min_frac too low), the 'stretched contact is shorter' rule (topspin_theta_max too high or aero_cl_max too low), the shot-type-contrast test (spin_bounce_vertical 0), and serve accuracy (aero_cl_max too high). Both extreme corners of this box were verified to pass all 38 unit tests. Widen a range only after re-checking `moon test`.",
+
+  "search_space": {
+    "topspin_speed_mul":    { "min": 0.80, "max": 1.05 },
+    "flat_speed_mul":       { "min": 0.92, "max": 1.08 },
+    "slice_speed_mul":      { "min": 0.65, "max": 0.88 },
+    "topspin_theta_min":    { "min": 8.0,  "max": 13.0 },
+    "topspin_theta_max":    { "min": 25.0, "max": 28.0 },
+    "flat_theta_max":       { "min": 12.0, "max": 20.0 },
+    "topspin_rpm_base":     { "min": 1800, "max": 2500 },
+    "topspin_rpm_slope":    { "min": 1800, "max": 2700 },
+    "aero_cl_max":          { "min": 0.32, "max": 0.42 },
+    "net_margin_drive":     { "min": 0.03, "max": 0.15 },
+    "net_margin_control":   { "min": 0.15, "max": 0.38 },
+    "rally_depth_min":      { "min": 3.8,  "max": 5.8 },
+    "rally_depth_max":      { "min": 10.5, "max": 12.2 },
+    "bounce_v_ref":         { "min": 7.0,  "max": 8.6 },
+    "bounce_slope":         { "min": 0.011, "max": 0.016 },
+    "bounce_min_frac":      { "min": 0.62, "max": 0.70 },
+    "spin_bounce_vertical": { "min": 0.003, "max": 0.009 }
+  },
+
+  "fixed_params": {},
+
+  "_fitness_note": "60% win rate stays the primary objective (weight 1.0, robust). The realism guards are STRENGTHENED (higher weights, tighter ranges) so the search cannot reach 60% via degenerate short/winner-heavy play: a solution that hits 60% but with e.g. avg_rally 1.6 / winner 71% now costs far more than a realistic 60%. Because the win-rate penalty grows quadratically with distance from 60, being far off is still punished most; the guards break ties among near-60% candidates toward realistic tennis. If no realistic ~60% region exists, the study will report the best compromise (that itself is useful signal).",
+
+  "fitness": [
+    { "metric": "side_a_win_pct",   "target": 60, "robust": true, "z": 1.0, "weight": 1.0, "scale": 6.0 },
+    { "metric": "avg_rally_shots",  "min": 4,   "max": 11,   "weight": 1.0, "scale": 2.0 },
+    { "metric": "winner_pct",       "min": 20,  "max": 45,   "weight": 0.7, "scale": 6.0 },
+    { "metric": "unforced_pct",     "min": 28,  "max": 60,   "weight": 0.5, "scale": 6.0 },
+    { "metric": "double_fault_pct", "min": 1,   "max": 10,   "weight": 0.3, "scale": 3.0 },
+    { "metric": "match_duration_s", "min": 300, "max": 1200, "weight": 0.3, "scale": 120 }
+  ],
+
+  "run": {
+    "n_trials": 200,
+    "matches_per_trial": 48,
+    "seed_base": 1000,
+    "workers": 4,
+    "games": 4,
+    "max_steps_per_match": 600000,
+    "sampler_seed": 42,
+    "timeout_weight": 50.0,
+    "max_consecutive_failures": 5,
+    "matchups": [
+      {
+        "you": 4, "opp": 4, "surface": "clay", "difficulty": "normal",
+        "force": { "a": "topspin", "b": "flat", "return": "slice", "alternate_server": true }
+      }
+    ]
+  },
+
+  "validation": {
+    "top_k": 5,
+    "seed_base": 100000,
+    "matches_per_matchup": 120
+  },
+
+  "output_dir": "autotune_topspin_out"
+}

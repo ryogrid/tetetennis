@@ -22,6 +22,7 @@
         "get_time_scale:getTimeScale",
         "menu_cmd:menuCmd",
         "set_cpu_mode:setCpuMode",
+        "set_match_policy:setMatchPolicy",
         "get_match_stats:getMatchStats",
         "set_param:setParam",
         "get_param:getParam",

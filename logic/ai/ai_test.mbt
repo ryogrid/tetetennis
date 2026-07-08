@@ -126,6 +126,7 @@ fn play_ball(
         game_time,
         can_hit: true,
         bounced: cpu_bounces > 0,
+        is_return: false,
       },
       rng,
     )

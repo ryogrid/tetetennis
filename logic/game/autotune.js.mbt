@@ -25,6 +25,20 @@ pub fn set_cpu_mode(on : Int) -> Unit {
 }
 
 ///|
+// Per-side shot policy for CPU-vs-CPU balance studies. Call after setCpuMode and
+// before menuCmd("go", ...) so start_match snapshots it onto the two AIs.
+// force_p / force_c: 0=none / 1=flat / 2=topspin / 3=slice. return_slice: play
+// Slice on the return of serve. first_server: 0=P / 1=C.
+pub fn set_match_policy(
+  force_p : Int,
+  force_c : Int,
+  return_slice : Int,
+  first_server : Int,
+) -> Unit {
+  @tuning.set_match_policy(force_p, force_c, return_slice != 0, first_server)
+}
+
+///|
 // JSON report of the current match. During a match this is a live partial
 // snapshot (finished:false, winner:""); after completion it is the final
 // report snapshotted before teardown; "" if no match since init. The live
@@ -110,6 +124,7 @@ fn p_ai_ctx(ms : MatchState) -> @ai.AiCtx {
     game_time: ms.time,
     can_hit: b.active && ms.last_hit_by == Some(@rules.C),
     bounced: ms.bounces > 0,
+    is_return: ms.point_state == Rally && ms.stats.rally_shots == 0,
   }
 }
 

@@ -18,9 +18,14 @@ pub(all) enum ShotType {
 ///|
 pub fn shot_def(t : ShotType) -> (Double, Double, Double) {
   match t {
-    Flat => (1.00, 0.0, 16.0)
-    Topspin => (0.85, 10.0, 32.0)
-    Slice => (0.76, 1.0, 16.0)
+    Flat => (@tuning.t.flat_speed_mul, 0.0, @tuning.t.flat_theta_max)
+    Topspin =>
+      (
+        @tuning.t.topspin_speed_mul,
+        @tuning.t.topspin_theta_min,
+        @tuning.t.topspin_theta_max,
+      )
+    Slice => (@tuning.t.slice_speed_mul, 1.0, 16.0)
     Lob => (1.00, 28.0, 55.0)
     Drop => (0.50, 26.0, 32.0)
   }
@@ -151,8 +156,11 @@ pub fn contact_quality(
   }
   // assist (human only) widens the forgiving bands; the CPU is never eased
   let aid = human && @assist.assist_on()
-  let lo = @physics.ideal_contact_r - 0.35
-  let hi = @physics.ideal_contact_r + (if aid { 0.40 } else { 0.25 })
+  // Sweet-zone half-widths doubled around the ideal contact radius (the flat
+  // band is twice as forgiving left/right). lo goes slightly negative, so the
+  // too-close "jam" branch below no longer fires within reach.
+  let lo = @physics.ideal_contact_r - 0.70
+  let hi = @physics.ideal_contact_r + (if aid { 0.80 } else { 0.50 })
   let q_dist = if d < lo {
     (if aid { 0.70 } else { 0.55 }) + (if aid { 0.30 } else { 0.45 }) * (d / lo)
   } else if d <= hi {
@@ -160,11 +168,13 @@ pub fn contact_quality(
   } else {
     @vec.clampd(1.0 - (d - hi) / (reach - hi), 0.0, 1.0)
   }
-  let h_flat = if aid { 0.45 } else { 0.3 }
+  // Height flat band and the penalty ramp both doubled (twice as forgiving
+  // up/down); h_cap is the max penalty depth, not a band width, so it is left.
+  let h_flat = if aid { 0.90 } else { 0.6 }
   let h_cap = if aid { 0.40 } else { 0.55 }
   let q_height = 1.0 -
     @vec.clampd(
-      (@vec.dabs(h - @physics.ideal_contact_h) - h_flat) / 0.9,
+      (@vec.dabs(h - @physics.ideal_contact_h) - h_flat) / 1.8,
       0.0,
       h_cap,
     )

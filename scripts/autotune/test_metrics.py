@@ -58,6 +58,12 @@ def canned_report():
     }
 
 
+def mini_report(winner):
+    r = canned_report()
+    r["winner"] = winner
+    return r
+
+
 def approx(a, b, eps=1e-9):
     assert abs(a - b) < eps, f"{a} != {b}"
 
@@ -113,6 +119,43 @@ def main():
     assert errs and "mirror" in errs[0]
     errs = validate_fitness([{"metric": "winner_pct", "min": 10, "max": 30}], False)
     assert errs == []
+
+    # side-A per-match win rate + sample size
+    approx(m["side_a_win_pct"], 100.0)  # single canned report, winner "p"
+    approx(m["side_a_win_n"], 1.0)
+    reports5 = [mini_report("p")] * 3 + [mini_report("c")] * 2
+    m5 = compute_metrics(reports5)
+    approx(m5["side_a_win_pct"], 60.0)
+    approx(m5["side_a_win_n"], 5.0)
+
+    # robust term: a near-target rate from FEW matches must score worse than
+    # from many, and the plain hinge is zero at target.
+    base = {"metric": "side_a_win_pct", "target": 60, "scale": 6, "weight": 1}
+    approx(term_penalty(base, 60.0), 0.0)
+    rob = {**base, "robust": True, "z": 1.0}
+    small_n = term_penalty(rob, 60.0, 5)
+    large_n = term_penalty(rob, 60.0, 200)
+    assert small_n > large_n > 0.0, (small_n, large_n)
+    # robust falls back to the plain hinge when the sample size is unknown
+    approx(term_penalty(rob, 60.0, None), 0.0)
+
+    # loss reads the companion sample-size metric for a robust term
+    tot, _ = loss(
+        {"side_a_win_pct": 60.0, "side_a_win_n": 5.0},
+        [rob],
+        timeout_rate=0.0,
+        timeout_weight=50.0,
+    )
+    approx(tot, small_n)
+
+    # aggregate sums side_a_win_n across mirror matchups, averages the pct
+    aggm = aggregate_matchups([m5, m5], [True, True])
+    approx(aggm["side_a_win_n"], 10.0)
+    approx(aggm["side_a_win_pct"], 60.0)
+
+    # a robust term validates its (defaulted) companion metric name
+    assert validate_fitness([{**rob, "n_metric": "nope"}], True)
+    assert validate_fitness([rob], True) == []
 
     # NaN never sneaks in
     assert not any(math.isnan(v) for v in m.values())

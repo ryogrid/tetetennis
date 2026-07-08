@@ -60,24 +60,41 @@ pub(all) struct Tuning {
   mut ai_react_scale : Double
   mut ai_choice_noise_scale : Double
   mut ai_tactical_scale : Double
+  // per-shot-type shot_def (speed multiplier + launch-angle band, degrees)
+  mut flat_speed_mul : Double
+  mut topspin_speed_mul : Double
+  mut slice_speed_mul : Double
+  mut flat_theta_max : Double
+  mut topspin_theta_min : Double
+  mut topspin_theta_max : Double
+  // solver net-clearance margins (drive = flat, control = spin shots)
+  mut net_margin_drive : Double
+  mut net_margin_control : Double
   // mode flag (not a tunable)
   mut cpu_p : Bool
+  // Per-side shot policy for CPU-vs-CPU balance studies (not tunables; set via
+  // set_match_policy, left alone by reset_params). force_type: 0=none / 1=flat /
+  // 2=topspin / 3=slice. first_server: 0=P / 1=C.
+  mut force_type_p : Int
+  mut force_type_c : Int
+  mut return_slice : Bool
+  mut first_server : Int
 }
 
 ///|
 fn defaults() -> Tuning {
   {
     aero_cd: 0.55,
-    aero_cl_max: 0.40,
+    aero_cl_max: 0.31722006791969354, // autotuned topspin study (was 0.4)
     aero_spin_decay_tau: 7.0,
-    bounce_v_ref: 7.1,
-    bounce_slope: 0.012,
-    bounce_min_frac: 0.65,
-    spin_bounce_vertical: 0.004,
+    bounce_v_ref: 8.592068172949306, // autotuned topspin study (was 7.1)
+    bounce_slope: 0.015001942533694603, // autotuned topspin study (was 0.012)
+    bounce_min_frac: 0.6168453650051086, // autotuned topspin study (was 0.65)
+    spin_bounce_vertical: 0.008354272614227123, // autotuned topspin study (was 0.004)
     flat_speed_base: 18.0,
     flat_speed_slope: 7.0,
-    topspin_rpm_base: 2200.0,
-    topspin_rpm_slope: 2600.0,
+    topspin_rpm_base: 2069.4478139041503, // autotuned topspin study (was 2200.0)
+    topspin_rpm_slope: 2276.626387837988, // autotuned topspin study (was 2600.0)
     slice_rpm_base: 1500.0,
     slice_rpm_slope: 1800.0,
     err_mul_hi: 2.1918957106234385, // autotuned (was 1.6)
@@ -96,8 +113,8 @@ fn defaults() -> Tuning {
     jam_threshold: 26.0,
     jam_scale: 14.0,
     aim_x_scale: 2.8,
-    rally_depth_min: 4.5,
-    rally_depth_max: 11.046198030546185, // autotuned (was 11.2)
+    rally_depth_min: 4.778879342520293, // autotuned topspin study (was 4.5)
+    rally_depth_max: 11.78789176257743, // autotuned topspin study (was 11.046198030546185)
     serve_err_x: 0.30,
     serve_err_z: 0.35,
     serve_err_speed: 0.025,
@@ -112,7 +129,19 @@ fn defaults() -> Tuning {
     ai_react_scale: 1.5176944481154784, // autotuned (was 1.0)
     ai_choice_noise_scale: 1.0,
     ai_tactical_scale: 1.0,
+    flat_speed_mul: 0.9918469490595508, // autotuned topspin study (was 1.0)
+    topspin_speed_mul: 1.0323938212953652, // autotuned topspin study (was 0.85)
+    slice_speed_mul: 0.7001049733126442, // autotuned topspin study (was 0.76)
+    flat_theta_max: 14.050105305200743, // autotuned topspin study (was 16.0)
+    topspin_theta_min: 9.338068284957794, // autotuned topspin study (was 10.0)
+    topspin_theta_max: 28.357518332926666, // autotuned topspin study (was 32.0)
+    net_margin_drive: 0.16760682648027334, // autotuned topspin study (was 0.05)
+    net_margin_control: 0.27530100490744747, // autotuned topspin study (was 0.25)
     cpu_p: false,
+    force_type_p: 0,
+    force_type_c: 0,
+    return_slice: false,
+    first_server: 0,
   }
 }
 
@@ -127,6 +156,22 @@ pub fn cpu_p_active() -> Bool {
 ///|
 pub fn set_cpu_p(on : Bool) -> Unit {
   t.cpu_p = on
+}
+
+///|
+// Per-side shot policy for CPU-vs-CPU balance studies. Like cpu_p, this is mode
+// state (not a tunable) and reset_params leaves it alone. force_type: 0=none /
+// 1=flat / 2=topspin / 3=slice; first_server: 0=P / 1=C.
+pub fn set_match_policy(
+  force_p : Int,
+  force_c : Int,
+  return_slice : Bool,
+  first_server : Int,
+) -> Unit {
+  t.force_type_p = force_p
+  t.force_type_c = force_c
+  t.return_slice = return_slice
+  t.first_server = first_server
 }
 
 ///|
@@ -179,6 +224,14 @@ pub fn reset_params() -> Unit {
   t.ai_react_scale = d.ai_react_scale
   t.ai_choice_noise_scale = d.ai_choice_noise_scale
   t.ai_tactical_scale = d.ai_tactical_scale
+  t.flat_speed_mul = d.flat_speed_mul
+  t.topspin_speed_mul = d.topspin_speed_mul
+  t.slice_speed_mul = d.slice_speed_mul
+  t.flat_theta_max = d.flat_theta_max
+  t.topspin_theta_min = d.topspin_theta_min
+  t.topspin_theta_max = d.topspin_theta_max
+  t.net_margin_drive = d.net_margin_drive
+  t.net_margin_control = d.net_margin_control
 }
 
 ///|
@@ -230,6 +283,14 @@ pub fn set_param(name : String, v : Double) -> Bool {
     "ai_react_scale" => t.ai_react_scale = v
     "ai_choice_noise_scale" => t.ai_choice_noise_scale = v
     "ai_tactical_scale" => t.ai_tactical_scale = v
+    "flat_speed_mul" => t.flat_speed_mul = v
+    "topspin_speed_mul" => t.topspin_speed_mul = v
+    "slice_speed_mul" => t.slice_speed_mul = v
+    "flat_theta_max" => t.flat_theta_max = v
+    "topspin_theta_min" => t.topspin_theta_min = v
+    "topspin_theta_max" => t.topspin_theta_max = v
+    "net_margin_drive" => t.net_margin_drive = v
+    "net_margin_control" => t.net_margin_control = v
     _ => return false
   }
   true
@@ -284,6 +345,14 @@ pub fn get_param(name : String) -> Double {
     "ai_react_scale" => t.ai_react_scale
     "ai_choice_noise_scale" => t.ai_choice_noise_scale
     "ai_tactical_scale" => t.ai_tactical_scale
+    "flat_speed_mul" => t.flat_speed_mul
+    "topspin_speed_mul" => t.topspin_speed_mul
+    "slice_speed_mul" => t.slice_speed_mul
+    "flat_theta_max" => t.flat_theta_max
+    "topspin_theta_min" => t.topspin_theta_min
+    "topspin_theta_max" => t.topspin_theta_max
+    "net_margin_drive" => t.net_margin_drive
+    "net_margin_control" => t.net_margin_control
     _ => @double.not_a_number
   }
 }

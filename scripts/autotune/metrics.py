@@ -121,6 +121,13 @@ def compute_metrics(reports: list[dict]) -> dict[str, float]:
         / len(reports),
         "run_m_per_point": run_m / n_points,
         "win_balance_pct": pct(lambda p: p["winner"] == "p"),
+        # Per-MATCH win rate for side A (= P = "you"); only meaningful on a
+        # mirror matchup where the sides differ solely by an imposed policy
+        # (e.g. topspin-only vs flat-only). side_a_win_n carries the sample size
+        # so a robust fitness term can penalise a near-target rate seen over too
+        # few matches.
+        "side_a_win_pct": 100.0 * sum(1 for r in reports if r["winner"] == "p") / len(reports),
+        "side_a_win_n": float(len(reports)),
     }
 
 
@@ -144,10 +151,15 @@ METRIC_NAMES = frozenset(
         "game_margin",
         "run_m_per_point",
         "win_balance_pct",
+        "side_a_win_pct",
+        "side_a_win_n",
     }
 )
 
-MIRROR_ONLY_METRICS = frozenset({"win_balance_pct"})
+MIRROR_ONLY_METRICS = frozenset({"win_balance_pct", "side_a_win_pct", "side_a_win_n"})
+
+# Aggregated by SUM across matchups (a total count), not by mean.
+SUM_METRICS = frozenset({"side_a_win_n"})
 
 # ------------------------------------------------------------------ loss
 
@@ -172,16 +184,27 @@ def aggregate_matchups(
         else:
             vals = [m[name] for m in per_matchup if m is not None]
         if vals:
-            agg[name] = sum(vals) / len(vals)
+            agg[name] = sum(vals) if name in SUM_METRICS else sum(vals) / len(vals)
     return agg
 
 
-def term_penalty(term: dict, value: float) -> float:
-    """Hinge-squared: zero inside the acceptable region, quadratic outside."""
+def term_penalty(term: dict, value: float, n: float | None = None) -> float:
+    """Hinge-squared: zero inside the acceptable region, quadratic outside.
+
+    A ``robust`` term treats ``value`` as a percentage estimated from ``n``
+    matches and adds ``z`` standard errors to the deviation, so a near-target
+    rate seen over few matches (large binomial standard error) still scores
+    poorly. With enough matches the standard error shrinks and the term
+    approaches the plain hinge. ``n`` None/0 falls back to the plain hinge.
+    """
     if "target" in term:
         d = abs(value - term["target"])
     else:
         d = max(0.0, term.get("min", -math.inf) - value, value - term.get("max", math.inf))
+    if term.get("robust") and n:
+        p = min(max(value / 100.0, 0.0), 1.0)
+        se = 100.0 * math.sqrt(p * (1.0 - p) / n)
+        d += term.get("z", 1.0) * se
     scale = term.get("scale", 1.0)
     weight = term.get("weight", 1.0)
     return weight * (d / scale) ** 2
@@ -205,7 +228,11 @@ def loss(
         name = term["metric"]
         if name not in metrics:
             continue
-        p = term_penalty(term, metrics[name])
+        if term.get("robust"):
+            n = metrics.get(term.get("n_metric", "side_a_win_n"))
+            p = term_penalty(term, metrics[name], n)
+        else:
+            p = term_penalty(term, metrics[name])
         breakdown[name] = p
         total += p
     timeout_pen = timeout_weight * timeout_rate
@@ -227,6 +254,12 @@ def validate_fitness(fitness: list[dict], has_mirror_matchup: bool) -> list[str]
             errors.append(f"fitness[{i}] ({name}): target and min/max are exclusive")
         if term.get("scale", 1.0) <= 0:
             errors.append(f"fitness[{i}] ({name}): scale must be > 0")
+        if term.get("robust"):
+            n_metric = term.get("n_metric", "side_a_win_n")
+            if n_metric not in METRIC_NAMES:
+                errors.append(
+                    f"fitness[{i}] ({name}): robust n_metric {n_metric!r} is not a known metric"
+                )
         if name in MIRROR_ONLY_METRICS and not has_mirror_matchup:
             errors.append(
                 f"fitness[{i}] ({name}): requires at least one mirror matchup (you == opp)"
