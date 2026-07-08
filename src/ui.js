@@ -265,28 +265,6 @@ const css = `
   position: absolute; top: -22px; left: 50%; transform: translateX(-50%);
   font-size: 11px; color: #aaa; letter-spacing: 1px; white-space: nowrap;
 }
-#timingmeter {
-  position: absolute; bottom: 15%; left: 50%; transform: translateX(-50%);
-  width: 210px; height: 16px; display: none;
-  background: rgba(10,10,18,.55); border: 1px solid rgba(255,255,255,.3);
-  border-radius: 8px;
-}
-#timingmeter .tm-band {
-  position: absolute; top: 0; bottom: 0;
-  background: rgba(80,230,120,.30);
-  border-left: 1px solid rgba(80,230,120,.9);
-  border-right: 1px solid rgba(80,230,120,.9);
-}
-#timingmeter .tm-dot {
-  position: absolute; top: 50%; width: 14px; height: 14px;
-  margin-top: -7px; margin-left: -7px; border-radius: 50%;
-  background: #d8f24b; box-shadow: 0 0 6px rgba(0,0,0,.5);
-}
-#timingmeter .tm-dot.good { background: #50e678; box-shadow: 0 0 12px #50e678; }
-#timingmeter .tm-label {
-  position: absolute; top: -20px; left: 50%; transform: translateX(-50%);
-  font-size: 11px; color: #aaa; letter-spacing: 1px; white-space: nowrap;
-}
 #powermeter {
   position: absolute; bottom: 26%; left: 50%; transform: translateX(-50%);
   width: 230px; height: 18px; display: none;
@@ -308,29 +286,6 @@ const css = `
 #powermeter .pm-label {
   position: absolute; top: -20px; left: 50%; transform: translateX(-50%);
   font-size: 11px; color: #aaa; letter-spacing: 1px; white-space: nowrap;
-}
-#chargebar {
-  position: absolute; bottom: 19%; left: 50%; transform: translateX(-50%);
-  width: 210px; height: 15px; display: none;
-  background: rgba(10,10,18,.55); border: 1px solid rgba(255,255,255,.4);
-  border-radius: 8px; overflow: hidden;
-  box-shadow: 0 0 16px rgba(190,70,255,.6);
-  animation: cb-glow 0.7s ease-in-out infinite alternate;
-}
-#chargebar .cb-fill {
-  position: absolute; left: 0; top: 0; bottom: 0; width: 0%;
-  background: linear-gradient(90deg, #9b3bff, #ff3bd0, #ffd24a, #ff3bd0, #9b3bff);
-  background-size: 220% 100%;
-  animation: cb-sheen 0.55s linear infinite;
-  box-shadow: 0 0 12px rgba(255,90,225,.95);
-}
-@keyframes cb-glow {
-  from { box-shadow: 0 0 10px rgba(160,60,255,.45); }
-  to   { box-shadow: 0 0 24px rgba(255,80,225,.9); }
-}
-@keyframes cb-sheen {
-  from { background-position: 0% 0; }
-  to   { background-position: 220% 0; }
 }
 /* second row, below the fixed ⚙ gear + ⤓ CLIP buttons (both top:10, z-index:60)
    so the toolbar is no longer buried behind them; kept right-aligned to avoid
@@ -502,7 +457,7 @@ export function createUI({ onVirtualKey, onMoveAxis, onSelectShot, settings, onS
   // option out horizontally (click to pick); phones keep the ◂ value ▸ toggle.
   const isDesktop = window.matchMedia('(hover: hover) and (pointer: fine)').matches;
   // per-name gauge "shown" state (toss / timing / height)
-  const gaugeShown = { toss: false, timing: false };
+  const gaugeShown = { toss: false };
   let recommendedShot = '';
 
   function div(id, parent, cls) {
@@ -562,19 +517,11 @@ export function createUI({ onVirtualKey, onMoveAxis, onSelectShot, settings, onS
     '<div class="tg-label">TOSS</div><div class="tg-band"></div><div class="tg-dot"></div>';
   els.tgBand = els.tossgauge.querySelector('.tg-band');
   els.tgDot = els.tossgauge.querySelector('.tg-dot');
-  els.timingmeter = div('timingmeter', hud);
-  els.timingmeter.innerHTML =
-    '<div class="tm-label">HIT</div><div class="tm-band"></div><div class="tm-dot"></div>';
-  els.tmBand = els.timingmeter.querySelector('.tm-band');
-  els.tmDot = els.timingmeter.querySelector('.tm-dot');
   els.powermeter = div('powermeter', hud);
   els.powermeter.innerHTML =
     '<span class="pm-label">SERVE POWER</span><div class="pm-band"></div><div class="pm-dot"></div>';
   els.pmBand = els.powermeter.querySelector('.pm-band');
   els.pmDot = els.powermeter.querySelector('.pm-dot');
-  els.chargebar = div('chargebar', hud);
-  els.chargebar.innerHTML = '<i class="cb-fill"></i>';
-  els.cbFill = els.chargebar.querySelector('.cb-fill');
   els.hitquality = div('hitquality', hud);
   els.hitquality.innerHTML =
     '<div class="hq-label">CONTACT</div><div class="hq-num">0</div>' +
@@ -1080,7 +1027,6 @@ export function createUI({ onVirtualKey, onMoveAxis, onSelectShot, settings, onS
     els.banner.style.opacity = 0;
     els.toast.style.opacity = 0;
     hideGauge('toss');
-    hideGauge('timing');
     hideGauge('height');
     hideHitQuality();
     hideMoveHint();
@@ -1304,12 +1250,6 @@ export function createUI({ onVirtualKey, onMoveAxis, onSelectShot, settings, onS
       els.tgBand.style.height = `${((hi - lo) * 100).toFixed(1)}%`;
       els.tgDot.style.bottom = `${(f * 100).toFixed(1)}%`;
       els.tgDot.classList.toggle('sweet', !!good);
-    } else if (name === 'timing') {
-      if (!gaugeShown.timing) { els.timingmeter.style.display = 'block'; gaugeShown.timing = true; }
-      els.tmBand.style.left = `${(lo * 100).toFixed(1)}%`;
-      els.tmBand.style.width = `${((hi - lo) * 100).toFixed(1)}%`;
-      els.tmDot.style.left = `${(f * 100).toFixed(1)}%`;
-      els.tmDot.classList.toggle('good', !!good);
     } else if (name === 'power') {
       if (!gaugeShown.power) { els.powermeter.style.display = 'block'; gaugeShown.power = true; }
       els.pmBand.style.left = `${(lo * 100).toFixed(1)}%`;
@@ -1323,23 +1263,7 @@ export function createUI({ onVirtualKey, onMoveAxis, onSelectShot, settings, onS
     if (!gaugeShown[name]) return;
     gaugeShown[name] = false;
     if (name === 'toss') els.tossgauge.style.display = 'none';
-    else if (name === 'timing') els.timingmeter.style.display = 'none';
     else if (name === 'power') els.powermeter.style.display = 'none';
-  }
-
-  // hold-to-charge bar. frac is the elapsed press time over the charge ceiling
-  // [0,1]. The bar fills smoothly; more charge = more power, no penalty.
-  let chargeShown = false;
-  function charge(frac) {
-    const f = Math.max(0, Math.min(1, frac));
-    if (!chargeShown) { els.chargebar.style.display = 'block'; chargeShown = true; }
-    els.cbFill.style.width = `${f * 100}%`;
-
-  }
-  function hideCharge() {
-    if (!chargeShown) return;
-    chargeShown = false;
-    els.chargebar.style.display = 'none';
   }
 
   // The on-screen move-assist arrow has been removed; keep no-op stubs so any
@@ -1359,7 +1283,7 @@ export function createUI({ onVirtualKey, onMoveAxis, onSelectShot, settings, onS
     showHUD, hideHUD, updateScore, practiceHud,
     banner, toast, flashShot, serveSpeedToast, serveInfo, setRecommendedShot,
     setShotContext,
-    gauge, hideGauge, charge, hideCharge,
+    gauge, hideGauge,
     hitQuality, hideHitQuality,
     moveHint, hideMoveHint,
     pointSituation, getSituation, hawkEye,

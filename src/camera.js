@@ -13,8 +13,11 @@ const EYE_BACK = 0.15; // eyes slightly behind the body position
 const CAMERA_BACK = 2.5; // meters behind body — pull back enough to see the full player
 const SERVICE_LINE = 6.40; // |z| of the service line (was COURT.serviceLine)
 // Overhead ("bird's-eye") view: high and behind the player, looking down-court.
-const OVER_H = 8.5; // meters above the court
-const OVER_BACK = 5.5; // meters behind the player
+// Pulled back far enough that ~1 m of ground behind the player is visible while
+// the opponent stays framed even when the human retreats to the back fence
+// (player_z_max = 16). Framing is z-invariant because the rig follows the human.
+const OVER_H = 9.5; // meters above the court
+const OVER_BACK = 7.5; // meters behind the player
 const OVER_LOOK_AHEAD = 16; // look at a point this far down-court from the player
 const OVER_LOOK_X = 0.4; // fraction of the player's x carried into the look target
 // Opt-in broadcast ("TV") angle: elevated, centred behind the baseline.

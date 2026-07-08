@@ -1066,6 +1066,32 @@ export function createPlayerRig({ side, color, reach, scene }) {
       if (this._reachMat) this._reachMat.color.setHex(hex);
     },
 
+    // Charge aura: a vertical additive glow enveloping the body whose size and
+    // brightness grow with the charge fraction. Additive blending brightens
+    // rather than occludes, so the player stays readable (視認性).
+    setAura(frac) {
+      const g = this._aura;
+      if (!g) return;
+      const f = Math.max(0, Math.min(1, frac));
+      if (f <= 0.01) { g.visible = false; return; }
+      g.visible = true;
+      const r = 0.35 + 0.55 * f;   // radius: 0.35 → 0.90 m
+      g.scale.set(r, 0.85 + 0.35 * f, r); // slight vertical stretch with charge
+      if (this._auraMat) this._auraMat.opacity = 0.12 + 0.4 * f;
+    },
+    hideAura() { if (this._aura) this._aura.visible = false; },
+
+    // Swing-timing ring: a flat circle concentric with the reach zone that
+    // shrinks from the reach radius (frac=1) to the player centre (frac=0).
+    setTimingRing(show, frac) {
+      const m = this._timingRing;
+      if (!m) return;
+      const f = Math.max(0, Math.min(1, frac));
+      if (!show || f <= 0.001) { m.visible = false; return; }
+      m.visible = true;
+      m.scale.set(f, f, 1);
+    },
+
     // Dim the whole body + racket to translucent (behind-player camera) so the
     // incoming ball and effects stay visible through the player; restore on
     // overhead view. Overlays (reach zone, hit-point rings) are untouched.
@@ -1105,6 +1131,36 @@ export function createPlayerRig({ side, color, reach, scene }) {
     circle.position.y = 0.012;
     root.add(circle);
     p._reachMat = circMat;
+
+    // Swing-timing ring: a thin bright annulus concentric with the reach zone,
+    // laid flat just above it. Driven by setTimingRing (scaled from the reach
+    // radius down to the player centre as the best-hit window approaches).
+    const ringMat = new THREE.MeshBasicMaterial({
+      color: 0xffe24a, transparent: true, opacity: 0.85, side: THREE.DoubleSide,
+    });
+    const timingRing = new THREE.Mesh(
+      new THREE.RingGeometry(reach * 0.9, reach, 48), ringMat,
+    );
+    timingRing.rotation.x = -Math.PI / 2;
+    timingRing.position.y = 0.013;
+    timingRing.visible = false;
+    root.add(timingRing);
+    p._timingRing = timingRing;
+
+    // Charge aura: an open, double-sided additive cylinder wrapping the torso.
+    // Radius/height/opacity are driven by setAura; hidden at zero charge.
+    const auraMat = new THREE.MeshBasicMaterial({
+      color: 0xffcf5a, transparent: true, opacity: 0.0,
+      side: THREE.DoubleSide, blending: THREE.AdditiveBlending, depthWrite: false,
+    });
+    const aura = new THREE.Mesh(
+      new THREE.CylinderGeometry(1, 1, 2.2, 24, 1, true), auraMat,
+    );
+    aura.position.y = 1.1;
+    aura.visible = false;
+    root.add(aura);
+    p._aura = aura;
+    p._auraMat = auraMat;
 
     // Best hit-point markers: a hollow green ring on each side of the player at
     // waist/contact height. The hole is ~2x the ball diameter (ball Ø ≈ 0.10 m)

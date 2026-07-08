@@ -123,6 +123,12 @@ pub extern "js" fn host_show_trail(h : Host, pts : Array[Double], ideal_idx : In
 ///|
 pub extern "js" fn host_hide_trail(h : Host) -> Unit = "(h)=>h.render.hideTrail()"
 
+// swing-timing ring: a circle centred on the human that shrinks from the reach
+// radius (frac=1) to zero (frac=0) as the best-hit window approaches.
+///|
+pub extern "js" fn host_set_timing_ring(h : Host, show : Bool, frac : Double) -> Unit =
+  "(h,s,f)=>h.render.setTimingRing(s,f)"
+
 // ---------------- render: players ----------------
 
 ///|
@@ -299,13 +305,14 @@ pub extern "js" fn host_gauge(
 pub extern "js" fn host_hide_gauge(h : Host, name : String) -> Unit =
   "(h,n)=>h.ui.hideGauge(n)"
 
-// charge bar: frac in [0,1] of the overcharge ceiling; over = in overcharge zone
+// charge feedback: frac in [0,1] of the charge ceiling. Rendered as a growing
+// aura around the human rig (not a HUD bar), so its size encodes the charge.
 ///|
 pub extern "js" fn host_charge(h : Host, frac : Double) -> Unit =
-  "(h,f)=>h.ui.charge(f)"
+  "(h,f)=>h.render.setAura(f)"
 
 ///|
-pub extern "js" fn host_hide_charge(h : Host) -> Unit = "(h)=>h.ui.hideCharge()"
+pub extern "js" fn host_hide_charge(h : Host) -> Unit = "(h)=>h.render.hideAura()"
 
 ///|
 pub extern "js" fn host_move_hint(h : Host, dx : Double, dz : Double) -> Unit =
