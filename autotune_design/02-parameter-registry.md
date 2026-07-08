@@ -76,6 +76,12 @@ Suggested min/max are search bounds for the optimizer config, not hard
 clamps; `setParam` accepts any finite double. Defaults are the current
 source literals (verify against source at implementation time — source wins).
 
+**† Autotuned defaults**: 10 defaults now carry values from the 200-trial
+study (trial 29, applied per doc 06). Their default cells below show the
+rounded tuned value with a `†`; the original pre-tuning literal is in
+parentheses, and full precision lives in `logic/tuning/tuning.mbt` /
+`autotune_out/best_params.json`.
+
 ### Ball physics (`logic/physics/constants.mbt`, use sites in the ball stepper / `bounce.mbt`)
 
 | name | symbol | kind | default | min | max | unit | description |
@@ -104,9 +110,9 @@ rules of tennis).
 | `slice_rpm_slope` | `slice_rpm` | base+slope | 1800 | 1000 | 2600 | rpm | added backspin at slc=100 |
 | `serve_stat_base` | `serve_power_speed` (:161) | base+slope | 0.82 | 0.70 | 0.95 | — | serve-speed stat factor at srv=0 |
 | `serve_stat_slope` | `serve_power_speed` (:161) | base+slope | 0.36 | 0.20 | 0.50 | — | added stat factor at srv=100 |
-| `err_mul_hi` | `err_mul_base` | base+slope | 1.6 | 1.2 | 2.2 | — | error multiplier at ctl=0 |
-| `err_mul_slope` | `err_mul_base` | base+slope | 1.2 | — | — | — | engine field; search via `err_mul_lo` [0.2, 1.0], tune.py derives `slope = hi - lo` |
-| `run_speed_scale` | `run_speed` | scale | 1.0 | 0.70 | 1.30 | — | player top speed multiplier |
+| `err_mul_hi` | `err_mul_base` | base+slope | 2.192† (1.6) | 1.2 | 2.2 | — | error multiplier at ctl=0 |
+| `err_mul_slope` | `err_mul_base` | base+slope | 1.200† (1.2) | — | — | — | engine field; search via `err_mul_lo` [0.2, 1.0], tune.py derives `slope = hi - lo` |
+| `run_speed_scale` | `run_speed` | scale | 0.954† (1.0) | 0.70 | 1.30 | — | player top speed multiplier |
 | `run_accel_scale` | `run_accel` | scale | 1.0 | 0.70 | 1.30 | — | player acceleration multiplier |
 | `reach_scale` | `reach` | scale | 1.0 | 0.85 | 1.15 | — | racket reach multiplier |
 
@@ -114,19 +120,19 @@ rules of tennis).
 
 | name | symbol | kind | default | min | max | unit | description |
 | --- | --- | --- | --- | --- | --- | --- | --- |
-| `stroke_err_x` | `compute_stroke` (:352) | absolute | 0.30 | 0.10 | 0.60 | m·σ | lateral aim noise per unit err_mul |
-| `stroke_err_z` | `compute_stroke` (:353) | absolute | 0.55 | 0.20 | 1.00 | m·σ | depth aim noise per unit err_mul |
+| `stroke_err_x` | `compute_stroke` (:352) | absolute | 0.584† (0.30) | 0.10 | 0.60 | m·σ | lateral aim noise per unit err_mul |
+| `stroke_err_z` | `compute_stroke` (:353) | absolute | 1.181† (0.55) | 0.20 | 1.00 | m·σ | depth aim noise per unit err_mul |
 | `stroke_err_spin` | `compute_stroke` (:356) | absolute | 0.06 | 0.02 | 0.12 | frac·σ | spin noise |
 | `stroke_err_speed` | `compute_stroke` (:357) | absolute | 0.03 | 0.01 | 0.08 | frac·σ | speed noise |
-| `err_quality_gain` | `compute_stroke` (:351) | absolute | 2.2 | 1.0 | 4.0 | — | how strongly bad contact (`1-q`) inflates err_mul |
+| `err_quality_gain` | `compute_stroke` (:351) | absolute | 3.495† (2.2) | 1.0 | 4.0 | — | how strongly bad contact (`1-q`) inflates err_mul |
 | `mishit_q_max` | `compute_stroke` (:359) | absolute | 0.30 | 0.15 | 0.50 | — | contact quality below which mishits can occur |
-| `mishit_prob` | `compute_stroke` (:360) | absolute | 0.35 | 0.10 | 0.60 | — | mishit probability when eligible (non-assist path) |
+| `mishit_prob` | `compute_stroke` (:360) | absolute | 0.261† (0.35) | 0.10 | 0.60 | — | mishit probability when eligible (non-assist path) |
 | `q_speed_floor` | `contact_quality` (:179) | absolute | 0.65 | 0.50 | 0.90 | — | floor of the incoming-pace quality penalty (non-assist) |
 | `jam_threshold` | `jam_threshold` (:121) | absolute | 26.0 | 20.0 | 34.0 | m/s | incoming pace where jamming starts |
 | `jam_scale` | `jam_scale` (:124) | absolute | 14.0 | 8.0 | 22.0 | m/s | excess pace that saturates the jam term |
 | `aim_x_scale` | `compute_stroke` (:254) **and** `choose_stroke` (`ai.mbt:325`) | absolute | 2.8 | 2.0 | 3.6 | m | full-deflection lateral aim (m from center). The AI divides its target x by the same constant (`plan_x = best_tx / 2.8`); both sites must read this field or AI aim silently rescales |
 | `rally_depth_min` | `compute_stroke` (:253) | absolute | 4.5 | 3.5 | 6.0 | m | rally target-depth floor (non-Drop) |
-| `rally_depth_max` | `compute_stroke` (:256) | absolute | 11.2 | 10.0 | 12.0 | m | target-depth ceiling |
+| `rally_depth_max` | `compute_stroke` (:256) | absolute | 11.05† (11.2) | 10.0 | 12.0 | m | target-depth ceiling |
 
 ### Serve model (`logic/shots/serve.mbt`, `logic/physics/constants.mbt`)
 
@@ -156,9 +162,9 @@ easy < normal < hard ordering.
 
 | name | scales field | default | min | max | description |
 | --- | --- | --- | --- | --- | --- |
-| `ai_pos_err_scale` | `Difficulty.pos_err` | 1.0 | 0.5 | 2.0 | landing-prediction error |
+| `ai_pos_err_scale` | `Difficulty.pos_err` | 1.160† (1.0) | 0.5 | 2.0 | landing-prediction error |
 | `ai_jitter_scale` | `Difficulty.jitter` | 1.0 | 0.5 | 2.0 | movement jitter |
-| `ai_react_scale` | `Difficulty.react` | 1.0 | 0.5 | 2.0 | reaction delay |
+| `ai_react_scale` | `Difficulty.react` | 1.518† (1.0) | 0.5 | 2.0 | reaction delay |
 | `ai_choice_noise_scale` | `Difficulty.choice_noise` | 1.0 | 0.5 | 2.0 | shot-selection noise |
 | `ai_tactical_scale` | `tactical_shot_type` trigger prob | 1.0 | 0.0 | 2.0 | lob/drop tactical override frequency |
 
