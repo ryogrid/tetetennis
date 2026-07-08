@@ -114,6 +114,11 @@ export function createRenderHost(scene, audio = null) {
     setReachColor(inReach) {
       if (players[0]) players[0].setReachZoneColor(inReach ? REACH_HOT : REACH_IDLE);
     },
+    // charge aura on the human rig; frac in [0,1] scales its size/intensity.
+    setAura(frac) { if (players[0]) players[0].setAura(frac); },
+    hideAura() { if (players[0]) players[0].hideAura(); },
+    // swing-timing ring on the human rig; frac in [0,1] shrinks it toward zero.
+    setTimingRing(show, frac) { if (players[0]) players[0].setTimingRing(show, frac); },
     // dim the human rig to translucent (behind-player camera) so the ball stays
     // visible through it; opaque again in overhead view.
     setHumanTransparent(on) {

@@ -2081,20 +2081,21 @@ pub fn frame_update(dt : Double) -> Unit {
 
   // (the on-screen move-assist arrow has been removed)
 
-  // swing timing meter + recommended shot + countdown
+  // swing timing feedback + recommended shot. The on-court ring shrinks from the
+  // reach radius (frac=1) to zero exactly at the START of the best-hit window
+  // (t = swing_contact_t + timing_tol); after that it stays hidden until the next
+  // incoming ball.
   let ttc = time_to_contact(ms)
+  let beststart = swing_contact_t + timing_tol
   match ttc {
     Some(t) =>
-      if t <= timing_window && t > -0.15 {
-        let w = timing_window
-        let frac = @vec.clampd(1.0 - t / w, 0.0, 1.0)
-        let band_lo = @vec.clampd(1.0 - (swing_contact_t + timing_tol) / w, 0.0, 1.0)
-        let band_hi = @vec.clampd(1.0 - (swing_contact_t - timing_tol) / w, 0.0, 1.0)
-        @ffi.host_gauge(h, "timing", frac, band_lo, band_hi, @vec.dabs(t - swing_contact_t) <= timing_tol)
+      if t <= timing_window && t > beststart {
+        let ring_frac = @vec.clampd((t - beststart) / (timing_window - beststart), 0.0, 1.0)
+        @ffi.host_set_timing_ring(h, true, ring_frac)
       } else {
-        @ffi.host_hide_gauge(h, "timing")
+        @ffi.host_set_timing_ring(h, false, 0.0)
       }
-    None => @ffi.host_hide_gauge(h, "timing")
+    None => @ffi.host_set_timing_ring(h, false, 0.0)
   }
   match ttc {
     Some(_) =>
@@ -2104,24 +2105,11 @@ pub fn frame_update(dt : Double) -> Unit {
       }
     None => @ffi.host_set_recommended_shot(h, "")
   }
-  // sweet-spot marker + countdown ring
-  match ttc {
-    Some(t) =>
-      if ms.has_sweet {
-        @ffi.host_set_sweet(
-          h, true, ms.sweet_x, ms.sweet_y, ms.sweet_z, true,
-          @vec.clampd(t / timing_window, 0.0, 1.0), t <= swing_contact_t,
-        )
-      } else {
-        @ffi.host_set_sweet(h, false, 0.0, 0.0, 0.0, false, 0.0, false)
-      }
-    None =>
-      if ms.has_sweet {
-        @ffi.host_set_sweet(h, true, ms.sweet_x, ms.sweet_y, ms.sweet_z, false, 0.0, false)
-      } else {
-        @ffi.host_set_sweet(h, false, 0.0, 0.0, 0.0, false, 0.0, false)
-      }
-  }
+  // sweet-spot position marker (the shrinking timing ring above replaces the old
+  // countdown, so the marker never drives its own countdown: cd_show = false).
+  @ffi.host_set_sweet(
+    h, ms.has_sweet, ms.sweet_x, ms.sweet_y, ms.sweet_z, false, 0.0, false,
+  )
   // (the vertical incoming-ball-height gauge has been removed)
 }
 
