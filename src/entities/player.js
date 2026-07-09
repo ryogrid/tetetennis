@@ -8,6 +8,10 @@
 import * as THREE from 'three';
 
 const SWING_DUR = 0.45;
+const IDEAL_CONTACT_H = 0.85;
+const IDEAL_CONTACT_R = 0.65;
+const BASE_HIP_Y = 0.86;
+const BASE_BASE_Y = 0.83;
 
 // reusable temporaries for the contact-point aim (immersion 01 §1.4); shared
 // because updateVisual runs sequentially per rig, never concurrently.
@@ -24,6 +28,68 @@ const _ikQpar = new THREE.Quaternion();
 const SKIN = 0xe8c39e;
 const SHORTS = 0x2b2b35;
 
+function clamp(value, min, max) {
+  return Math.max(min, Math.min(max, value));
+}
+
+function deriveRigMetrics(reach, serveContactHeight) {
+  const standingHeight = clamp(serveContactHeight - reach * 0.52, 1.72, 1.9);
+  const hipHeight = standingHeight * 0.49;
+  const shoulderHeight = standingHeight * 0.81;
+  const shoulderY = shoulderHeight - hipHeight;
+  const headRadius = standingHeight * 0.067;
+  const headCenterY = standingHeight * 0.11;
+  const torsoRadius = standingHeight * 0.074;
+  const torsoLen = Math.max(0.30, shoulderY - headCenterY * 0.55);
+  const shoulderHalfWidth = clamp(Math.min(IDEAL_CONTACT_R * 0.36, reach * 0.115), 0.21, 0.27);
+  const pelvisHalfWidth = shoulderHalfWidth * 0.45;
+  const upperArmLen = clamp(reach * 0.18, 0.30, 0.40);
+  const forearmLen = clamp(reach * 0.165, 0.27, 0.37);
+  const thighLen = hipHeight * 0.47;
+  const footHeight = standingHeight * 0.035;
+  const shinLen = Math.max(0.34, hipHeight - thighLen - footHeight * 0.8);
+  const footLen = standingHeight * 0.125;
+  const footWidth = standingHeight * 0.058;
+  const handleLen = clamp((serveContactHeight - shoulderHeight) * 0.22, 0.30, 0.36);
+  const racketHeadOffset = clamp((serveContactHeight - shoulderHeight) * 0.40, 0.44, 0.58);
+  const racketHeadRadius = clamp(IDEAL_CONTACT_R * 0.23, 0.14, 0.17);
+  const baseYScale = hipHeight / BASE_HIP_Y;
+  return {
+    standingHeight,
+    hipHeight,
+    shoulderY,
+    headRadius,
+    headCenterY,
+    torsoRadius,
+    torsoLen,
+    torsoCenterY: torsoLen * 0.5 + torsoRadius * 0.4,
+    shoulderHalfWidth,
+    pelvisHalfWidth,
+    upperArmLen,
+    upperArmRadius: upperArmLen * 0.22,
+    forearmLen,
+    forearmRadius: forearmLen * 0.21,
+    thighLen,
+    thighRadius: thighLen * 0.17,
+    shinLen,
+    shinRadius: shinLen * 0.14,
+    footHeight,
+    footLen,
+    footWidth,
+    handleLen,
+    handleRadius: handleLen * 0.093,
+    racketHeadOffset,
+    racketHeadRadius,
+    racketHeadTube: racketHeadRadius * 0.15,
+    baseHipY: BASE_BASE_Y * baseYScale,
+    baseYScale,
+    sweetSpotX: IDEAL_CONTACT_R,
+    sweetSpotY: IDEAL_CONTACT_H,
+    eyeLineY: hipHeight + shoulderY + headCenterY,
+    auraHeight: standingHeight * 1.18,
+  };
+}
+
 function limbMesh(len, r, color) {
   const geo = new THREE.CylinderGeometry(r, r * 0.85, len, 8);
   geo.translate(0, -len / 2, 0); // pivot at top
@@ -32,17 +98,17 @@ function limbMesh(len, r, color) {
   return m;
 }
 
-function buildRig(color) {
+function buildRig(color, metrics) {
   const root = new THREE.Group();
   const joints = {};
 
   const hips = new THREE.Group();
-  hips.position.y = 0.86;
+  hips.position.y = metrics.hipHeight;
   root.add(hips);
   joints.hips = hips;
 
   const pelvis = new THREE.Mesh(
-    new THREE.SphereGeometry(0.11, 10, 8),
+    new THREE.SphereGeometry(metrics.pelvisHalfWidth * 1.1, 10, 8),
     new THREE.MeshLambertMaterial({ color: SHORTS }),
   );
   pelvis.castShadow = true;
@@ -56,24 +122,24 @@ function buildRig(color) {
   joints.chest = chest;
 
   const torso = new THREE.Mesh(
-    new THREE.CapsuleGeometry(0.13, 0.34, 4, 10),
+    new THREE.CapsuleGeometry(metrics.torsoRadius, metrics.torsoLen, 4, 10),
     new THREE.MeshLambertMaterial({ color }),
   );
-  torso.position.y = 0.30;
+  torso.position.y = metrics.torsoCenterY;
   torso.castShadow = true;
   chest.add(torso);
 
   // neck lets the head tilt/turn (auto-driven toward the ball)
   const neck = new THREE.Group();
-  neck.position.y = 0.52;
+  neck.position.y = metrics.shoulderY;
   chest.add(neck);
   joints.neck = neck;
 
   const head = new THREE.Mesh(
-    new THREE.SphereGeometry(0.12, 12, 10),
+    new THREE.SphereGeometry(metrics.headRadius, 12, 10),
     new THREE.MeshLambertMaterial({ color: SKIN }),
   );
-  head.position.y = 0.20; // 0.72 in the hips frame minus the neck offset
+  head.position.y = metrics.headCenterY;
   head.castShadow = true;
   neck.add(head);
 
@@ -82,39 +148,39 @@ function buildRig(color) {
   for (const side of ['R', 'L']) {
     const sx = side === 'R' ? 1 : -1;
     const shoulder = new THREE.Group();
-    shoulder.position.set(sx * 0.23, 0.52, 0);
+    shoulder.position.set(sx * metrics.shoulderHalfWidth, metrics.shoulderY, 0);
     chest.add(shoulder);
-    shoulder.add(limbMesh(0.28, 0.062, SKIN));
+    shoulder.add(limbMesh(metrics.upperArmLen, metrics.upperArmRadius, SKIN));
     const elbow = new THREE.Group();
-    elbow.position.y = -0.28;
+    elbow.position.y = -metrics.upperArmLen;
     shoulder.add(elbow);
-    elbow.add(limbMesh(0.26, 0.055, SKIN));
+    elbow.add(limbMesh(metrics.forearmLen, metrics.forearmRadius, SKIN));
     joints['shoulder' + side] = shoulder;
     joints['elbow' + side] = elbow;
   }
 
   // wrist between the forearm and the racket → racket-head lag + pronation
   const wristR = new THREE.Group();
-  wristR.position.y = -0.26;
+  wristR.position.y = -metrics.forearmLen;
   joints.elbowR.add(wristR);
   joints.wristR = wristR;
   // racket on the right hand (now hangs off the wrist, same head geometry)
   const racket = new THREE.Group();
   racket.position.y = 0;
   wristR.add(racket);
-  const handle = limbMesh(0.3, 0.028, 0x333333);
+  const handle = limbMesh(metrics.handleLen, metrics.handleRadius, 0x333333);
   racket.add(handle);
   const headRing = new THREE.Mesh(
-    new THREE.TorusGeometry(0.15, 0.022, 8, 18),
+    new THREE.TorusGeometry(metrics.racketHeadRadius, metrics.racketHeadTube, 8, 18),
     new THREE.MeshLambertMaterial({ color: 0xdddddd }),
   );
-  headRing.position.y = -0.44;
+  headRing.position.y = -(metrics.handleLen + metrics.racketHeadOffset);
   racket.add(headRing);
   const strings = new THREE.Mesh(
-    new THREE.CircleGeometry(0.14, 16),
+    new THREE.CircleGeometry(metrics.racketHeadRadius - metrics.racketHeadTube * 0.55, 16),
     new THREE.MeshLambertMaterial({ color: 0xeeeeee, transparent: true, opacity: 0.45, side: THREE.DoubleSide }),
   );
-  strings.position.y = -0.44;
+  strings.position.y = headRing.position.y;
   racket.add(strings);
   joints.racket = racket;
 
@@ -122,23 +188,23 @@ function buildRig(color) {
   for (const side of ['R', 'L']) {
     const sx = side === 'R' ? 1 : -1;
     const hip = new THREE.Group();
-    hip.position.set(sx * 0.10, -0.02, 0);
+    hip.position.set(sx * metrics.pelvisHalfWidth, -metrics.footHeight * 0.35, 0);
     hips.add(hip);
-    hip.add(limbMesh(0.40, 0.068, SHORTS));
+    hip.add(limbMesh(metrics.thighLen, metrics.thighRadius, SHORTS));
     const knee = new THREE.Group();
-    knee.position.y = -0.40;
+    knee.position.y = -metrics.thighLen;
     hip.add(knee);
-    knee.add(limbMesh(0.42, 0.06, SKIN));
+    knee.add(limbMesh(metrics.shinLen, metrics.shinRadius, SKIN));
     // ankle + foot: the ankle counter-rotates to keep the foot flat on the
     // ground despite hip/knee swing → believable footing (immersion 01 §1.1)
     const ankle = new THREE.Group();
-    ankle.position.y = -0.42;
+    ankle.position.y = -metrics.shinLen;
     knee.add(ankle);
     const foot = new THREE.Mesh(
-      new THREE.BoxGeometry(0.10, 0.06, 0.22),
+      new THREE.BoxGeometry(metrics.footWidth, metrics.footHeight, metrics.footLen),
       new THREE.MeshLambertMaterial({ color: 0x222228 }),
     );
-    foot.position.set(0, -0.03, 0.06);
+    foot.position.set(0, -metrics.footHeight * 0.5, metrics.footLen * 0.27);
     foot.castShadow = true;
     ankle.add(foot);
     joints['hip' + side] = hip;
@@ -776,9 +842,10 @@ function getSwingPose(swing) {
 }
 
 // side: 0 = human (+z, faces -z), 1 = cpu (-z, rotated PI).
-// reach: horizontal reach radius for the human zone circle (ignored for cpu).
-export function createPlayerRig({ side, color, reach, scene }) {
-  const { root, joints, bodyMats } = buildRig(color);
+// reach: horizontal reach radius for the on-court reach circle.
+export function createPlayerRig({ side, color, reach, serveContactHeight, scene }) {
+  const metrics = deriveRigMetrics(reach, serveContactHeight);
+  const { root, joints, bodyMats } = buildRig(color, metrics);
   const isHuman = side === 0;
   if (!isHuman) root.rotation.y = Math.PI;
   scene.add(root);
@@ -894,7 +961,7 @@ export function createPlayerRig({ side, color, reach, scene }) {
       t.chest = [0, 0, 0];   // X-factor: extra upper-body yaw over the hips
       t.neck = [0.05, 0, 0]; // slight athletic look-down by default
       t.wristR = [0, 0, 0];  // racket-head lag / pronation
-      let baseY = 0.83;
+      let baseY = metrics.baseHipY;
 
       if (this.swing) {
         const pose = getSwingPose(this.swing);
@@ -906,7 +973,7 @@ export function createPlayerRig({ side, color, reach, scene }) {
           t.racket = [pose.racket[0], 0, 0];
           t.kneeR[0] = pose.kneeBend;
           t.kneeL[0] = pose.kneeBend;
-          baseY = pose.baseY;
+          baseY = pose.baseY * metrics.baseYScale;
           // Left arm: forehand tracking or backhand double-grip
           if (pose.shoulderL) {
             t.shoulderL = pose.shoulderL;
@@ -962,7 +1029,7 @@ export function createPlayerRig({ side, color, reach, scene }) {
         const dx = (this._ball.x - this.pos.x) * fwd;
         const dz = Math.max(0.5, Math.abs(this.pos.z - this._ball.z));
         const yaw = Math.max(-0.6, Math.min(0.6, Math.atan2(dx, dz)));
-        const pitch = Math.max(-0.4, Math.min(0.4, -(this._ball.y - 1.45) * 0.12 + 0.05));
+        const pitch = Math.max(-0.4, Math.min(0.4, -(this._ball.y - metrics.eyeLineY) * 0.12 + 0.05));
         t.neck = [pitch, yaw, 0];
       }
 
@@ -1025,7 +1092,7 @@ export function createPlayerRig({ side, color, reach, scene }) {
         if (n > 0.28 && n < 0.52) {
           const w = Math.sin(((n - 0.28) / 0.24) * Math.PI); // 0→1→0, peak ~n=0.40
           root.updateMatrixWorld(true);
-          const head = _ikHead.set(0, -0.44, 0);
+          const head = _ikHead.set(0, -(metrics.handleLen + metrics.racketHeadOffset), 0);
           J.racket.localToWorld(head); // racket sweet-spot in world space
           const sh = _ikSh.setFromMatrixPosition(J.shoulderR.matrixWorld);
           const toBall = _ikToBall.set(
@@ -1154,9 +1221,9 @@ export function createPlayerRig({ side, color, reach, scene }) {
       side: THREE.DoubleSide, blending: THREE.AdditiveBlending, depthWrite: false,
     });
     const aura = new THREE.Mesh(
-      new THREE.CylinderGeometry(1, 1, 2.2, 24, 1, true), auraMat,
+      new THREE.CylinderGeometry(1, 1, metrics.auraHeight, 24, 1, true), auraMat,
     );
-    aura.position.y = 1.1;
+    aura.position.y = metrics.auraHeight * 0.5;
     aura.visible = false;
     root.add(aura);
     p._aura = aura;
@@ -1172,7 +1239,7 @@ export function createPlayerRig({ side, color, reach, scene }) {
     });
     for (const sx of [-1, 1]) {
       const hoop = new THREE.Mesh(new THREE.TorusGeometry(0.10, 0.02, 10, 28), hitMat);
-      hoop.position.set(sx * 0.55, 0.95, 0);
+      hoop.position.set(sx * metrics.sweetSpotX, metrics.sweetSpotY, 0);
       root.add(hoop);
     }
   }

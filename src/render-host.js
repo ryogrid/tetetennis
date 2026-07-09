@@ -6,7 +6,7 @@ import * as THREE from 'three';
 import { buildCourt } from './court.js';
 import { createBallEntity } from './entities/ball.js';
 import { createPlayerRig } from './entities/player.js';
-import { CHARACTERS, reachRadius } from './characters.js';
+import { CHARACTERS, reachRadius, serveContactHeight } from './characters.js';
 
 const ONLY_SURFACE_ID = 'hard';
 const ONLY_CHARACTER_INDEX = 4;
@@ -46,10 +46,18 @@ export function createRenderHost(scene, audio = null) {
     const pChar = CHARACTERS[ONLY_CHARACTER_INDEX] || CHARACTERS[0];
     const cChar = CHARACTERS[ONLY_CHARACTER_INDEX] || CHARACTERS[0];
     players[0] = createPlayerRig({
-      side: 0, color: pChar.color, reach: reachRadius(pChar.stats.REA), scene,
+      side: 0,
+      color: pChar.color,
+      reach: reachRadius(pChar.stats.REA),
+      serveContactHeight: serveContactHeight(pChar.stats.REA),
+      scene,
     });
     players[1] = createPlayerRig({
-      side: 1, color: cChar.color, reach: 0, scene,
+      side: 1,
+      color: cChar.color,
+      reach: reachRadius(cChar.stats.REA),
+      serveContactHeight: serveContactHeight(cChar.stats.REA),
+      scene,
     });
     ball = createBallEntity(scene);
   }
