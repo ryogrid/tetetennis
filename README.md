@@ -1,7 +1,7 @@
 # tetetennis
 
 A browser 3D tennis game. One-set match, you vs the CPU, with physically-based
-ball flight (drag + Magnus effect) and surface-dependent bounces.
+ball flight (drag + Magnus effect) on a fixed hard court.
 
 The game is split into two layers:
 
@@ -41,11 +41,11 @@ manifest icons live in `public/` (the generator script lives on the
 
 The home screen offers two modes:
 
-- **Match** — a scored singles set against the CPU (pick player, opponent, surface,
-  difficulty, set length, assist). This is the classic game.
+- **Match** — a scored singles set against the CPU. Choose the difficulty, set
+  length, and assist level, then start.
 - **Practice** — the CPU acts as a ball machine: it feeds you balls on your terms and
-  **no points are counted**, so you can groove a return. You choose your player, the CPU's
-  player, the surface, whether it feeds a **stroke or a serve**, the **shot type**
+  **no points are counted**, so you can groove a return. You choose whether it
+  feeds a **stroke or a serve**, the **shot type**
   (strokes: flat / topspin / slice / lob / drop; serves: flat / slice / kick), and — for
   stroke feeds — the **depth** (shallow forecourt / deep backcourt / random). Feeds vary
   side-to-side so you have to move. Esc → Quit returns to the home screen. See
@@ -70,7 +70,7 @@ The home screen offers two modes:
 The game is playable on phones and tablets (hold the device in landscape
 with both hands):
 
-- Menus: tap a card to select it, tap it again to confirm.
+- Menus: tap an option row or a button to select it.
 - On the court, an on-screen pad appears:
   - **Left thumb** — analog stick (bottom-left): drag to move; it works like a
     console thumbstick — push further to move faster, and the knob springs back
@@ -141,34 +141,27 @@ into the box (the safe second serve); **slice** curves visibly toward the
 receiver's right. The CPU serves like a player: flat (sometimes slice) on
 first serve, kick on second.
 
-## Surfaces
+## Court
 
-- **Clay** — slow and high-bouncing; topspin kicks up, slices check.
-- **Grass** — fast and low; slices skid, big serves dominate.
-- **Hard** — medium pace, true bounce.
+Matches now play on a fixed **hard court**. Bounces are physical: vertical
+restitution plus a Coulomb friction impulse. The restitution is anchored to the
+ITF ball test (a 2.54 m drop on hard court rebounds ~1.35-1.47 m) and — because
+a tennis ball is not rigid — falls with impact speed, so hard-hit balls rebound
+proportionally lower. Flat and slice balls lose horizontal speed at the bounce,
+and a heavily overspun topspin ball can even kick forward — all verified by
+`moon test` (the physics checks are ported into `logic/physics`).
 
-Bounces are physical: vertical restitution plus a Coulomb friction impulse.
-The restitution is anchored to the ITF ball test (a 2.54 m drop on hard
-court rebounds ~1.35-1.47 m) and — because a tennis ball is not rigid —
-falls with impact speed, so hard-hit balls rebound proportionally lower.
-Flat and slice balls lose horizontal speed at the bounce, with the loss
-driven by each surface's friction coefficient (clay μ=0.80 robs a slice of
-~7.3 m/s, hard μ=0.56 of ~5.0, grass μ=0.38 of ~3.2); a heavily overspun
-topspin ball can even kick forward — all verified by `moon test` (the physics
-checks are ported into `logic/physics`).
+## Player Model
 
-## Characters
-
-Boom (big server) · Rojo (spin grinder) · Dash (counterpuncher) ·
-Sly (slice specialist) · Ace (all-rounder). The CPU plays with the same
-stat-driven physics and shot-selection personality.
+Both sides use the same all-round player tuning. The gameplay parameters are the
+existing balanced stat line previously used for the ACE character, but that
+proper name is no longer surfaced in the UI.
 
 ## Difficulty
 
-Pick **Easy / Normal / Hard** after choosing the surface. Difficulty changes
-only the CPU's brain — reaction time, read accuracy, swing timing, shot
-selection risk, serve toss quality, and a touch of foot speed — never the
-character's stats, so every opponent keeps their identity at every level.
+Pick **Easy / Normal / Hard** on the setup screen. Difficulty changes only the
+CPU's brain — reaction time, read accuracy, swing timing, shot selection risk,
+serve toss quality, and a touch of foot speed — never the player model stats.
 
 ## Development
 

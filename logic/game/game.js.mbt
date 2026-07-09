@@ -5,9 +5,6 @@
 // ---------------- constants ----------------
 
 ///|
-let surface_ids : Array[String] = ["clay", "grass", "hard"]
-
-///|
 let point_over_dur : Double = 2.0
 
 ///|
@@ -99,7 +96,6 @@ let serve_sweet_hi : Double = 0.88
 enum AppState {
   MenuTitle // NEW (option b): branded entry screen, shown before setup
   MenuSetup // screen 1: MATCH/PRACTICE mode + mode-dependent settings as rows
-  MenuPlayers // screen 2: pick your player + opponent (rich character cards)
   Match
   Results
 } derive(Eq)
@@ -109,7 +105,6 @@ enum AppState {
 ///|
 enum RowKind {
   Mode
-  Surface
   Difficulty
   Games
   Assist
@@ -273,10 +268,8 @@ struct Game {
   rng : @rng.Gauss
   mut state : AppState
   mut setup_row : Int // focused row on the MenuSetup screen
-  mut players_sel : Int // MenuPlayers focus: 0 = you, 1 = opponent
-  mut sel_player : Int
-  mut sel_opp : Int
-  mut sel_surface : Int
+  sel_player : Int
+  sel_opp : Int
   mut sel_difficulty : Int
   mut sel_games : Int // games to win the set
   mut is_practice : Bool // home-screen mode: false = MATCH, true = PRACTICE
@@ -425,38 +418,33 @@ fn level_str(l : @assist.AssistLevel) -> String {
 }
 
 ///|
-fn char_name(idx : Int) -> String {
-  @shots.characters[idx].name
-}
-
-///|
 fn names_p() -> String {
-  char_name(g().sel_player) + " (You)"
+  "Player"
 }
 
 ///|
 fn names_c() -> String {
-  char_name(g().sel_opp)
+  "Opponent"
 }
 
 // ---------------- menu navigation ----------------
 
 // The ordered list of rows shown on the setup screen for the current mode.
-// MATCH: mode + surface + difficulty + games + assist.
-// PRACTICE: mode + surface + feed + shot (+ depth, stroke feeds only) + assist.
+// MATCH: mode + assist + difficulty + games.
+// PRACTICE: mode + assist + feed + shot (+ depth, stroke feeds only).
 ///|
 fn setup_rows(self : Game) -> Array[RowKind] {
-  // Rows common to both modes (Mode, Surface, Assist) come first, in the same
-  // order, so toggling MATCH/PRACTICE never shifts them; mode-specific rows
+  // Rows common to both modes (Mode, Assist) come first, in the same order, so
+  // toggling MATCH/PRACTICE never shifts them; mode-specific rows
   // follow.
   if self.is_practice {
     if self.prac_feed == 0 {
-      [Mode, Surface, Assist, Feed, Shot, Depth]
+      [Mode, Assist, Feed, Shot, Depth]
     } else {
-      [Mode, Surface, Assist, Feed, Shot]
+      [Mode, Assist, Feed, Shot]
     }
   } else {
-    [Mode, Surface, Assist, Difficulty, Games]
+    [Mode, Assist, Difficulty, Games]
   }
 }
 
@@ -466,7 +454,7 @@ fn show_setup(self : Game) -> Unit {
     self.host,
     self.is_practice,
     self.setup_row,
-    self.sel_surface,
+    2,
     self.sel_difficulty,
     games_idx_of(self.sel_games),
     assist_idx(),
@@ -474,11 +462,6 @@ fn show_setup(self : Game) -> Unit {
     self.prac_shot,
     self.prac_depth,
   )
-}
-
-///|
-fn show_players(self : Game) -> Unit {
-  @ffi.host_show_players(self.host, self.players_sel, self.sel_player, self.sel_opp)
 }
 
 // Change the focused row's value by `dir` (+1 / -1), wrapping. Mode/Feed are
@@ -495,7 +478,6 @@ fn setup_change(self : Game, dir : Int) -> Unit {
         self.setup_row = n - 1
       }
     }
-    Surface => self.sel_surface = (self.sel_surface + dir + 3) % 3
     Difficulty => self.sel_difficulty = (self.sel_difficulty + dir + 3) % 3
     Games => {
       let i = (games_idx_of(self.sel_games) + dir + 3) % 3
@@ -539,7 +521,6 @@ fn setup_set(self : Game, row : Int, val : Int) -> Unit {
         self.setup_row = n - 1
       }
     }
-    Surface => if val >= 0 && val < 3 { self.sel_surface = val }
     Difficulty => if val >= 0 && val < 3 { self.sel_difficulty = val }
     Games => if val >= 0 && val < games_options.length() { self.sel_games = games_options[val] }
     Assist =>
@@ -670,7 +651,7 @@ fn policy_type(code : Int) -> @shots.ShotType? {
 
 ///|
 fn start_match(self : Game) -> Unit {
-  let surface_id = surface_ids[self.sel_surface]
+  let surface_id = "hard"
   let surface = @physics.surface_by_id(surface_id)
   let char_p = @shots.characters[self.sel_player]
   let char_c = @shots.characters[self.sel_opp]
@@ -1579,39 +1560,6 @@ pub fn handle_input() -> Unit {
       }
       if self.confirm_pressed() {
         @ffi.host_sfx(h, "sfxConfirm")
-        self.state = MenuPlayers
-        self.players_sel = 0
-        self.show_players()
-      }
-    }
-    MenuPlayers => {
-      let nc = @shots.characters.length()
-      if @ffi.host_was_pressed(h, "ArrowUp") || @ffi.host_was_pressed(h, "ArrowDown") {
-        self.players_sel = 1 - self.players_sel
-        @ffi.host_sfx(h, "sfxMenu")
-        self.show_players()
-      }
-      let dir = if @ffi.host_was_pressed(h, "ArrowLeft") {
-        -1
-      } else if @ffi.host_was_pressed(h, "ArrowRight") {
-        1
-      } else {
-        0
-      }
-      if dir != 0 {
-        if self.players_sel == 0 {
-          self.sel_player = (self.sel_player + dir + nc) % nc
-        } else {
-          self.sel_opp = (self.sel_opp + dir + nc) % nc
-        }
-        @ffi.host_sfx(h, "sfxMenu")
-        self.show_players()
-      }
-      if @ffi.host_was_pressed(h, "Escape") {
-        self.state = MenuSetup
-        self.show_setup()
-      } else if self.confirm_pressed() {
-        @ffi.host_sfx(h, "sfxConfirm")
         self.start_match()
       }
     }
@@ -2289,37 +2237,7 @@ pub fn menu_cmd(action : String, a : Int, b : Int) -> Unit {
         "set" => self.setup_set(a, b)
         "go" => {
           @ffi.host_sfx(self.host, "sfxConfirm")
-          self.state = MenuPlayers
-          self.players_sel = 0
-          self.show_players()
-        }
-        _ => ()
-      }
-    }
-    MenuPlayers => {
-      let nc = @shots.characters.length()
-      match action {
-        "you" =>
-          if a >= 0 && a < nc {
-            self.players_sel = 0
-            self.sel_player = a
-            @ffi.host_sfx(self.host, "sfxMenu")
-            self.show_players()
-          }
-        "opp" =>
-          if a >= 0 && a < nc {
-            self.players_sel = 1
-            self.sel_opp = a
-            @ffi.host_sfx(self.host, "sfxMenu")
-            self.show_players()
-          }
-        "go" => {
-          @ffi.host_sfx(self.host, "sfxConfirm")
           self.start_match()
-        }
-        "back" => {
-          self.state = MenuSetup
-          self.show_setup()
         }
         _ => ()
       }
@@ -2337,10 +2255,8 @@ pub fn game_init(host : @ffi.Host, seed : Int) -> Unit {
     rng: @rng.Gauss::new(seed),
     state: MenuTitle, // option b: open on the branded title screen
     setup_row: 0,
-    players_sel: 0,
-    sel_player: 0,
-    sel_opp: 0,
-    sel_surface: 2,
+    sel_player: 4,
+    sel_opp: 4,
     sel_difficulty: 1,
     sel_games: 6,
     is_practice: false,
