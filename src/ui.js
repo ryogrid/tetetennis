@@ -7,7 +7,6 @@
 //  - The three separate gauges (toss / timing / height) are unified behind a
 //    single name-keyed gauge(name, frac, lo, hi, good) / hideGauge(name).
 import { SURFACE_THEMES } from './court.js';
-import { CHARACTERS } from './characters.js';
 
 // Difficulty display table (order: easy, normal, hard). From old ai.js.
 const DIFFICULTIES = [
@@ -28,9 +27,6 @@ const GAMES_OPTIONS = [
   { name: '4 Games', desc: 'Short set: first to 4 games (win by 2, tiebreak at 4-4).' },
   { name: '6 Games', desc: 'Full set: first to 6 games (win by 2, tiebreak at 6-6).' },
 ];
-
-// Surface display order: clay, grass, hard.
-const SURFACE_IDS = ['clay', 'grass', 'hard'];
 
 // Practice-mode option tables (design/practice-mode). Order must match the
 // MoonBit index mappings in logic/game/game.js.mbt + logic/shots.
@@ -125,8 +121,6 @@ const css = `
 }
 .startrow { display: flex; gap: 14px; }
 .startbtn.back { background: rgba(255,255,255,.06); border-color: #555; color: #bbb; }
-/* screen 2: player sections */
-.screen[data-screen="players"] { gap: 12px; }
 .psection {
   display: flex; flex-direction: column; align-items: center; gap: 4px;
   padding: 8px 12px; border-radius: 12px; border: 2px solid transparent;
@@ -777,30 +771,12 @@ export function createUI({ onVirtualKey, onMoveAxis, onSelectShot, settings, onS
     onKey('Escape', false);
   });
 
-  // ---------- menus ----------
-
-  // one character card (name + archetype + desc + radar). `cmd` is the tap
-  // action ("you"/"opp") tagged on the element with the character index.
-  function charCard(c, i, selected, cmd) {
-    return `<div class="card${selected ? ' sel' : ''}" data-cmd="${cmd}" data-arg="${i}">
-      <h3 style="color:#${c.color.toString(16).padStart(6, '0')}">${c.name}</h3>
-      <div class="arch">${c.archetype}</div>
-      <div class="desc">${c.desc}</div>
-      ${statBars(c.stats, '#' + c.color.toString(16).padStart(6, '0'))}
-    </div>`;
-  }
-
   // ----- screen 1: consolidated setup (mode + mode-dependent settings) -----
   // Row indices below MUST match Game::setup_rows in logic/game/game.js.mbt.
 
-  function surfaceLabel(idx) {
-    const t = SURFACE_THEMES[SURFACE_IDS[idx]];
-    return `<span class="dot" style="background:#${t.court.toString(16).padStart(6, '0')}"></span>${t.label}`;
-  }
-
   // top-down court swatch for the chosen surface (review: setup preview)
-  function courtPreview(idx) {
-    const t = SURFACE_THEMES[SURFACE_IDS[idx]];
+  function courtPreview() {
+    const t = SURFACE_THEMES.hard;
     const col = '#' + t.court.toString(16).padStart(6, '0');
     return `<div class="court-preview"><div class="cp-label">COURT</div>` +
       `<div class="cp-court" style="background:${col};box-shadow:0 0 0 1px rgba(255,255,255,.12),0 6px 18px ${col}44">` +
@@ -853,67 +829,37 @@ export function createUI({ onVirtualKey, onMoveAxis, onSelectShot, settings, onS
   function showSetup(isPractice, row, surface, difficulty, gamesIdx, assist, feed, shot, depth) {
     els.menu.style.display = 'flex';
     els.menu.dataset.screen = 'setup';
-    const surfaceOpts = SURFACE_IDS.map((id, i) => ({ name: surfaceLabel(i), desc: '' }));
-    // Rows common to both modes come first in the same order (MODE, SURFACE,
-    // ASSIST) so toggling MATCH/PRACTICE doesn't move them; mode-specific rows
+    // Rows common to both modes come first in the same order (MODE, ASSIST) so
+    // toggling MATCH/PRACTICE doesn't move them; mode-specific rows
     // follow. Indices must match the MoonBit setup_rows() order exactly.
     const rows = [
       // MODE is always chips (binary, reads as a clear toggle on any device)
       optRow('MODE', 0, row, MODE_OPTIONS, isPractice ? 1 : 0, true),
-      optRow('SURFACE', 1, row, surfaceOpts, surface, isDesktop),
-      optRow('ASSIST', 2, row, ASSIST_OPTIONS, assist, isDesktop),
+      optRow('ASSIST', 1, row, ASSIST_OPTIONS, assist, isDesktop),
     ];
     if (isPractice) {
-      rows.push(optRow('FEED', 3, row, FEED_OPTIONS, feed, isDesktop));
-      rows.push(optRow('BALL TYPE', 4, row, feed === 1 ? SERVE_SHOTS : STROKE_SHOTS, shot, isDesktop));
+      rows.push(optRow('FEED', 2, row, FEED_OPTIONS, feed, isDesktop));
+      rows.push(optRow('BALL TYPE', 3, row, feed === 1 ? SERVE_SHOTS : STROKE_SHOTS, shot, isDesktop));
       if (feed === 0) {
-        rows.push(optRow('FEED DEPTH', 5, row, DEPTH_OPTIONS, depth, isDesktop));
+        rows.push(optRow('FEED DEPTH', 4, row, DEPTH_OPTIONS, depth, isDesktop));
       }
     } else {
-      rows.push(optRow('DIFFICULTY', 3, row, DIFFICULTIES, difficulty, isDesktop));
-      rows.push(optRow('GAMES', 4, row, GAMES_OPTIONS, gamesIdx, isDesktop));
+      rows.push(optRow('DIFFICULTY', 2, row, DIFFICULTIES, difficulty, isDesktop));
+      rows.push(optRow('GAMES', 3, row, GAMES_OPTIONS, gamesIdx, isDesktop));
     }
     const nav = isDesktop
-      ? '&uarr;/&darr; row &middot; &larr;/&rarr; or click an option &middot; Enter &rarr; players'
-      : '&uarr;/&darr; row &middot; &larr;/&rarr; change &middot; Enter &rarr; players &middot; or tap';
+      ? '&uarr;/&darr; row &middot; &larr;/&rarr; or click an option &middot; Enter &rarr; start'
+      : '&uarr;/&darr; row &middot; &larr;/&rarr; change &middot; Enter &rarr; start &middot; or tap';
     const badge = isPractice
       ? `<div class="practice-badge"><i></i>NO SCORE &middot; ENDLESS FEED &middot; QUIT ANYTIME</div>`
       : '';
     els.menu.innerHTML =
       `<div class="title">GAME SETUP</div>` + badge +
       `<div class="setup-wrap"><div class="setup">${rows.join('')}</div>` +
-      courtPreview(surface) +
+      courtPreview() +
       `</div>` +
-      `<div class="startbtn" data-cmd="go" data-arg="0">ENTER &rarr; PLAYERS</div>` +
+      `<div class="startbtn" data-cmd="go" data-arg="0">ENTER &rarr; START</div>` +
       `<div class="hint">${nav}</div>`;
-  }
-
-  // ----- screen 2: pick your player + opponent (rich cards) -----
-
-  function playerSection(label, cmd, selIdx, focused) {
-    return `<div class="psection${focused ? ' focused' : ''}">
-      <div class="psection-label">${label}</div>
-      <div class="cards compact">` +
-      CHARACTERS.map((c, i) => charCard(c, i, i === selIdx, cmd)).join('') +
-      `</div></div>`;
-  }
-
-  function showPlayers(sel, player, opp) {
-    els.menu.style.display = 'flex';
-    els.menu.dataset.screen = 'players';
-    els.menu.innerHTML =
-      `<div class="title">SELECT PLAYERS</div>` +
-      playerSection('YOU', 'you', player, sel === 0) +
-      playerSection('OPPONENT', 'opp', opp, sel === 1) +
-      `<div class="startrow">` +
-      `<div class="startbtn back" data-cmd="back" data-arg="0">&larr; BACK</div>` +
-      `<div class="startbtn" data-cmd="go" data-arg="0">START &#9654;</div>` +
-      `</div>` +
-      `<div class="hint">&uarr;/&darr; you/opp &middot; &larr;/&rarr; pick &middot; Enter start &middot; Esc back &middot; or tap</div>`;
-    // keep the focused section's chosen card in view when the card row scrolls
-    // horizontally (narrow screens). No-op when nothing overflows (desktop).
-    const active = els.menu.querySelector('.psection.focused .card.sel');
-    if (active) active.scrollIntoView({ inline: 'center', block: 'nearest' });
   }
 
   function showResults(win, lose, games, playerWon, difficulty, stats) {
@@ -1277,7 +1223,7 @@ export function createUI({ onVirtualKey, onMoveAxis, onSelectShot, settings, onS
   return {
     setMenuTapHandler(fn) { menuTapHandler = fn; },
     showTitle,
-    showSetup, showPlayers,
+    showSetup,
     showPause, hidePause,
     showResults, hideMenu,
     showHUD, hideHUD, updateScore, practiceHud,

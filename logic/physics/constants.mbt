@@ -173,7 +173,10 @@ pub fn smash_speed(pow : Double) -> Double {
 
 ///|
 pub fn run_speed(spd : Double) -> Double {
-  (5.2 + 2.6 * spd / 100.0) * 1.5 * @tuning.t.run_speed_scale
+  // Constant-speed movement needs a lower ceiling than the old accel-based
+  // model; this lands normal rally movement around 5.6-6.7 m/s across the
+  // roster, which is a plausible tennis court sprint range.
+  (5.2 + 2.6 * spd / 100.0) * @tuning.t.run_speed_scale
 }
 
 ///|

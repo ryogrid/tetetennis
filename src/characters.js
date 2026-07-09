@@ -45,3 +45,9 @@ export const CHARACTERS = [
 export function reachRadius(REA) {
   return (1.25 + 0.25 * REA / 100) * 1.5;
 }
+
+// Mirrors logic/physics/constants.mbt serve_contact_h so the render rig can be
+// scaled from the same per-character overhead contact height as the gameplay.
+export function serveContactHeight(REA) {
+  return 2.55 + 0.55 * REA / 100;
+}
