@@ -95,7 +95,6 @@ fn play_ball(
   // CPU stub, moved exactly like entities/player.js
   let dt = @physics.dt
   let max_speed = @physics.run_speed(character.stats.spd) * ai.diff.speed_mul
-  let accel = @physics.run_accel(character.stats.spd) * ai.diff.speed_mul
   let mut cpu_x = 0.0
   let mut cpu_z = -12.3
   let mut cpu_vx = 0.0
@@ -138,16 +137,16 @@ fn play_ball(
       pending_aim_x = mv.swing_aim_x
       pending_aim_depth = mv.swing_aim_depth
     }
-    // movement integration (accel/brake model from player.update)
+    // movement integration (constant-speed model from player.update)
     let slow = if swing_active { 0.45 } else { 1.0 }
-    let dvx = mv.x * max_speed * slow - cpu_vx
-    let dvz = mv.z * max_speed * slow - cpu_vz
-    let dv = @vec.hypot2(dvx, dvz)
-    if dv > 1.0e-6 {
-      let braking = cpu_vx * dvx + cpu_vz * dvz < 0.0
-      let step = @vec.dmin(dv, (if braking { accel * 1.8 } else { accel }) * dt)
-      cpu_vx = cpu_vx + dvx / dv * step
-      cpu_vz = cpu_vz + dvz / dv * step
+    let mv_len = @vec.hypot2(mv.x, mv.z)
+    if mv_len > 1.0e-6 {
+      let speed = max_speed * slow
+      cpu_vx = mv.x / mv_len * speed
+      cpu_vz = mv.z / mv_len * speed
+    } else {
+      cpu_vx = 0.0
+      cpu_vz = 0.0
     }
     cpu_x = cpu_x + cpu_vx * dt
     cpu_z = cpu_z + cpu_vz * dt

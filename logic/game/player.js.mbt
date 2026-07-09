@@ -27,7 +27,6 @@ struct Player {
   mut stiff_t : Double // post-impact movement stiffness timer
   mut whiff_cd : Double // cooldown after a whiffed release
   max_speed : Double
-  accel : Double
   reach : Double
   // pending CPU swing (set when the AI requests a swing)
   mut pending_type : @shots.ShotType
@@ -68,7 +67,6 @@ fn create_player(
     stiff_t: 0.0,
     whiff_cd: 0.0,
     max_speed: @physics.run_speed(stats.spd) * speed_mul,
-    accel: @physics.run_accel(stats.spd) * speed_mul,
     reach: @physics.reach(stats.rea),
     pending_type: Flat,
     pending_aim_x: 0.0,
@@ -109,8 +107,8 @@ fn Player::place(self : Player, x : Double, z : Double) -> Unit {
   self.vel_z = 0.0
 }
 
-// fixed-step movement; move in [-1,1]. Constant-force accel toward the desired
-// velocity; braking is 1.8x stronger. Advances swing/serve timers + run phase.
+// fixed-step movement; any non-zero move input snaps immediately to a constant
+// top speed in that direction. Advances swing/serve timers + run phase.
 ///|
 fn Player::update(self : Player, dt : Double, move_x : Double, move_z : Double) -> Unit {
   // post-impact stiffness nearly halts movement briefly after a hit
@@ -121,16 +119,14 @@ fn Player::update(self : Player, dt : Double, move_x : Double, move_z : Double) 
   } else {
     1.0
   }
-  let tx = move_x * self.max_speed * slow
-  let tz = move_z * self.max_speed * slow
-  let dvx = tx - self.vel_x
-  let dvz = tz - self.vel_z
-  let dv = @vec.hypot2(dvx, dvz)
-  if dv > 1.0e-6 {
-    let braking = self.vel_x * dvx + self.vel_z * dvz < 0.0
-    let step = @vec.dmin(dv, (if braking { self.accel * 1.8 } else { self.accel }) * dt)
-    self.vel_x = self.vel_x + dvx / dv * step
-    self.vel_z = self.vel_z + dvz / dv * step
+  let move_len = @vec.hypot2(move_x, move_z)
+  if move_len > 1.0e-6 {
+    let speed = self.max_speed * slow
+    self.vel_x = move_x / move_len * speed
+    self.vel_z = move_z / move_len * speed
+  } else {
+    self.vel_x = 0.0
+    self.vel_z = 0.0
   }
   self.pos_x = self.pos_x + self.vel_x * dt
   self.pos_z = self.pos_z + self.vel_z * dt
