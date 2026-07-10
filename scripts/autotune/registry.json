@@ -283,16 +283,16 @@
       "kind": "absolute"
     },
     "serve_speed_min": {
-      "default": 30.0,
-      "min": 24.0,
+      "default": 27.0,
+      "min": 22.0,
       "max": 36.0,
       "file": "logic/tuning/tuning.mbt",
       "symbol": "serve meter speed floor",
       "kind": "absolute"
     },
     "serve_speed_max": {
-      "default": 54.0,
-      "min": 46.0,
+      "default": 48.6,
+      "min": 42.0,
       "max": 62.0,
       "file": "logic/tuning/tuning.mbt",
       "symbol": "serve meter speed ceiling",

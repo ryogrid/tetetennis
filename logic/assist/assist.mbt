@@ -2,13 +2,11 @@
 // old/src/assist.js (localStorage persistence stays in the JS layer).
 //   Off  — classic balance
 //   On   — slow-mo approach, easier pace, contact forgiveness (DEFAULT)
-//   Full — On + auto-swing + positioning magnetism
 
 ///|
 pub(all) enum AssistLevel {
   Off
   On
-  Full
 } derive(Eq, Show)
 
 ///|
@@ -17,11 +15,6 @@ let level : Ref[AssistLevel] = { val: On }
 ///|
 pub fn assist_on() -> Bool {
   level.val != Off
-}
-
-///|
-pub fn assist_full() -> Bool {
-  level.val == Full
 }
 
 ///|

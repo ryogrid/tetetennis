@@ -109,13 +109,13 @@ pub struct Surface {
 }
 
 ///|
-pub let surface_clay : Surface = { id: "clay", ey: 0.81, mu: 0.80 }
+pub let surface_clay : Surface = { id: "clay", ey: 0.79, mu: 0.80 }
 
 ///|
-pub let surface_hard : Surface = { id: "hard", ey: 0.75, mu: 0.56 }
+pub let surface_hard : Surface = { id: "hard", ey: 0.74, mu: 0.56 }
 
 ///|
-pub let surface_grass : Surface = { id: "grass", ey: 0.66, mu: 0.38 }
+pub let surface_grass : Surface = { id: "grass", ey: 0.64, mu: 0.38 }
 
 ///|
 pub fn surface_by_id(id : String) -> Surface {

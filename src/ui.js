@@ -15,11 +15,10 @@ const DIFFICULTIES = [
   { id: 'hard', name: 'Hard', desc: 'Sharp anticipation, big serves, few gifts.' },
 ];
 
-// Player-side assist axis (order: off, on, full). From old game.js.
+// Player-side assist axis (order: off, on). From old game.js.
 const ASSIST_OPTIONS = [
   { id: 'off',  name: 'Off',  desc: 'Classic challenge. No player-side help.' },
   { id: 'on',   name: 'On',   desc: 'Slow-motion approach, easier pace, forgiving contact.' },
-  { id: 'full', name: 'Full', desc: 'Everything in On, plus auto-swing and auto-positioning.' },
 ];
 // must match games_options in logic/game/game.js.mbt
 const GAMES_OPTIONS = [

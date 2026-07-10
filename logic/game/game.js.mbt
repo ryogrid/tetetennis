@@ -26,15 +26,6 @@ let timing_tol : Double = 0.07
 let swing_window : Double = 0.09
 
 ///|
-let magnet_radius : Double = 1.2
-
-///|
-let magnet_strength : Double = 0.6
-
-///|
-let magnet_input_cut : Double = 0.3
-
-///|
 pub let swing_contact_t : Double = 0.18
 
 ///|
@@ -71,9 +62,6 @@ let stiff_dur : Double = 0.35 // post-impact stiffness duration
 
 ///|
 let stiff_factor : Double = 0.12 // movement multiplier while stiff
-
-///|
-let full_assist_charge : Double = 0.7 // auto-charge level under Full assist
 
 ///|
 let volley_forecourt : Double = 7.0 // hit a still-airborne ball within this of the net = volley
@@ -249,7 +237,6 @@ struct MatchState {
   mut serve_meter_t : Double // meter phase clock (s)
   stats : MatchStats
   mut cpu_serve_plan : @ai.ServePlan?
-  mut last_shot_pref : @shots.ShotType?
   mut was_in_reach : Bool
   practice : Practice? // None = scored match; Some = practice feed session
   events : Array[@physics.Event]
@@ -395,7 +382,6 @@ fn assist_idx() -> Int {
   match @assist.get_assist_level() {
     Off => 0
     On => 1
-    Full => 2
   }
 }
 
@@ -403,8 +389,7 @@ fn assist_idx() -> Int {
 fn level_from_idx(i : Int) -> @assist.AssistLevel {
   match i {
     0 => Off
-    1 => On
-    _ => Full
+    _ => On
   }
 }
 
@@ -413,7 +398,6 @@ fn level_str(l : @assist.AssistLevel) -> String {
   match l {
     Off => "off"
     On => "on"
-    Full => "full"
   }
 }
 
@@ -484,7 +468,7 @@ fn setup_change(self : Game, dir : Int) -> Unit {
       self.sel_games = games_options[i]
     }
     Assist => {
-      let lvl = level_from_idx((assist_idx() + dir + 3) % 3)
+      let lvl = level_from_idx((assist_idx() + dir + 2) % 2)
       @assist.set_assist_level(lvl)
       @ffi.host_save_assist(self.host, level_str(lvl))
     }
@@ -675,7 +659,7 @@ fn start_match(self : Game) -> Unit {
   }
   let human = match ai_p {
     Some(a) => create_player(@rules.P, char_p, a.diff.speed_mul)
-    None => create_player(@rules.P, char_p, 1.0)
+    None => create_player(@rules.P, char_p, 1.2) // human-only speed buff
   }
   let cpu = create_player(@rules.C, char_c, ai.diff.speed_mul)
   let practice : Practice? = if self.is_practice {
@@ -724,7 +708,6 @@ fn start_match(self : Game) -> Unit {
     serve_meter_t: 0.0,
     stats: new_match_stats(),
     cpu_serve_plan: None,
-    last_shot_pref: None,
     was_in_reach: false,
     practice,
     events: [],
@@ -1450,8 +1433,7 @@ fn update_human_charge(self : Game, ms : MatchState, dt : Double) -> Unit {
     ms.rally_phase == Live &&
     ms.last_hit_by == Some(@rules.C) &&
     ms.ball.active
-  // Full assist auto-charges/auto-swings via the auto-swing block; no manual hold.
-  if !live || @assist.assist_full() || ph.swinging || ph.whiff_cd > 0.0 {
+  if !live || ph.swinging || ph.whiff_cd > 0.0 {
     if ph.charging {
       ph.charging = false
       @ffi.host_hide_charge(self.host)
@@ -1504,7 +1486,6 @@ fn fire_charged_swing(self : Game, ms : MatchState, safety : Bool) -> Unit {
   ph.swing_charge = ph.charge
   ph.swing_no_perfect = safety
   ph.charging = false
-  ms.last_shot_pref = Some(ph.charge_type)
   ph.start_swing(ph.charge_type, fh) |> ignore
   let motion = @shots.swing_motion(
     ms.bounces, b.py, b.pz, ph.charge_type, volley_forecourt,
@@ -1667,7 +1648,7 @@ pub fn fixed_update(dt : Double) -> Unit {
       ms.human.pos_z = @physics.court_half_len + 0.4
     }
   } else {
-    // human movement (+ optional positioning magnetism)
+    // human movement
     let mut hx = @ffi.host_move_x(self.host)
     let mut hz = @ffi.host_move_z(self.host)
     // While charging, d-pad controls aim only — no movement
@@ -1677,25 +1658,6 @@ pub fn fixed_update(dt : Double) -> Unit {
     }
     if (ms.point_state == PreServe || ms.point_state == Serving) && server(ms) == @rules.P {
       hz = 0.0 // slide along the baseline only
-    }
-    if @assist.assist_full() &&
-      ms.point_state == Rally &&
-      ms.last_hit_by == Some(@rules.C) &&
-      ms.has_sweet {
-      let dx = ms.sweet_x - ms.human.pos_x
-      let dz = ms.sweet_z - ms.human.pos_z
-      let dist = @vec.hypot2(dx, dz)
-      let input_mag = @vec.hypot2(hx, hz)
-      if dist < magnet_radius && dist > 0.05 && input_mag < magnet_input_cut {
-        let pull = magnet_strength * (1.0 - input_mag / magnet_input_cut)
-        hx = hx + dx / dist * pull
-        hz = hz + dz / dist * pull
-        let mag = @vec.hypot2(hx, hz)
-        if mag > 1.0 {
-          hx = hx / mag
-          hz = hz / mag
-        }
-      }
     }
     ms.human.update(dt, hx, hz)
   }
@@ -1761,41 +1723,9 @@ pub fn fixed_update(dt : Double) -> Unit {
     }
   }
 
-  // human charge / release (hold to charge, release to swing); Full assist
-  // auto-charges + auto-releases at the sweet spot below.
+  // human charge / release (hold to charge, release to swing)
   if !self.cpu_vs_cpu {
     self.update_human_charge(ms, dt)
-  }
-
-  // auto-swing assist (full assist only): auto-release at the sweet spot
-  if @assist.assist_full() &&
-    ms.point_state == Rally &&
-    ms.last_hit_by == Some(@rules.C) &&
-    !ms.human.swinging {
-    match time_to_contact(ms) {
-      Some(ttc) =>
-        if ttc <= swing_contact_t {
-          let ty = match ms.last_shot_pref {
-            Some(t) => Some(t)
-            None => recommend_shot_type(ms)
-          }
-          match ty {
-            Some(t) => {
-              let fh = b.px - ms.human.pos_x >= 0.0
-              ms.human.swing_charge = full_assist_charge
-              ms.human.swing_no_perfect = false
-              ms.human.start_swing(t, fh) |> ignore
-              let motion = @shots.swing_motion(
-                ms.bounces, b.py, b.pz, t, volley_forecourt,
-              )
-              @ffi.host_start_swing(self.host, 0, shot_type_str(t), fh, motion)
-              ms.last_shot_pref = None
-            }
-            None => ()
-          }
-        }
-      None => ()
-    }
   }
 
   // swing contacts: human gets a forgiving timing window; CPU is exact.
@@ -2276,8 +2206,7 @@ pub fn game_init(host : @ffi.Host, seed : Int) -> Unit {
   match @ffi.host_load_assist(host) {
     "off" => @assist.set_assist_level(Off)
     "on" => @assist.set_assist_level(On)
-    "full" => @assist.set_assist_level(Full)
-    _ => ()
+    _ => () // unknown (incl. legacy "full") keeps the default On
   }
   self.show_title()
 }

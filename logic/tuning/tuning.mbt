@@ -120,8 +120,8 @@ fn defaults() -> Tuning {
     serve_err_x: 0.30,
     serve_err_z: 0.35,
     serve_err_speed: 0.025,
-    serve_speed_min: 30.0,
-    serve_speed_max: 54.0,
+    serve_speed_min: 27.0, // 0.9x serve pace (was 30.0)
+    serve_speed_max: 48.6, // 0.9x serve pace (was 54.0)
     serve_stat_base: 0.82,
     serve_stat_slope: 0.36,
     serve_sweet_lo: 0.70,

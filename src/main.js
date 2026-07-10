@@ -19,7 +19,7 @@ import { registerPWA } from './pwa.js';
 const DT = 1 / 240; // fixed physics step (mirrors the MoonBit DT)
 
 const ASSIST_KEY = 'assistLevel';
-const ASSIST_LEVELS = ['off', 'on', 'full'];
+const ASSIST_LEVELS = ['off', 'on'];
 
 registerPWA();
 

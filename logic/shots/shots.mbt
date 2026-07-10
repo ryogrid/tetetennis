@@ -233,7 +233,10 @@ pub fn compute_stroke(
   if cq.whiff {
     return None
   }
-  let q = cq.q
+  // human only: soften every bad-contact penalty by lifting quality 20%
+  // toward 1 (CPU-driven side P in balance studies is exempt)
+  let human = side == @rules.P && !@tuning.cpu_p_active()
+  let q = if human { cq.q + (1.0 - cq.q) * 0.2 } else { cq.q }
   let aid = side == @rules.P && @assist.assist_on()
   let mut typ = shot_type
   if cq.stretched && typ != Slice {
