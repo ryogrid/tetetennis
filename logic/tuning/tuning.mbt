@@ -40,6 +40,8 @@ pub(all) struct Tuning {
   mut mishit_q_max : Double
   mut mishit_prob : Double
   mut q_speed_floor : Double
+  mut shallow_speed_mid : Double
+  mut shallow_speed_net : Double
   mut jam_threshold : Double
   mut jam_scale : Double
   mut aim_x_scale : Double
@@ -112,6 +114,8 @@ fn defaults() -> Tuning {
     mishit_q_max: 0.3,
     mishit_prob: 0.26072720125734405, // autotuned (was 0.35)
     q_speed_floor: 0.65,
+    shallow_speed_mid: 1.08, // stroke speed mul at the service line
+    shallow_speed_net: 1.30, // stroke speed mul at the net
     jam_threshold: 26.0,
     jam_scale: 14.0,
     aim_x_scale: 2.8,
@@ -208,6 +212,8 @@ pub fn reset_params() -> Unit {
   t.mishit_q_max = d.mishit_q_max
   t.mishit_prob = d.mishit_prob
   t.q_speed_floor = d.q_speed_floor
+  t.shallow_speed_mid = d.shallow_speed_mid
+  t.shallow_speed_net = d.shallow_speed_net
   t.jam_threshold = d.jam_threshold
   t.jam_scale = d.jam_scale
   t.aim_x_scale = d.aim_x_scale
@@ -268,6 +274,8 @@ pub fn set_param(name : String, v : Double) -> Bool {
     "mishit_q_max" => t.mishit_q_max = v
     "mishit_prob" => t.mishit_prob = v
     "q_speed_floor" => t.q_speed_floor = v
+    "shallow_speed_mid" => t.shallow_speed_mid = v
+    "shallow_speed_net" => t.shallow_speed_net = v
     "jam_threshold" => t.jam_threshold = v
     "jam_scale" => t.jam_scale = v
     "aim_x_scale" => t.aim_x_scale = v
@@ -331,6 +339,8 @@ pub fn get_param(name : String) -> Double {
     "mishit_q_max" => t.mishit_q_max
     "mishit_prob" => t.mishit_prob
     "q_speed_floor" => t.q_speed_floor
+    "shallow_speed_mid" => t.shallow_speed_mid
+    "shallow_speed_net" => t.shallow_speed_net
     "jam_threshold" => t.jam_threshold
     "jam_scale" => t.jam_scale
     "aim_x_scale" => t.aim_x_scale
