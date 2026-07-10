@@ -1611,8 +1611,10 @@ fn handle_match_input(self : Game) -> Unit {
   let shot = str_to_shot(@ffi.host_shot_key(h))
   let touch_shot = @ffi.host_was_pressed(h, "TouchShot")
   if ms.point_state == PreServe && server(ms) == @rules.P {
-    if @ffi.host_was_pressed(h, "Space") || touch_shot {
-      self.start_toss(ms)
+    // any shot-select key (Z/X/C/V) — or the mobile shot button — tosses
+    match shot {
+      Some(_) => self.start_toss(ms)
+      None => if touch_shot { self.start_toss(ms) }
     }
   } else if ms.point_state == Serving && server(ms) == @rules.P {
     match shot {

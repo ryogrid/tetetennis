@@ -528,7 +528,7 @@ export function createUI({ onVirtualKey, onMoveAxis, onSelectShot, settings, onS
     'Move: Arrow keys<br>Shots: <b>hold</b> Z/X/C/V to charge, <b>release</b> to hit ' +
     '(Z flat &middot; X topspin &middot; C slice &middot; V drop)<br>' +
     'Release in the sweet spot for a Perfect Hit; longer charge = more power<br>' +
-    'Serve: Space toss, then Z/X/C when the power meter is in the green band<br>' +
+    'Serve: Z/X/C/V to toss, then Z/X/C/V again when the power meter is in the green band<br>' +
     'Aim: hold a direction at the moment you release';
 
   // ---------- immersion / presentation settings panel (immersion 07 §7.1) ----------
