@@ -27,17 +27,19 @@ const STEPS = 240 * 180; // 3 sim-minutes
 const SEED = 7777;
 
 // Procedural tape: everything is a pure function of the step counter, so the
-// run is fully deterministic. The "player" serves with Space + flat, then
-// hold-charges topspin in bursts and wanders with the d-pad — bad tennis,
-// which is good coverage (faults, whiffs, safety hits, errors).
+// run is fully deterministic. The "player" serves with the Z/X/C/V shot key
+// (flat) — one pulse tosses, a later pulse releases — then hold-charges
+// topspin in bursts and wanders with the d-pad — bad tennis, which is good
+// coverage (faults, whiffs, safety hits, errors).
 function makeTape() {
   let step = 0;
   return {
     tick: () => { step++; },
     moveX: () => [0, 1, 0, -1][(step >> 7) & 3],
     moveZ: () => [0, -1, 0, 1][(step >> 8) & 3],
-    wasPressed: (code) => code === 'Space' && step % 480 === 0 && step > 0,
-    shotKey: () => (step % 480 === 120 ? 'flat' : ''),
+    wasPressed: () => false,
+    shotKey: () =>
+      ((step % 480 === 0 && step > 0) || step % 480 === 120 ? 'flat' : ''),
     shotHeld: () => (step % 240 < 200 ? 'topspin' : ''),
     isDown: () => false,
   };
