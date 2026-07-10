@@ -190,6 +190,23 @@ pub fn contact_quality(
 }
 
 ///|
+/// Shallow-contact aggression: a shorter contact point yields a faster shot.
+/// Piecewise-linear in distance-from-net: gentle baseline->service-line ramp
+/// (1.0 -> shallow_speed_mid), steep service-line->net ramp (mid -> net).
+/// Contact behind the baseline clamps to 1.0.
+fn shallow_speed_mul(contact_z_abs : Double) -> Double {
+  let sl = @physics.court_service_line
+  let hl = @physics.court_half_len
+  let d = @vec.clampd(contact_z_abs, 0.0, hl)
+  if d >= sl {
+    1.0 + (@tuning.t.shallow_speed_mid - 1.0) * (hl - d) / (hl - sl)
+  } else {
+    @tuning.t.shallow_speed_net +
+    (@tuning.t.shallow_speed_mid - @tuning.t.shallow_speed_net) * d / sl
+  }
+}
+
+///|
 pub(all) struct Stroke {
   vx : Double
   vy : Double
@@ -427,6 +444,11 @@ pub fn compute_stroke(
     (if ball_x >= player_x { 1.0 } else { -1.0 })
   } else {
     0.0
+  }
+  // shallow-contact aggression (groundstrokes only; volleys/smash/touch
+  // shots keep their own speed identity)
+  if !do_volley && !is_smash && (typ == Flat || typ == Topspin || typ == Slice) {
+    speed = speed * shallow_speed_mul(@vec.dabs(ball_z))
   }
   // uniform ball-speed reduction across every shot category (flat/topspin/slice/
   // volley/smash/lob/drop all funnel through `speed`); default scale 1.0.
