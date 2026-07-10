@@ -50,7 +50,7 @@
       "kind": "absolute"
     },
     "spin_bounce_vertical": {
-      "default": 0.006979847383437907,
+      "default": 0.006281862645094116,
       "min": 0.0,
       "max": 0.01,
       "file": "logic/tuning/tuning.mbt",

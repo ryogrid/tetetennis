@@ -91,7 +91,7 @@ fn defaults() -> Tuning {
     bounce_v_ref: 7.663922610666696, // autotuned topspin study (was 8.592068172949306)
     bounce_slope: 0.014631407032846796, // autotuned topspin study (was 0.015001942533694603)
     bounce_min_frac: 0.6476881754507375, // autotuned topspin study (was 0.6168453650051086)
-    spin_bounce_vertical: 0.006979847383437907, // autotuned topspin study (was 0.008354272614227123)
+    spin_bounce_vertical: 0.006281862645094116, // -10% topspin kick (was 0.006979847383437907)
     flat_speed_base: 18.0,
     flat_speed_slope: 7.0,
     topspin_rpm_base: 1863.0891274701878, // autotuned deep-bounce study @0.85 (was 2480.2718697744863)
