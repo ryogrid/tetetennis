@@ -26,6 +26,9 @@ let timing_tol : Double = 0.07
 let swing_window : Double = 0.09
 
 ///|
+let return_reach_mul : Double = 1.25 // human reach boost on return of serve
+
+///|
 pub let swing_contact_t : Double = 0.18
 
 ///|
@@ -741,6 +744,26 @@ fn server(ms : MatchState) -> @rules.Side {
 }
 
 ///|
+/// Human reach multiplier: boosted only while returning the CPU's serve
+/// (serve in play, no rally shot yet; practice feeds and CPU-driven side P
+/// are excluded).
+fn human_reach_mul(ms : MatchState) -> Double {
+  let returning = ms.point_state == Rally &&
+    ms.stats.rally_shots == 0 &&
+    ms.last_hit_by == Some(@rules.C) &&
+    (match ms.practice {
+      None => true
+      Some(_) => false
+    }) &&
+    !@tuning.cpu_p_active()
+  if returning {
+    return_reach_mul
+  } else {
+    1.0
+  }
+}
+
+///|
 fn receiver(ms : MatchState) -> @rules.Side {
   @rules.other(ms.m.server)
 }
@@ -1091,10 +1114,11 @@ fn attempt_contact(
   let volley = ms.bounces == 0 &&
     @vec.dabs(b.pz) < volley_forecourt &&
     (ty == @shots.Flat || ty == @shots.Slice)
+  let reach_mul = if side == @rules.P { human_reach_mul(ms) } else { 1.0 }
   let res = @shots.compute_stroke(
     e.pos_x, e.pos_z, b.px, b.py, b.pz, b.vx, b.vy, b.vz, e.stats, ty, aim_x,
     aim_depth, side, self.rng, power_mul~, perfect_eligible~,
-    charge_cc~, volley~,
+    charge_cc~, volley~, reach_mul~,
   )
   match res {
     None => false // whiff
@@ -1503,7 +1527,7 @@ fn should_safety_hit(self : Game, ms : MatchState) -> Bool {
   let ph = ms.human
   let b = ms.ball
   let d = @vec.hypot2(b.px - ph.pos_x, b.pz - ph.pos_z)
-  if d > ph.reach {
+  if d > ph.reach * human_reach_mul(ms) {
     return false
   }
   let passed = b.pz > ph.pos_z && b.vz > 0.0
@@ -1946,10 +1970,10 @@ fn point_over_step(self : Game, ms : MatchState, dt : Double) -> Unit {
         }
         let diff_name = @ai.difficulties[self.sel_difficulty].name
         let stats_str = stats_string(ms)
-        if self.cpu_vs_cpu {
-          // snapshot before teardown_match destroys the MatchState
-          self.last_report = build_report(ms, Some(w))
-        }
+        // snapshot before teardown_match destroys the MatchState (human
+        // matches too — the human-mode golden reads it when a match ends
+        // within its step budget)
+        self.last_report = build_report(ms, Some(w))
         self.teardown_match()
         @ffi.host_show_results(
           self.host, win_name, lose_name, g_str, w == @rules.P, diff_name, stats_str,
@@ -2024,9 +2048,10 @@ pub fn frame_update(dt : Double) -> Unit {
   @ffi.host_camera_update(h, dt, self.camera_mode())
 
   // reach zone colour + alert
+  let h_reach = ms.human.reach * human_reach_mul(ms)
   let in_reach = b.active &&
-    @vec.hypot2(b.px - ms.human.pos_x, b.pz - ms.human.pos_z) <= ms.human.reach &&
-    b.py <= 1.15 + ms.human.reach
+    @vec.hypot2(b.px - ms.human.pos_x, b.pz - ms.human.pos_z) <= h_reach &&
+    b.py <= 1.15 + h_reach
   @ffi.host_reach_color(h, in_reach)
   if in_reach && !ms.was_in_reach {
     @ffi.host_sfx(h, "sfxReachAlert")
@@ -2117,7 +2142,7 @@ pub fn get_time_scale(dt : Double) -> Double {
         let approaching = b.active && b.vz > 0.0
         if approaching &&
           @vec.hypot2(b.px - ms.human.pos_x, b.pz - ms.human.pos_z) <=
-          ms.human.reach + slowmo_margin {
+          ms.human.reach * human_reach_mul(ms) + slowmo_margin {
           target = slowmo_scale
         }
       }

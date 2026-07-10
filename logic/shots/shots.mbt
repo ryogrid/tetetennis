@@ -144,10 +144,11 @@ pub fn contact_quality(
   vz : Double,
   stats : Stats,
   side : @rules.Side,
+  reach_mul~ : Double = 1.0,
 ) -> ContactQuality {
   let d = @vec.hypot2(ball_x - player_x, ball_z - player_z)
   let h = ball_y
-  let reach = @physics.reach(stats.rea)
+  let reach = @physics.reach(stats.rea) * reach_mul
   let human = side == @rules.P && !@tuning.cpu_p_active()
   let reach_eff = reach + (if human { reach_grace } else { 0.0 })
   let h_max = 1.15 + reach_eff
@@ -226,9 +227,11 @@ pub fn compute_stroke(
   perfect_eligible~ : Bool = false,
   charge_cc~ : Double = 0.0,
   volley~ : Bool = false,
+  reach_mul~ : Double = 1.0,
 ) -> Stroke? {
   let cq = contact_quality(
     player_x, player_z, ball_x, ball_y, ball_z, vx, vy, vz, stats, side,
+    reach_mul~,
   )
   if cq.whiff {
     return None
