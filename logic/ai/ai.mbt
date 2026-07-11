@@ -289,14 +289,19 @@ fn choose_stroke(ai : Ai, ctx : AiCtx, pred_x : Double, pred_z : Double, rng : @
   let run_dist = @vec.hypot2(pred_x - ctx.cpu_x, pred_z - ctx.cpu_z)
   let stretch = @vec.dmin(run_dist / 6.0, 1.0)
 
-  // targets: (x, z, corner, short)
-  let targets = [
-    (-3.0, 10.3, 1.0, 0.0),
-    (0.0, 10.6, 0.0, 0.0),
-    (3.0, 10.3, 1.0, 0.0),
-    (-2.6, 5.0, 0.0, 1.0),
-    (2.6, 5.0, 0.0, 1.0),
-    (human_x * 0.5, 9.5, 0.0, 0.0),
+  // 9-target cells (design_docs/ball-control-and-aiming.md): the AI picks
+  // among the same discrete targets the human aims with, in the hitter's
+  // frame (mirror-invariant, so CPU-vs-CPU side P needs no un-mirroring).
+  let cells = [
+    (-1.0, 1.0),
+    (0.0, 1.0),
+    (1.0, 1.0),
+    (-1.0, 0.0),
+    (0.0, 0.0),
+    (1.0, 0.0),
+    (-1.0, -1.0),
+    (0.0, -1.0),
+    (1.0, -1.0),
   ]
   // Balance-study policy: Slice on the return of serve, else a single forced
   // type; otherwise the normal Flat/Topspin/Slice choice. When forced, the
@@ -317,14 +322,19 @@ fn choose_stroke(ai : Ai, ctx : AiCtx, pred_x : Double, pred_z : Double, rng : @
   }
   let mut best_u = -1.0e18
   let mut best_type : @shots.ShotType = Flat
-  let mut best_tx = 0.0
-  let mut best_tz = 0.0
-  for tg in targets {
-    let tgx = tg.0
-    let tgz = tg.1
-    let corner = tg.2
-    let short_ = tg.3
+  let mut best_cx = 0.0
+  let mut best_cz = 0.0
+  for cell in cells {
+    let cx = cell.0
+    let cz = cell.1
+    let corner = if cx != 0.0 && cz != 0.0 { 1.0 } else { 0.0 }
+    let short_ = if cz < 0.0 { 1.0 } else { 0.0 }
     for ty in types {
+      // absolute landing coordinates: the AI plans as side C (hitter's
+      // right = -x), matching compute_stroke's hitter-frame mapping
+      let (x_right, depth) = @shots.rally_cell_target(cx, cz, ty)
+      let tgx = -x_right
+      let tgz = depth
       let open = @vec.hypot2(tgx - human_x, tgz - human_z) / 10.0
       let type_bias = match ty {
         Flat => bias.flat
@@ -343,7 +353,10 @@ fn choose_stroke(ai : Ai, ctx : AiCtx, pred_x : Double, pred_z : Double, rng : @
       let u = open +
         aggr * (corner * 0.35 + flat_term) +
         cons * (topspin_term + (if @vec.dabs(tgx) < 2.0 { 0.15 } else { 0.0 })) -
-        stretch * ((match ty { Flat => 0.5; _ => 0.0 }) + corner * 0.4 + short_ * 0.25) * 1.1 +
+        stretch * ((match ty { Flat => 0.5; _ => 0.0 }) + corner * 0.4 + short_ * 0.25) * 1.1 -
+        // rally deep by default: a short ball is a tactical exception (the drop
+        // override handles the deliberate case), not a reflex vs a deep camper
+        short_ * (0.5 + 0.25 * @vec.clampd((@vec.dabs(pred_z) - 9.0) / 3.0, 0.0, 1.0)) +
         type_bias +
         corner * bias.corner +
         short_ * bias.short_ +
@@ -351,29 +364,24 @@ fn choose_stroke(ai : Ai, ctx : AiCtx, pred_x : Double, pred_z : Double, rng : @
       if u > best_u {
         best_u = u
         best_type = ty
-        best_tx = tgx
-        best_tz = tgz
+        best_cx = cx
+        best_cz = cz
       }
     }
   }
-  let base_z = match best_type {
-    Flat => 10.6
-    Topspin => 9.8
-    _ => 9.2
-  }
-  let plan_x = best_tx / @tuning.t.aim_x_scale
   let default_plan : StrokePlan = {
     type_: best_type,
-    aim_x: plan_x,
-    aim_depth: (best_tz - base_z) / 2.4,
+    aim_x: best_cx,
+    aim_depth: best_cz,
   }
   if policy_forced {
     return default_plan
   }
-  // tactical override: lob a net-rusher, drop on a deep camper
+  // tactical override: lob a net-rusher (safe row — a line-hugging lob under
+  // pressure would gift outs), drop on a deep camper (down row)
   match tactical_shot_type(human_z, rng.uniform(), ai.diff.id) {
-    Some(Lob) => { type_: Lob, aim_x: plan_x, aim_depth: 1.0 }
-    Some(Drop) => { type_: Drop, aim_x: plan_x, aim_depth: -1.0 }
+    Some(Lob) => { type_: Lob, aim_x: best_cx, aim_depth: 0.0 }
+    Some(Drop) => { type_: Drop, aim_x: best_cx, aim_depth: -1.0 }
     _ => default_plan
   }
 }
@@ -381,7 +389,8 @@ fn choose_stroke(ai : Ai, ctx : AiCtx, pred_x : Double, pred_z : Double, rng : @
 ///|
 pub(all) struct ServePlan {
   type_ : @shots.ServeType
-  preset : @shots.Preset
+  preset : @shots.Preset // lateral tactic (box frame); converted via preset_aim_x
+  row : Double // depth row cell: 1 deep / 0 safe / -1 short
   power : Double // serve power-meter value [0,1]
 }
 
@@ -416,13 +425,25 @@ pub fn choose_serve(ai : Ai, is_second : Bool, rng : @rng.Gauss) -> ServePlan {
       Body
     }
   }
+  // depth row: first serves go line-ギリギリ deep sometimes (by difficulty);
+  // second serves always take the safe row
+  let deep_p = if is_second {
+    0.0
+  } else if diff.id == "hard" {
+    0.5
+  } else if diff.id == "easy" {
+    0.1
+  } else {
+    0.3
+  }
+  let row = if rng.uniform() < deep_p { 1.0 } else { 0.0 }
   // aggressive (higher power) first serve; safer (lower power) second serve
   let base = (if is_second { 0.58 } else { 0.74 }) + diff.serve_q
   let power = @vec.dmax(
     0.4,
     @vec.dmin(0.98, base + 0.18 * rng.uniform() * (0.5 + stats.ctl / 200.0)),
   )
-  { type_, preset, power }
+  { type_, preset, row, power }
 }
 
 // Time to cover `dist` from rest with limited accel, then top speed.

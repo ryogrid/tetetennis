@@ -49,11 +49,13 @@ pub fn practice_stroke_type(i : Int) -> ShotType {
   }
 }
 
+// 9-target cells: shallow feed = the down row (a true short ball), deep feed
+// = the none row (the up row would fault too many reps to drill against).
 ///|
-pub let practice_shallow_aim : Double = -0.8 // forecourt bounce
+pub let practice_shallow_aim : Double = -1.0 // forecourt bounce (down row)
 
 ///|
-pub let practice_deep_aim : Double = 0.8 // backcourt bounce
+pub let practice_deep_aim : Double = 0.0 // backcourt bounce (none row)
 
 // Depth choice -> compute_stroke aim_depth. 0 shallow, 1 deep, 2 random (the
 // caller supplies the coin flip so this stays pure / testable).
@@ -190,6 +192,50 @@ pub fn contact_quality(
 }
 
 ///|
+/// Quantize an aim pair to the 9 cells: radial gate, then eight even
+/// 45-degree sectors (an axis registers when its magnitude exceeds
+/// sin(22.5deg) of the radial magnitude). Keyboard singles (1,0) and
+/// diagonals (~0.707,0.707) classify exactly; any joystick push past 35%
+/// deflection aims at full cell strength.
+pub fn aim_cells(ax : Double, az : Double) -> (Double, Double) {
+  let r = @vec.hypot2(ax, az)
+  if r < 0.35 {
+    return (0.0, 0.0)
+  }
+  let lim = 0.383 * r // sin(22.5deg)
+  let cx = if ax > lim { 1.0 } else if ax < -lim { -1.0 } else { 0.0 }
+  let cz = if az > lim { 1.0 } else if az < -lim { -1.0 } else { 0.0 }
+  (cx, cz)
+}
+
+///|
+/// Hitter-frame cell -> (lateral offset toward the hitter's right, depth
+/// from the net) for rally shots. Single lateral presses use the safe side
+/// margin; diagonals hug the corner. Drop keeps its short identity with its
+/// own depth rows.
+pub fn rally_cell_target(
+  cell_x : Double,
+  cell_z : Double,
+  typ : ShotType,
+) -> (Double, Double) {
+  let depth = if typ == Drop {
+    if cell_z > 0.0 { 3.8 } else if cell_z < 0.0 { 1.8 } else { 2.4 }
+  } else if cell_z > 0.0 {
+    @physics.court_half_len - @tuning.t.aim_deep_margin
+  } else if cell_z < 0.0 {
+    @tuning.t.aim_short_depth
+  } else {
+    @tuning.t.aim_safe_depth
+  }
+  let margin = if cell_z == 0.0 {
+    @tuning.t.aim_side_safe_margin
+  } else {
+    @tuning.t.aim_corner_margin
+  }
+  (cell_x * (@physics.court_half_width - margin), depth)
+}
+
+///|
 /// Shallow-contact aggression: a shorter contact point yields a faster shot.
 /// Piecewise-linear in distance-from-net: gentle baseline->service-line ramp
 /// (1.0 -> shallow_speed_mid), steep service-line->net ramp (mid -> net).
@@ -269,23 +315,24 @@ pub fn compute_stroke(
   let (def_speed_mul, def_theta_min0, def_theta_max0) = shot_def(typ)
   let mut def_theta_min = def_theta_min0
   let mut def_theta_max = def_theta_max0
-  let type_z = match typ {
-    Flat => 6.5
-    Topspin => 8.0
-    Slice => 5.5
-    Lob => 5.5
-    Drop => 2.2 // dies just past the net
+  // Discrete 9-target aiming (design_docs/ball-control-and-aiming.md):
+  // quantize the aim pair to a cell, map it to hitter-frame coordinates, and
+  // gate the DEPTH authority by contact quality — length control is internal
+  // power modulation the hitter can only execute on clean contact. Lateral
+  // aim keeps full authority (the error model already widens with bad q).
+  let (cell_x, cell_z) = aim_cells(aim_x, aim_depth)
+  let (x_right, cell_depth) = rally_cell_target(cell_x, cell_z, typ)
+  let natural_z = match typ {
+    Flat => 7.0
+    Topspin => 7.5
+    Slice => 6.5
+    Lob => 7.5
+    Drop => 2.4 // dies just past the net
   }
-  let base_z = type_z - (1.0 - q) * 1.5
-  // Drop is allowed to target much shorter than the rally depth floor.
-  let min_depth = if typ == Drop { 1.5 } else { @tuning.t.rally_depth_min }
-  let mut tx = @vec.clampd(aim_x, -1.0, 1.0) * @tuning.t.aim_x_scale
-  let mut tz = z_sign *
-    @vec.clampd(
-      base_z + @vec.clampd(aim_depth, -1.0, 1.0) * 2.4,
-      min_depth,
-      @tuning.t.rally_depth_max,
-    )
+  let len_ctrl = @vec.clampd((q - 0.30) / 0.60, 0.0, 1.0)
+  let achieved_z = natural_z + (cell_depth - natural_z) * len_ctrl
+  let mut tx = -z_sign * x_right // hitter's right is -z_sign in world x
+  let mut tz = z_sign * achieved_z
   let flat_speed = @physics.max_flat_speed(stats.pow) * (0.52 + 0.48 * q)
   let mut speed = 0.0
   let mut spin_rpm = 0.0
@@ -341,8 +388,8 @@ pub fn compute_stroke(
         spin_rpm = spin_rpm * (1.0 + topspin_charge_spin_gain * cc)
         tx = @vec.clampd(
           tx * (1.0 + topspin_charge_angle * cc),
-          -(@physics.court_half_width - 0.3),
-          @physics.court_half_width - 0.3,
+          -(@physics.court_half_width - @tuning.t.aim_corner_margin),
+          @physics.court_half_width - @tuning.t.aim_corner_margin,
         )
         // short-angle "attack": under a high, controlled, angled hit, pull the
         // landing toward the service line and drive it lower & faster.
@@ -351,7 +398,8 @@ pub fn compute_stroke(
         let pace_ok = if v_in < 22.0 { 1.0 } else { 0.0 }
         let angle_frac = @vec.clampd(@vec.dabs(aim_x), 0.0, 1.0)
         let pull = topspin_attack_shorten * cc * height_cond * pace_ok * angle_frac
-        if pull >= 1.0 {
+        // never DEEPEN an already-short (down-cell) aim
+        if pull >= 1.0 && @vec.dabs(tz) > topspin_attack_min_depth {
           let cur = @vec.dabs(tz)
           tz = z_sign * @vec.dmax(topspin_attack_min_depth, cur - pull)
           speed = speed * (1.0 + 0.18 * cc) // low/fast drive
@@ -359,11 +407,15 @@ pub fn compute_stroke(
         }
       }
       Slice => {
-        // deeper float with more bite (spin_rpm is negative -> grow magnitude)
+        // deeper float with more bite (spin_rpm is negative -> grow magnitude);
+        // capped at the up-row line so charge never pushes past the deepest cell
         spin_rpm = spin_rpm * (1.0 + slice_charge_back_gain * cc)
         let cur = @vec.dabs(tz)
         tz = z_sign *
-          @vec.dmin(@physics.court_half_len, cur + slice_charge_depth * cc)
+          @vec.dmin(
+            @physics.court_half_len - @tuning.t.aim_deep_margin,
+            cur + slice_charge_depth * cc,
+          )
       }
       _ => ()
     }
@@ -444,6 +496,24 @@ pub fn compute_stroke(
     (if ball_x >= player_x { 1.0 } else { -1.0 })
   } else {
     0.0
+  }
+  // Depth-dependent speed: aiming short/long is internal power modulation.
+  // Only drive shots (Flat) need the explicit cut — the control solver
+  // (Topspin/Slice/Lob/Drop) derives pace from the target geometry itself.
+  // Reads achieved_z so poor contact collapses the modulation together with
+  // the depth authority.
+  if typ == Flat && !is_smash {
+    let safe = @tuning.t.aim_safe_depth
+    let mul = if achieved_z >= safe {
+      let deep = @physics.court_half_len - @tuning.t.aim_deep_margin
+      1.0 + 0.05 * (achieved_z - safe) / @vec.dmax(deep - safe, 0.1)
+    } else {
+      1.0 -
+      @tuning.t.aim_short_speed_drop *
+      (safe - achieved_z) /
+      @vec.dmax(safe - @tuning.t.aim_short_depth, 0.1)
+    }
+    speed = speed * @vec.clampd(mul, 0.6, 1.05)
   }
   // shallow-contact aggression (groundstrokes only; volleys/smash/touch
   // shots keep their own speed identity)

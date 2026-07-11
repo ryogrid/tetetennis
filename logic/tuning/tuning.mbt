@@ -44,9 +44,15 @@ pub(all) struct Tuning {
   mut shallow_speed_net : Double
   mut jam_threshold : Double
   mut jam_scale : Double
-  mut aim_x_scale : Double
-  mut rally_depth_min : Double
-  mut rally_depth_max : Double
+  mut aim_deep_margin : Double
+  mut aim_safe_depth : Double
+  mut aim_short_depth : Double
+  mut aim_side_safe_margin : Double
+  mut aim_corner_margin : Double
+  mut aim_short_speed_drop : Double
+  mut serve_deep_inset : Double
+  mut serve_safe_inset : Double
+  mut serve_short_inset : Double
   // serve model
   mut serve_err_x : Double
   mut serve_err_z : Double
@@ -118,9 +124,16 @@ fn defaults() -> Tuning {
     shallow_speed_net: 1.30, // stroke speed mul at the net
     jam_threshold: 26.0,
     jam_scale: 14.0,
-    aim_x_scale: 2.8,
-    rally_depth_min: 6.997701135780842, // autotuned deep-bounce study @0.85 (was 6.961895945952685)
-    rally_depth_max: 10.54314665682049, // autotuned deep-bounce study @0.85 (was 11.823958465742205)
+    // discrete 9-target aiming (design_docs/ball-control-and-aiming.md)
+    aim_deep_margin: 0.90, // up-row depth = half_len - margin
+    aim_safe_depth: 9.20, // none/left/right row depth
+    aim_short_depth: 3.20, // down-row depth
+    aim_side_safe_margin: 0.80, // side cells x = half_width - margin
+    aim_corner_margin: 0.45, // corner cells x = half_width - margin
+    aim_short_speed_drop: 0.28, // max flat-drive speed cut at the shortest depth
+    serve_deep_inset: 0.35, // up-row inset from the service line
+    serve_safe_inset: 1.20, // none-row inset
+    serve_short_inset: 2.30, // down-row inset
     serve_err_x: 0.30,
     serve_err_z: 0.35,
     serve_err_speed: 0.025,
@@ -216,9 +229,15 @@ pub fn reset_params() -> Unit {
   t.shallow_speed_net = d.shallow_speed_net
   t.jam_threshold = d.jam_threshold
   t.jam_scale = d.jam_scale
-  t.aim_x_scale = d.aim_x_scale
-  t.rally_depth_min = d.rally_depth_min
-  t.rally_depth_max = d.rally_depth_max
+  t.aim_deep_margin = d.aim_deep_margin
+  t.aim_safe_depth = d.aim_safe_depth
+  t.aim_short_depth = d.aim_short_depth
+  t.aim_side_safe_margin = d.aim_side_safe_margin
+  t.aim_corner_margin = d.aim_corner_margin
+  t.aim_short_speed_drop = d.aim_short_speed_drop
+  t.serve_deep_inset = d.serve_deep_inset
+  t.serve_safe_inset = d.serve_safe_inset
+  t.serve_short_inset = d.serve_short_inset
   t.serve_err_x = d.serve_err_x
   t.serve_err_z = d.serve_err_z
   t.serve_err_speed = d.serve_err_speed
@@ -278,9 +297,15 @@ pub fn set_param(name : String, v : Double) -> Bool {
     "shallow_speed_net" => t.shallow_speed_net = v
     "jam_threshold" => t.jam_threshold = v
     "jam_scale" => t.jam_scale = v
-    "aim_x_scale" => t.aim_x_scale = v
-    "rally_depth_min" => t.rally_depth_min = v
-    "rally_depth_max" => t.rally_depth_max = v
+    "aim_deep_margin" => t.aim_deep_margin = v
+    "aim_safe_depth" => t.aim_safe_depth = v
+    "aim_short_depth" => t.aim_short_depth = v
+    "aim_side_safe_margin" => t.aim_side_safe_margin = v
+    "aim_corner_margin" => t.aim_corner_margin = v
+    "aim_short_speed_drop" => t.aim_short_speed_drop = v
+    "serve_deep_inset" => t.serve_deep_inset = v
+    "serve_safe_inset" => t.serve_safe_inset = v
+    "serve_short_inset" => t.serve_short_inset = v
     "serve_err_x" => t.serve_err_x = v
     "serve_err_z" => t.serve_err_z = v
     "serve_err_speed" => t.serve_err_speed = v
@@ -343,9 +368,15 @@ pub fn get_param(name : String) -> Double {
     "shallow_speed_net" => t.shallow_speed_net
     "jam_threshold" => t.jam_threshold
     "jam_scale" => t.jam_scale
-    "aim_x_scale" => t.aim_x_scale
-    "rally_depth_min" => t.rally_depth_min
-    "rally_depth_max" => t.rally_depth_max
+    "aim_deep_margin" => t.aim_deep_margin
+    "aim_safe_depth" => t.aim_safe_depth
+    "aim_short_depth" => t.aim_short_depth
+    "aim_side_safe_margin" => t.aim_side_safe_margin
+    "aim_corner_margin" => t.aim_corner_margin
+    "aim_short_speed_drop" => t.aim_short_speed_drop
+    "serve_deep_inset" => t.serve_deep_inset
+    "serve_safe_inset" => t.serve_safe_inset
+    "serve_short_inset" => t.serve_short_inset
     "serve_err_x" => t.serve_err_x
     "serve_err_z" => t.serve_err_z
     "serve_err_speed" => t.serve_err_speed
