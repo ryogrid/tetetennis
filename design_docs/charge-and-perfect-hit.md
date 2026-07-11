@@ -20,8 +20,8 @@ pull inputs `host_shot_held` (keyboard hold) and `host_is_down("TouchShot")` (to
 | Constant (`game.js.mbt`) | Value | Meaning |
 |---|---|---|
 | `charge_time` | 0.8 s | hold time to reach `c = 1.0` |
-| `charge_max` | 1.25 | maximum charge |
-| `charge_power_bonus` | 0.25 | full charge adds +25% pace over the 1.0 baseline |
+| `charge_max` | 1.0 | maximum charge (no overcharge headroom) |
+| `charge_power_bonus` | 0.5 | full charge adds +50% pace over the 1.0 baseline |
 | `full_assist_charge` | 0.7 | auto-charge level under Assist=Full |
 | `safety_drop_y` | 0.7 m | low-ball trigger for a Safety Hit |
 | `safety_approach_rate` | 3 m/s | vertical safety suppressed while closing faster |
@@ -45,10 +45,18 @@ Threaded into `@shots.compute_stroke` via two optional args (defaults keep the f
 neutral, so the CPU path and serves are unchanged). **Charge is a bonus, never a tax**
 (see `design/charge-mechanic/charge-rebalance.md`):
 
-- `power_mul = 1.0 + 0.25·charge` scales the launch speed linearly. **No-charge = 1.0** — the
+- `power_mul = 1.0 + 0.5·charge` scales the launch speed linearly. **No-charge = 1.0** — the
   same full baseline the CPU uses, so an un-charged stroke clears the net and lands in.
-  **Full charge = 1.3125** (a +31% pace bonus at max). Longer charge always means more power
-  with no penalty.
+  **Full charge = 1.5** (a +50% pace bonus at max; `charge_max` is 1.0, so there is no
+  overcharge headroom — a bigger bonus with overcharge sent inside-the-court flat drives
+  aimed deep flying out). `power_mul` scales the *requested* launch speed, which only the
+  drive solver (Flat) uses; for the control shots the requested speed is ignored.
+- **Spin shots get charge pace by flattening the arc** (`charge_spin_flatten`, `shots.mbt`):
+  Topspin/Slice go through the control solver, which reaches the target via a seeded apex,
+  so charge lowers `def_theta_max` (∝ `charge_cc`) → a flatter, faster trajectory to the
+  *same* landing. The solver's net-clearance retry self-limits it, so this adds pace without
+  adding outs. Topspin gains ~+27% at full charge; Slice, already low and floaty, is near
+  its geometric ceiling and gains little.
 - `perfect_eligible` + the contact quality decide `perfect = q ≥ 0.90`. A Perfect Hit
   multiplies speed ×1.08 and spin ×1.12 and tightens aim (error ×0.6); `Stroke.perfect`
   is returned so the game layer plays the bell (`sfxPerfect`) and a gold cue.

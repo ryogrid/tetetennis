@@ -444,6 +444,68 @@ test "fast-ball jam: topspin jams off pace, a slice blocks it, slow balls are fi
   assert_true(flat_jam_speed(1.0) > flat_jam_speed(0.0))
 }
 
+///|
+fn shot_out(
+  typ : ShotType,
+  contact_z : Double,
+  aim_x : Double,
+  aim_depth : Double,
+  power_mul : Double,
+  cc : Double,
+) -> (Double, Double) {
+  let g = @rng.Gauss::new(555)
+  let mut sp = 0.0
+  let mut inn = 0
+  let mut n = 0
+  for _i = 0; _i < 400; _i = _i + 1 {
+    let r = compute_stroke(
+      0.0, contact_z + 0.2, 0.5, @physics.ideal_contact_h, contact_z, 0.0, 2.0,
+      6.0, test_stats, typ, aim_x, aim_depth, @rules.P, g, power_mul~,
+      charge_cc=cc,
+    )
+    match r {
+      Some(s) => {
+        n = n + 1
+        sp = sp + @vec.hypot3(s.vx, s.vy, s.vz)
+        let b = @physics.make_ball()
+        b.px = 0.5
+        b.py = @physics.ideal_contact_h
+        b.pz = contact_z
+        b.vx = s.vx
+        b.vy = s.vy
+        b.vz = s.vz
+        b.sx = s.sx
+        b.sy = s.sy
+        b.sz = s.sz
+        b.activate()
+        match @physics.predict_landing(b, @physics.surface_hard) {
+          Some(l) =>
+            if l.z < 0.0 &&
+              -l.z <= @physics.court_half_len &&
+              @vec.dabs(l.x) <= @physics.court_half_width {
+              inn = inn + 1
+            }
+          None => ()
+        }
+      }
+      None => ()
+    }
+  }
+  let nd = (if n == 0 { 1 } else { n }).to_double()
+  (sp / nd, inn.to_double() / nd)
+}
+
+///|
+test "charge adds pace to topspin without extra outs" {
+  @assist.set_assist_level(Off)
+  // Topspin ignores requested speed (control solver), so charge adds pace by
+  // flattening the arc — faster to the same target, landing-in unchanged.
+  let (sp0, in0) = shot_out(Topspin, 11.2, 0.0, 1.0, 1.0, 0.0) // no charge
+  let (sp1, in1) = shot_out(Topspin, 11.2, 0.0, 1.0, 1.5, 1.0) // full charge
+  assert_true(sp1 > sp0 * 1.15) // clearly faster when charged
+  assert_true(in1 >= in0 - 0.03) // and does not fly out any more
+}
+
 // Mean outgoing speed + landing-in rate of a Flat drive from a given contact
 // depth, aimed at (aim_x, aim_depth). Player stands next to the ball.
 ///|
