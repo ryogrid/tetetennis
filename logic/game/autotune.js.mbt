@@ -96,8 +96,9 @@ fn side_str(i : Int) -> String {
 // Mirrored world view for the P-side AI: a 180-degree rotation about the y
 // axis (negate x/z of position, velocity and spin; y components unchanged).
 // The scratch ball avoids a per-step allocation. The returned AiMove's x/z
-// and swing_aim_x must be negated by the caller; swing_aim_depth passes
-// through (compute_stroke applies the side's z_sign itself).
+// (movement) must be negated by the caller; the aim is hitter-frame and
+// mirror-invariant, so swing_aim_x/depth pass through unchanged
+// (compute_stroke applies the side's z_sign itself).
 ///|
 fn p_ai_ctx(ms : MatchState) -> @ai.AiCtx {
   let b = ms.ball

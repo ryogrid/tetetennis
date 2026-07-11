@@ -114,11 +114,11 @@ test "practice feed: shot/serve index + depth mappings" {
   assert_true(practice_serve_type(0) == ServeFlat)
   assert_true(practice_serve_type(1) == ServeSlice)
   assert_true(practice_serve_type(2) == ServeKick)
-  // shallow aims short (negative), deep aims long (positive)
-  assert_true(practice_depth_aim(0, false) < 0.0)
+  // 9-cell feeds: shallow = the down row (-1), deep = the none row (0);
+  // a line-hugging up-row feed would fault too many reps to drill against
+  assert_true(practice_depth_aim(0, false) < practice_depth_aim(1, false))
   assert_true(practice_depth_aim(0, true) < 0.0)
-  assert_true(practice_depth_aim(1, false) > 0.0)
-  assert_true(practice_depth_aim(1, true) > 0.0)
+  assert_true(practice_depth_aim(1, false) <= 0.0)
   // random follows the supplied coin flip
   assert_true(practice_depth_aim(2, true) == practice_deep_aim)
   assert_true(practice_depth_aim(2, false) == practice_shallow_aim)
@@ -458,6 +458,191 @@ test "contact quality: whiff out of reach, full quality in the band" {
   assert_true(!ideal.whiff && ideal.q > 0.95)
 }
 
+// ---- discrete 9-target aiming (design_docs/ball-control-and-aiming.md) ----
+
+// Mean landing stats of a P-side stroke aimed at cell (aim_x, aim_depth) from
+// contact (ball_x, ball_z, contact_h): (mean |x|, mean depth = -l.z, long-rate
+// past the baseline, valid n). ball_x tunes contact quality (0.5 clean,
+// 1.6 stretched).
+///|
+fn cell_landing(
+  typ : ShotType,
+  ball_x : Double,
+  aim_x : Double,
+  aim_depth : Double,
+) -> (Double, Double, Double, Int) {
+  let g = @rng.Gauss::new(9001)
+  let ball_z = 11.0
+  let mut ax = 0.0
+  let mut dz = 0.0
+  let mut long = 0
+  let mut n = 0
+  for _i = 0; _i < 300; _i = _i + 1 {
+    let r = compute_stroke(
+      0.0, 11.2, ball_x, @physics.ideal_contact_h, ball_z, 0.0, 2.0, 6.0,
+      test_stats, typ, aim_x, aim_depth, @rules.P, g,
+    )
+    match r {
+      Some(s) => {
+        let b = @physics.make_ball()
+        b.px = ball_x
+        b.py = @physics.ideal_contact_h
+        b.pz = ball_z
+        b.vx = s.vx
+        b.vy = s.vy
+        b.vz = s.vz
+        b.sx = s.sx
+        b.sy = s.sy
+        b.sz = s.sz
+        b.activate()
+        match @physics.predict_landing(b, @physics.surface_hard) {
+          Some(l) => {
+            n = n + 1
+            ax = ax + @vec.dabs(l.x)
+            dz = dz + -l.z
+            if -l.z > @physics.court_half_len {
+              long = long + 1
+            }
+          }
+          None => ()
+        }
+      }
+      None => ()
+    }
+  }
+  let nd = (if n == 0 { 1 } else { n }).to_double()
+  (ax / nd, dz / nd, long.to_double() / nd, n)
+}
+
+// Mean serve landing over 40 seeds: (mean x, mean depth from net, in-box rate).
+///|
+fn serve_landing(
+  serving_side : @rules.Side,
+  court_side : CourtSide,
+  type_ : ServeType,
+  aim_x : Double,
+  aim_depth : Double,
+) -> (Double, Double, Double) {
+  let stats : Stats = { pow: 74, spn: 70, slc: 60, srv: 85, spd: 60, ctl: 90, rea: 70, net: 45 }
+  let from_x = serve_stance_x(serving_side, court_side)
+  // the server stands opposite the target-box z side
+  let box = serve_box(serving_side, court_side)
+  let from_z = -box.z_sign * (@physics.court_half_len + 0.4)
+  let mut xs = 0.0
+  let mut ds = 0.0
+  let mut inn = 0
+  let mut n = 0
+  for seed = 1; seed <= 40; seed = seed + 1 {
+    let g = @rng.Gauss::new(seed)
+    let s = compute_serve(
+      stats, type_, from_x, 2.95, from_z, serving_side, court_side, aim_x,
+      aim_depth, 0.8, g,
+    )
+    let b = @physics.make_ball()
+    b.px = from_x
+    b.py = 2.95
+    b.pz = from_z
+    b.vx = s.vx
+    b.vy = s.vy
+    b.vz = s.vz
+    b.sx = s.sx
+    b.sy = s.sy
+    b.sz = s.sz
+    b.activate()
+    let ev : Array[@physics.Event] = []
+    let step = 1.0 / 240.0
+    let mut done = false
+    for t = 0.0; t < 3.0 && not(done); t = t + step {
+      ev.clear()
+      @physics.step_ball(b, step, @physics.surface_hard, ev)
+      for e in ev {
+        match e {
+          @physics.Bounce(px, _, pz, _) => {
+            xs = xs + px
+            ds = ds + @vec.dabs(pz)
+            n = n + 1
+            if is_serve_box_in(px, pz, serving_side, court_side) {
+              inn = inn + 1
+            }
+            done = true
+          }
+          @physics.Net(_) => ()
+        }
+      }
+    }
+  }
+  let nd = (if n == 0 { 1 } else { n }).to_double()
+  (xs / nd, ds / nd, inn.to_double() / 40.0)
+}
+
+///|
+test "9-target aiming: depth rows order deep > safe > short" {
+  @assist.set_assist_level(Off)
+  let (_, up_d, _, _) = cell_landing(Topspin, 0.5, 0.0, 1.0)
+  let (_, none_d, _, _) = cell_landing(Topspin, 0.5, 0.0, 0.0)
+  let (_, down_d, _, _) = cell_landing(Topspin, 0.5, 0.0, -1.0)
+  assert_true(up_d > none_d + 1.0) // up aims noticeably deeper
+  assert_true(none_d > down_d + 3.0) // down is a genuine short ball
+  // a flat drive reaches the deep line the control solver undershoots
+  let (_, fup_d, _, _) = cell_landing(Flat, 0.5, 0.0, 1.0)
+  let (_, fnone_d, _, _) = cell_landing(Flat, 0.5, 0.0, 0.0)
+  assert_true(fup_d > fnone_d + 1.0)
+}
+
+///|
+test "9-target aiming: lateral columns order corner > side > center" {
+  @assist.set_assist_level(Off)
+  let (corner_x, _, _, _) = cell_landing(Topspin, 0.5, 1.0, 1.0)
+  let (side_x, _, _, _) = cell_landing(Topspin, 0.5, 1.0, 0.0)
+  let (center_x, _, _, _) = cell_landing(Topspin, 0.5, 0.0, 0.0)
+  assert_true(corner_x > side_x) // corner hugs the line more than the safe side
+  assert_true(side_x > center_x + 1.5) // a side aim clears the middle
+  assert_true(corner_x > 2.8) // and reaches well out toward the sideline
+}
+
+///|
+test "9-target aiming: length control collapses with poor contact" {
+  @assist.set_assist_level(Off)
+  // clean vs stretched contact, aiming deep then short
+  let (_, up_clean, _, _) = cell_landing(Topspin, 0.5, 0.0, 1.0)
+  let (_, up_stretch, _, _) = cell_landing(Topspin, 1.6, 0.0, 1.0)
+  assert_true(up_clean > up_stretch + 1.0) // stretched deep aim falls shorter
+  let (_, down_clean, _, _) = cell_landing(Topspin, 0.5, 0.0, -1.0)
+  let (_, down_stretch, _, _) = cell_landing(Topspin, 1.6, 0.0, -1.0)
+  assert_true(down_stretch > down_clean + 0.8) // and stretched short aim floats deeper
+}
+
+///|
+test "9-target aiming: deep flat drive is risky, safe row is reliable" {
+  @assist.set_assist_level(Off)
+  let (_, _, up_long, _) = cell_landing(Flat, 0.5, 0.0, 1.0)
+  let (_, _, none_long, _) = cell_landing(Flat, 0.5, 0.0, 0.0)
+  // a line-hugging flat drive carries real back-out risk (but is not a coin flip)
+  assert_true(up_long > 0.15 && up_long < 0.45)
+  // the no-input safe row stays comfortably in
+  assert_true(none_long < 0.12)
+}
+
+///|
+test "9-target serve: rows and lateral place inside the box" {
+  @assist.set_assist_level(Off)
+  // P / Deuce: up lands deepest (nearest the service line), down shortest
+  let (ptx, pud, puin) = serve_landing(@rules.P, Deuce, ServeFlat, 0.0, 1.0)
+  let (_, pnd, pnin) = serve_landing(@rules.P, Deuce, ServeFlat, 0.0, 0.0)
+  let (_, pdd, pdin) = serve_landing(@rules.P, Deuce, ServeFlat, 0.0, -1.0)
+  assert_true(pud > pnd + 0.6)
+  assert_true(pnd > pdd + 0.7)
+  assert_true(puin > 0.6 && pnin > 0.6 && pdin > 0.6) // every row lands in
+  // hitter-frame lateral: aim right (+1) = T (near center) vs wide (-1)
+  let (twx, _, _) = serve_landing(@rules.P, Deuce, ServeFlat, -1.0, 0.0)
+  assert_true(@vec.dabs(ptx) < @vec.dabs(twx))
+  // C / Ad mirror: same ordering and in-box on the opposite side/court
+  let (_, cud, cuin) = serve_landing(@rules.C, Ad, ServeFlat, 0.0, 1.0)
+  let (_, cdd, cdin) = serve_landing(@rules.C, Ad, ServeFlat, 0.0, -1.0)
+  assert_true(cud > cdd + 0.8)
+  assert_true(cuin > 0.6 && cdin > 0.6)
+}
+
 // Serve: simulate compute_serve from C's side, return (net clearance, in-box,
 // launch speed). power is the meter value; seed varies the error draw.
 ///|
@@ -471,7 +656,7 @@ fn serve_flight_p(
   let stats : Stats = { pow: 74, spn: 70, slc: 60, srv: 85, spd: 60, ctl, rea: 70, net: 45 }
   let g = @rng.Gauss::new(seed)
   let s = compute_serve(
-    stats, type_, -0.35, 2.95, -11.9, @rules.C, Deuce, Body, 0.0, 0.0, power, g,
+    stats, type_, -0.35, 2.95, -11.9, @rules.C, Deuce, 0.0, 0.0, power, g,
   )
   let launch = @vec.hypot3(s.vx, s.vy, s.vz)
   let b = @physics.make_ball()

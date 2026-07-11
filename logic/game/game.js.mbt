@@ -961,8 +961,7 @@ fn execute_serve(
   ms : MatchState,
   ty : @shots.ServeType,
   power : Double,
-  preset : @shots.Preset,
-  aim_adjust : Double,
+  aim_x : Double,
   aim_depth : Double,
 ) -> Unit {
   let sv = server(ms)
@@ -977,7 +976,7 @@ fn execute_serve(
   let contact_h = @physics.serve_contact_h(e.stats.rea)
   let from_y = @vec.dmax(1.6, @vec.dmin(b.py, contact_h))
   let res = @shots.compute_serve(
-    e.stats, ty, b.px, from_y, b.pz, sv, ms.court_side, preset, aim_adjust, aim_depth,
+    e.stats, ty, b.px, from_y, b.pz, sv, ms.court_side, aim_x, aim_depth,
     power, self.rng,
   )
   b.py = from_y
@@ -1444,7 +1443,7 @@ fn do_serve(self : Game, ms : MatchState, kind : @shots.ShotType) -> Unit {
   let ty = stroke_to_serve(kind)
   let aim_x = @ffi.host_move_x(self.host)
   let aim_depth = -@ffi.host_move_z(self.host)
-  self.execute_serve(ms, ty, power, Body, aim_x, aim_depth)
+  self.execute_serve(ms, ty, power, aim_x, aim_depth)
 }
 
 // Hold-to-charge rally strokes (Appendix A.2). Charge builds while a shot key
@@ -1655,7 +1654,8 @@ pub fn fixed_update(dt : Double) -> Unit {
         let fh = b.px - ms.human.pos_x >= 0.0 // P faces -z
         if ms.human.start_swing(mv.swing_type, fh) {
           ms.human.pending_type = mv.swing_type
-          ms.human.pending_aim_x = -mv.swing_aim_x // un-mirror
+          // aim is hitter-frame (mirror-invariant) — no un-mirror needed
+          ms.human.pending_aim_x = mv.swing_aim_x
           ms.human.pending_aim_depth = mv.swing_aim_depth
           let motion = @shots.swing_motion(
             ms.bounces, b.py, b.pz, mv.swing_type, volley_forecourt,
@@ -1804,6 +1804,7 @@ pub fn fixed_update(dt : Double) -> Unit {
               ms.cpu_serve_plan = Some({
                 type_: @shots.practice_serve_type(p.shot),
                 preset: self.prac_random_preset(),
+                row: 0.0,
                 power: 0.8,
               })
               self.start_toss(ms)
@@ -1837,7 +1838,10 @@ pub fn fixed_update(dt : Double) -> Unit {
         Some(plan) =>
           if sv == @rules.C && b.vy < 0.0 && b.py <= contact_h {
             ms.cpu_serve_plan = None
-            self.execute_serve(ms, plan.type_, plan.power, plan.preset, 0.0, 0.0)
+            self.execute_serve(
+              ms, plan.type_, plan.power,
+              @shots.preset_aim_x(plan.preset, sv, ms.court_side), plan.row,
+            )
             return
           }
         None => ()
@@ -1846,7 +1850,10 @@ pub fn fixed_update(dt : Double) -> Unit {
         Some(plan) =>
           if sv == @rules.P && b.vy < 0.0 && b.py <= contact_h {
             ms.p_serve_plan = None
-            self.execute_serve(ms, plan.type_, plan.power, plan.preset, 0.0, 0.0)
+            self.execute_serve(
+              ms, plan.type_, plan.power,
+              @shots.preset_aim_x(plan.preset, sv, ms.court_side), plan.row,
+            )
             return
           }
         None => ()

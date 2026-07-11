@@ -76,6 +76,24 @@ pub fn serve_box(serving_side : @rules.Side, court_side : CourtSide) -> ServeBox
   }
 }
 
+// CPU tactical preset -> hitter-frame lateral cell for compute_serve.
+// T hugs the center line, Wide the sideline; Body is centered. Derived so
+// that compute_serve's `t_lat = cell_x * -z_sign` maps back onto the box:
+// T needs t_lat = -x_sign, Wide needs +x_sign, so cell_x = ±(x_sign*z_sign).
+///|
+pub fn preset_aim_x(
+  preset : Preset,
+  serving_side : @rules.Side,
+  court_side : CourtSide,
+) -> Double {
+  let box = serve_box(serving_side, court_side)
+  match preset {
+    Body => 0.0
+    T => box.x_sign * box.z_sign
+    Wide => -box.x_sign * box.z_sign
+  }
+}
+
 ///|
 pub fn is_serve_box_in(
   pos_x : Double,
@@ -114,7 +132,11 @@ pub(all) struct Serve {
   sz : Double
 }
 
-// q_serve in [0.4, 1] from toss timing. aim_adjust/aim_depth in [-1,1].
+// Discrete 9-target aiming (design_docs/ball-control-and-aiming.md):
+// aim_x/aim_depth are hitter-frame axes, quantized to cells. Columns map
+// onto the box's [T .. wide] band; depth rows are insets from the service
+// line, with the achieved depth gated by the meter accuracy (length control
+// = internal power modulation).
 ///|
 pub fn compute_serve(
   stats : Stats,
@@ -124,34 +146,26 @@ pub fn compute_serve(
   from_z : Double,
   serving_side : @rules.Side,
   court_side : CourtSide,
-  target_preset : Preset,
-  aim_adjust : Double,
+  aim_x : Double,
   aim_depth : Double,
   power : Double, // serve power meter value p in [0,1]
   rng : @rng.Gauss,
 ) -> Serve {
   let box = serve_box(serving_side, court_side)
   let (def_speed_mul, def_theta_min, def_theta_max) = serve_def(type_)
+  let (cell_x, cell_z) = aim_cells(aim_x, aim_depth)
 
-  // target points 0.5 m inside the box lines
+  // lateral: hitter-frame cell onto the box's [T .. wide] band
   let x_inner = if box.x_sign > 0.0 { 0.45 } else { -0.45 } // near center line (T)
   let x_outer = box.x_sign * (@physics.court_half_width - 0.55) // near sideline (wide)
-  let depth = @vec.clampd(aim_depth, -1.0, 1.0)
-  let z_inset = if depth >= 0.0 {
-    0.55 - 0.25 * depth
-  } else {
-    0.55 - 1.05 * depth
-  }
-  let z_deep = box.z_sign * (@physics.court_service_line - z_inset)
-  let mut tx = match target_preset {
-    T => x_inner
-    Wide => x_outer
-    Body => (x_inner + x_outer) / 2.0
-  }
-  tx = tx + @vec.clampd(aim_adjust, -1.0, 1.0) * 1.6
-  tx = @vec.clampd(tx, @vec.dmin(x_inner, x_outer), @vec.dmax(x_inner, x_outer))
-  let mut target_x = tx
-  let mut target_z = z_deep
+  let x_mid = (x_inner + x_outer) / 2.0
+  let lat_span = @vec.dabs(x_outer - x_inner) / 2.0
+  let t_lat = cell_x * -box.z_sign // hitter's right in world +x terms
+  let mut target_x = @vec.clampd(
+    x_mid + t_lat * lat_span,
+    @vec.dmin(x_inner, x_outer),
+    @vec.dmax(x_inner, x_outer),
+  )
   // Power meter: speed grows with p; accuracy peaks in the sweet band
   // [sweet_lo, sweet_hi] (defaults [0.70, 0.88]), scales down
   // below it, and collapses in the overpower zone.
@@ -165,7 +179,30 @@ pub fn compute_serve(
   } else {
     @vec.dmax(0.35, 1.0 - (p - sweet_hi) / (1.0 - sweet_hi) * 0.6)
   }
+  // depth row -> inset from the service line, gated by meter accuracy
+  let row_inset = if cell_z > 0.0 {
+    @tuning.t.serve_deep_inset
+  } else if cell_z < 0.0 {
+    @tuning.t.serve_short_inset
+  } else {
+    @tuning.t.serve_safe_inset
+  }
+  let serve_len_ctrl = @vec.clampd((acc - 0.40) / 0.60, 0.0, 1.0)
+  let achieved_inset = @tuning.t.serve_safe_inset +
+    (row_inset - @tuning.t.serve_safe_inset) * serve_len_ctrl
+  let mut target_z = box.z_sign *
+    (@physics.court_service_line - achieved_inset)
   let mut speed = @physics.serve_power_speed(stats.srv, p) * def_speed_mul
+  // short row: internal power modulation — a full-pace serve cannot land
+  // short. Per-type cut (kick's loft already drops it short).
+  if cell_z < 0.0 {
+    speed = speed *
+      (match type_ {
+        ServeFlat => 0.68
+        ServeSlice => 0.72
+        ServeKick => 0.85
+      })
+  }
 
   // spin: rpm + axis split between lateral (top/back) and vertical (side)
   let mut spin_rpm = 0.0

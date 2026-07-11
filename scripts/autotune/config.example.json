@@ -1,30 +1,99 @@
 {
   "search_space": {
-    "stroke_err_x":     { "min": 0.15, "max": 0.60 },
-    "stroke_err_z":     { "min": 0.30, "max": 1.20 },
-    "err_mul_hi":       { "min": 1.2,  "max": 2.2 },
-    "err_mul_lo":       { "min": 0.2,  "max": 1.0 },
-    "mishit_prob":      { "min": 0.10, "max": 0.60 },
-    "err_quality_gain": { "min": 1.5,  "max": 4.0 },
-    "rally_depth_max":  { "min": 10.5, "max": 12.5 },
-    "run_speed_scale":  { "min": 0.70, "max": 1.10 },
-    "ai_pos_err_scale": { "min": 0.8,  "max": 2.5 },
-    "ai_react_scale":   { "min": 0.8,  "max": 2.5 }
+    "stroke_err_x": {
+      "min": 0.15,
+      "max": 0.6
+    },
+    "stroke_err_z": {
+      "min": 0.3,
+      "max": 1.2
+    },
+    "err_mul_hi": {
+      "min": 1.2,
+      "max": 2.2
+    },
+    "err_mul_lo": {
+      "min": 0.2,
+      "max": 1.0
+    },
+    "mishit_prob": {
+      "min": 0.1,
+      "max": 0.6
+    },
+    "err_quality_gain": {
+      "min": 1.5,
+      "max": 4.0
+    },
+    "run_speed_scale": {
+      "min": 0.7,
+      "max": 1.1
+    },
+    "ai_pos_err_scale": {
+      "min": 0.8,
+      "max": 2.5
+    },
+    "ai_react_scale": {
+      "min": 0.8,
+      "max": 2.5
+    }
   },
-
   "fixed_params": {},
-
   "fitness": [
-    { "metric": "avg_rally_shots",    "min": 3,   "max": 8,   "weight": 1.0, "scale": 2.0 },
-    { "metric": "winner_pct",         "target": 30,            "weight": 1.0, "scale": 5.0 },
-    { "metric": "unforced_pct",       "min": 30,  "max": 55,  "weight": 0.8, "scale": 5.0 },
-    { "metric": "double_fault_pct",   "min": 1,   "max": 8,   "weight": 0.5, "scale": 2.0 },
-    { "metric": "first_serve_in_pct", "min": 55,  "max": 75,  "weight": 0.5, "scale": 5.0 },
-    { "metric": "service_hold_pct",   "min": 55,  "max": 85,  "weight": 0.8, "scale": 5.0 },
-    { "metric": "match_duration_s",   "min": 300, "max": 900, "weight": 0.6, "scale": 60 },
-    { "metric": "win_balance_pct",    "target": 50,            "weight": 0.4, "scale": 5.0 }
+    {
+      "metric": "avg_rally_shots",
+      "min": 3,
+      "max": 8,
+      "weight": 1.0,
+      "scale": 2.0
+    },
+    {
+      "metric": "winner_pct",
+      "target": 30,
+      "weight": 1.0,
+      "scale": 5.0
+    },
+    {
+      "metric": "unforced_pct",
+      "min": 30,
+      "max": 55,
+      "weight": 0.8,
+      "scale": 5.0
+    },
+    {
+      "metric": "double_fault_pct",
+      "min": 1,
+      "max": 8,
+      "weight": 0.5,
+      "scale": 2.0
+    },
+    {
+      "metric": "first_serve_in_pct",
+      "min": 55,
+      "max": 75,
+      "weight": 0.5,
+      "scale": 5.0
+    },
+    {
+      "metric": "service_hold_pct",
+      "min": 55,
+      "max": 85,
+      "weight": 0.8,
+      "scale": 5.0
+    },
+    {
+      "metric": "match_duration_s",
+      "min": 300,
+      "max": 900,
+      "weight": 0.6,
+      "scale": 60
+    },
+    {
+      "metric": "win_balance_pct",
+      "target": 50,
+      "weight": 0.4,
+      "scale": 5.0
+    }
   ],
-
   "run": {
     "n_trials": 200,
     "matches_per_trial": 8,
@@ -36,17 +105,31 @@
     "timeout_weight": 50.0,
     "max_consecutive_failures": 5,
     "matchups": [
-      { "you": 4, "opp": 4, "surface": "hard", "difficulty": "normal" },
-      { "you": 0, "opp": 3, "surface": "hard", "difficulty": "normal" },
-      { "you": 1, "opp": 2, "surface": "clay", "difficulty": "normal" }
+      {
+        "you": 4,
+        "opp": 4,
+        "surface": "hard",
+        "difficulty": "normal"
+      },
+      {
+        "you": 0,
+        "opp": 3,
+        "surface": "hard",
+        "difficulty": "normal"
+      },
+      {
+        "you": 1,
+        "opp": 2,
+        "surface": "clay",
+        "difficulty": "normal"
+      }
     ]
   },
-
   "validation": {
     "top_k": 5,
     "seed_base": 100000,
     "matches_per_matchup": 24
   },
-
-  "output_dir": "autotune_out"
+  "output_dir": "autotune_out",
+  "_aiming_redesign_note": "aim_x_scale/rally_depth_min/rally_depth_max were removed by the discrete 9-target aiming redesign (design_docs/ball-control-and-aiming.md); their former search dimensions were dropped from this config. New depth/width levers: aim_deep_margin, aim_safe_depth, aim_short_depth, aim_side_safe_margin, aim_corner_margin, aim_short_speed_drop, serve_*_inset."
 }

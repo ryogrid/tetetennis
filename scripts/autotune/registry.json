@@ -250,28 +250,76 @@
       "symbol": "jam saturation scale",
       "kind": "absolute"
     },
-    "aim_x_scale": {
-      "default": 2.8,
-      "min": 2.0,
-      "max": 3.6,
+    "aim_deep_margin": {
+      "default": 0.9,
+      "min": 0.4,
+      "max": 1.6,
       "file": "logic/tuning/tuning.mbt",
-      "symbol": "lateral aim deflection (stroke + AI inverse)",
+      "symbol": "up-row depth margin from the baseline",
       "kind": "absolute"
     },
-    "rally_depth_min": {
-      "default": 6.997701135780842,
-      "min": 3.5,
-      "max": 6.0,
+    "aim_safe_depth": {
+      "default": 9.2,
+      "min": 7.5,
+      "max": 10.5,
       "file": "logic/tuning/tuning.mbt",
-      "symbol": "rally target depth floor",
+      "symbol": "none/side-row target depth",
       "kind": "absolute"
     },
-    "rally_depth_max": {
-      "default": 10.54314665682049,
-      "min": 10.0,
-      "max": 12.5,
+    "aim_short_depth": {
+      "default": 3.2,
+      "min": 2.4,
+      "max": 5.0,
       "file": "logic/tuning/tuning.mbt",
-      "symbol": "rally target depth ceiling",
+      "symbol": "down-row target depth",
+      "kind": "absolute"
+    },
+    "aim_side_safe_margin": {
+      "default": 0.8,
+      "min": 0.4,
+      "max": 1.4,
+      "file": "logic/tuning/tuning.mbt",
+      "symbol": "side-cell margin from the singles sideline",
+      "kind": "absolute"
+    },
+    "aim_corner_margin": {
+      "default": 0.45,
+      "min": 0.25,
+      "max": 0.9,
+      "file": "logic/tuning/tuning.mbt",
+      "symbol": "corner-cell margin from the singles sideline",
+      "kind": "absolute"
+    },
+    "aim_short_speed_drop": {
+      "default": 0.28,
+      "min": 0.1,
+      "max": 0.4,
+      "file": "logic/tuning/tuning.mbt",
+      "symbol": "max flat-drive speed cut at the shortest depth",
+      "kind": "scale"
+    },
+    "serve_deep_inset": {
+      "default": 0.35,
+      "min": 0.2,
+      "max": 0.8,
+      "file": "logic/tuning/tuning.mbt",
+      "symbol": "serve up-row inset from the service line",
+      "kind": "absolute"
+    },
+    "serve_safe_inset": {
+      "default": 1.2,
+      "min": 0.6,
+      "max": 1.8,
+      "file": "logic/tuning/tuning.mbt",
+      "symbol": "serve none-row inset from the service line",
+      "kind": "absolute"
+    },
+    "serve_short_inset": {
+      "default": 2.3,
+      "min": 1.6,
+      "max": 3.2,
+      "file": "logic/tuning/tuning.mbt",
+      "symbol": "serve down-row inset from the service line",
       "kind": "absolute"
     },
     "serve_err_x": {

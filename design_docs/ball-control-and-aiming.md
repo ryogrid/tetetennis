@@ -210,12 +210,16 @@ shot layer uses — the AI's divergent `base_z` table (10.6/9.8/9.2) and the
 Scoring carries over unchanged: open-court distance from the opponent,
 `aggr`/`cons` stat biases, the stretch penalty, style bias, and
 difficulty-scaled choice noise. Flags become: `corner` = the 4 diagonals,
-`short_` = the down row. One addition: a small penalty
-`−0.25 · short_ · clamp((|pred_z| − 9.0)/3.0, 0, 1)` discourages
-short-angle attempts from deep contact points. Tactical overrides map to
-cells: **Lob → none row** (`aim_depth = 0.0` — review finding: the up row
-would turn a defensive lob into a ~30% gift out; 9.2 m clears a net-rusher
-fine), Drop → down row (−1.0).
+`short_` = the down row. One addition — a **rally-deep-by-default** penalty
+on the short row, `short_ · (0.5 + 0.25 · clamp((|pred_z| − 9.0)/3.0, 0, 1))`:
+without it the open-court term rewards short balls against a baseline camper,
+and the removal of the old `rally_depth_min` floor let the CPU float
+everything short (deep-first-bounce rate fell to ~24% before the term, ~59%
+with it). A short ball is thus a tactical exception (the drop override
+handles the deliberate case), not a reflex. Tactical overrides map to cells:
+**Lob → none row** (`aim_depth = 0.0` — review finding: the up row would turn
+a defensive lob into a ~30% gift out; 9.2 m clears a net-rusher fine),
+Drop → down row (−1.0).
 
 ## 7. Preserved interactions
 
