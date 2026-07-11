@@ -652,7 +652,7 @@ fn start_match(self : Game) -> Unit {
   }
   let human = match ai_p {
     Some(a) => create_player(@rules.P, char_p, a.diff.speed_mul)
-    None => create_player(@rules.P, char_p, 1.2) // human-only speed buff
+    None => create_player(@rules.P, char_p, 1.32) // human-only speed buff (+10% over 1.2)
   }
   let cpu = create_player(@rules.C, char_c, ai.diff.speed_mul)
   let practice : Practice? = if self.is_practice {
