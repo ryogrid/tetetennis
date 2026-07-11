@@ -34,13 +34,13 @@ pub let swing_dur : Double = 0.45
 let charge_time : Double = 0.8 // seconds of hold to reach full charge
 
 ///|
-let charge_max : Double = 1.25 // maximum charge
+let charge_max : Double = 1.0 // maximum charge (no overcharge headroom: caps power_mul at 1.5)
 
 ///|
 let charge_gauge_move_eps : Double = 0.05 // below this speed the player counts as stopped (charge bar shows)
 
 ///|
-let charge_power_bonus : Double = 0.25 // full charge adds +25% pace over the 1.0 baseline
+let charge_power_bonus : Double = 0.5 // full charge adds +50% pace over the 1.0 baseline
 
 ///|
 let safety_drop_y : Double = 0.4 // auto-swing only once a low ball drops below this
