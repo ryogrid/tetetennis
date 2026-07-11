@@ -589,15 +589,81 @@ test "9-target aiming: depth rows order deep > safe > short" {
   assert_true(fup_d > fnone_d + 1.0)
 }
 
+// Full out-rate (long OR wide) of a stroke aimed at a cell, clean contact.
 ///|
-test "9-target aiming: lateral columns order corner > side > center" {
+fn cell_out_rate(typ : ShotType, aim_x : Double, aim_depth : Double) -> (Double, Double, Double) {
+  let g = @rng.Gauss::new(4242)
+  let ball_z = 11.0
+  let mut outn = 0
+  let mut n = 0
+  let mut depth_sum = 0.0
+  for _i = 0; _i < 400; _i = _i + 1 {
+    let r = compute_stroke(
+      0.0, 11.2, 0.5, @physics.ideal_contact_h, ball_z, 0.0, 2.0, 6.0,
+      test_stats, typ, aim_x, aim_depth, @rules.P, g,
+    )
+    match r {
+      Some(s) => {
+        let b = @physics.make_ball()
+        b.px = 0.5
+        b.py = @physics.ideal_contact_h
+        b.pz = ball_z
+        b.vx = s.vx
+        b.vy = s.vy
+        b.vz = s.vz
+        b.sx = s.sx
+        b.sy = s.sy
+        b.sz = s.sz
+        b.activate()
+        match @physics.predict_landing(b, @physics.surface_hard) {
+          Some(l) => {
+            n = n + 1
+            depth_sum = depth_sum + -l.z
+            if -l.z > @physics.court_half_len ||
+              @vec.dabs(l.x) > @physics.court_half_width {
+              outn = outn + 1
+            }
+          }
+          None => ()
+        }
+      }
+      None => ()
+    }
+  }
+  let nd = (if n == 0 { 1 } else { n }).to_double()
+  (outn.to_double() / nd, depth_sum / nd, n.to_double())
+}
+
+///|
+test "9-target aiming: side and corner cells clear the middle" {
   @assist.set_assist_level(Off)
   let (corner_x, _, _, _) = cell_landing(Topspin, 0.5, 1.0, 1.0)
   let (side_x, _, _, _) = cell_landing(Topspin, 0.5, 1.0, 0.0)
   let (center_x, _, _, _) = cell_landing(Topspin, 0.5, 0.0, 0.0)
-  assert_true(corner_x > side_x) // corner hugs the line more than the safe side
-  assert_true(side_x > center_x + 1.5) // a side aim clears the middle
-  assert_true(corner_x > 2.8) // and reaches well out toward the sideline
+  // corner and side both reach out toward the sideline (the corner is now a
+  // "safe corner": its lateral is close to the side cell, distinguished by
+  // depth rather than by hugging the line harder)
+  assert_true(side_x > center_x + 1.5)
+  assert_true(corner_x > center_x + 1.5)
+  assert_true(corner_x > 2.5)
+}
+
+///|
+test "9-target aiming: corners are looser than the raw lines" {
+  @assist.set_assist_level(Off)
+  // up-corner lands less deep than the straight deep aim; down-corner lands
+  // deeper than the straight short aim (corners pulled in from the ギリギリ)
+  let (_, up_corner_d, _, _) = cell_landing(Topspin, 0.5, 1.0, 1.0)
+  let (_, straight_up_d, _, _) = cell_landing(Topspin, 0.5, 0.0, 1.0)
+  let (_, down_corner_d, _, _) = cell_landing(Topspin, 0.5, 1.0, -1.0)
+  let (_, straight_down_d, _, _) = cell_landing(Topspin, 0.5, 0.0, -1.0)
+  assert_true(up_corner_d < straight_up_d - 0.5)
+  assert_true(down_corner_d > straight_down_d + 0.5)
+  // and the flat corner out-rate stays bounded (was ~50% before the loosening)
+  let (fu_out, _, _) = cell_out_rate(Flat, 1.0, 1.0)
+  let (fd_out, _, _) = cell_out_rate(Flat, 1.0, -1.0)
+  assert_true(fu_out < 0.32)
+  assert_true(fd_out < 0.25)
 }
 
 ///|

@@ -1148,17 +1148,6 @@ export function createPlayerRig({ side, color, reach, serveContactHeight, scene 
     },
     hideAura() { if (this._aura) this._aura.visible = false; },
 
-    // Swing-timing ring: a flat circle concentric with the reach zone that
-    // shrinks from the reach radius (frac=1) to the player centre (frac=0).
-    setTimingRing(show, frac) {
-      const m = this._timingRing;
-      if (!m) return;
-      const f = Math.max(0, Math.min(1, frac));
-      if (!show || f <= 0.001) { m.visible = false; return; }
-      m.visible = true;
-      m.scale.set(f, f, 1);
-    },
-
     // Dim the whole body + racket to translucent (behind-player camera) so the
     // incoming ball and effects stay visible through the player; restore on
     // overhead view. Overlays (reach zone, hit-point rings) are untouched.
@@ -1198,21 +1187,6 @@ export function createPlayerRig({ side, color, reach, serveContactHeight, scene 
     circle.position.y = 0.012;
     root.add(circle);
     p._reachMat = circMat;
-
-    // Swing-timing ring: a thin bright annulus concentric with the reach zone,
-    // laid flat just above it. Driven by setTimingRing (scaled from the reach
-    // radius down to the player centre as the best-hit window approaches).
-    const ringMat = new THREE.MeshBasicMaterial({
-      color: 0xffe24a, transparent: true, opacity: 0.85, side: THREE.DoubleSide,
-    });
-    const timingRing = new THREE.Mesh(
-      new THREE.RingGeometry(reach * 0.9, reach, 48), ringMat,
-    );
-    timingRing.rotation.x = -Math.PI / 2;
-    timingRing.position.y = 0.013;
-    timingRing.visible = false;
-    root.add(timingRing);
-    p._timingRing = timingRing;
 
     // Charge aura: an open, double-sided additive cylinder wrapping the torso.
     // Radius/height/opacity are driven by setAura; hidden at zero charge.

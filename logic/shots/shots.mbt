@@ -218,19 +218,23 @@ pub fn rally_cell_target(
   cell_z : Double,
   typ : ShotType,
 ) -> (Double, Double) {
+  // Diagonals (corners) get their own looser depth + width than the straight
+  // rows, so a corner aim is aggressive but not a near-certain out.
+  let is_corner = cell_x != 0.0 && cell_z != 0.0
   let depth = if typ == Drop {
     if cell_z > 0.0 { 3.8 } else if cell_z < 0.0 { 1.8 } else { 2.4 }
   } else if cell_z > 0.0 {
-    @physics.court_half_len - @tuning.t.aim_deep_margin
+    @physics.court_half_len -
+    (if is_corner { @tuning.t.aim_corner_deep_margin } else { @tuning.t.aim_deep_margin })
   } else if cell_z < 0.0 {
-    @tuning.t.aim_short_depth
+    if is_corner { @tuning.t.aim_corner_short_depth } else { @tuning.t.aim_short_depth }
   } else {
     @tuning.t.aim_safe_depth
   }
-  let margin = if cell_z == 0.0 {
-    @tuning.t.aim_side_safe_margin
-  } else {
+  let margin = if is_corner {
     @tuning.t.aim_corner_margin
+  } else {
+    @tuning.t.aim_side_safe_margin
   }
   (cell_x * (@physics.court_half_width - margin), depth)
 }
@@ -442,8 +446,18 @@ pub fn compute_stroke(
   speed = speed * (1.0 + rng.draw() * @tuning.t.stroke_err_speed * err_mul)
   let mut mishit = false
   let mut yaw_err = 0.0
-  if q < @tuning.t.mishit_q_max &&
-    rng.uniform() < (if aid { 0.15 } else { @tuning.t.mishit_prob }) {
+  // The human's mishit gate is looser (independent of assist): it triggers
+  // only on clearly poor contact and less often, so off-centre hits punish
+  // less. The CPU / autotune-driven side keeps the full criteria.
+  let mishit_q = if human { @tuning.t.mishit_q_max * 0.7 } else { @tuning.t.mishit_q_max }
+  let mishit_p = if aid {
+    0.10
+  } else if human {
+    0.16
+  } else {
+    @tuning.t.mishit_prob
+  }
+  if q < mishit_q && rng.uniform() < mishit_p {
     mishit = true
     yaw_err = (rng.uniform() - 0.5) * 0.5
     speed = speed * 0.55
@@ -474,7 +488,8 @@ pub fn compute_stroke(
       def_theta_max = def_theta_max + 10.0 * jam
       let cur = @vec.dabs(tz)
       tz = z_sign * @vec.dmax(2.5, cur - 3.0 * jam) // and shorter
-      if jam > 0.3 {
+      // the human is jammed into an outright mishit less readily
+      if jam > (if human { 0.45 } else { 0.3 }) {
         mishit = true
       }
     }

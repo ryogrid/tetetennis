@@ -49,6 +49,8 @@ pub(all) struct Tuning {
   mut aim_short_depth : Double
   mut aim_side_safe_margin : Double
   mut aim_corner_margin : Double
+  mut aim_corner_deep_margin : Double
+  mut aim_corner_short_depth : Double
   mut aim_short_speed_drop : Double
   mut serve_deep_inset : Double
   mut serve_safe_inset : Double
@@ -129,7 +131,9 @@ fn defaults() -> Tuning {
     aim_safe_depth: 9.20, // none/left/right row depth
     aim_short_depth: 3.20, // down-row depth
     aim_side_safe_margin: 0.80, // side cells x = half_width - margin
-    aim_corner_margin: 0.45, // corner cells x = half_width - margin
+    aim_corner_margin: 0.75, // corner cells x = half_width - margin (looser)
+    aim_corner_deep_margin: 2.05, // up-corner depth = half_len - margin (less deep)
+    aim_corner_short_depth: 4.60, // down-corner depth (deeper than the straight short row)
     aim_short_speed_drop: 0.28, // max flat-drive speed cut at the shortest depth
     serve_deep_inset: 0.35, // up-row inset from the service line
     serve_safe_inset: 1.20, // none-row inset
@@ -234,6 +238,8 @@ pub fn reset_params() -> Unit {
   t.aim_short_depth = d.aim_short_depth
   t.aim_side_safe_margin = d.aim_side_safe_margin
   t.aim_corner_margin = d.aim_corner_margin
+  t.aim_corner_deep_margin = d.aim_corner_deep_margin
+  t.aim_corner_short_depth = d.aim_corner_short_depth
   t.aim_short_speed_drop = d.aim_short_speed_drop
   t.serve_deep_inset = d.serve_deep_inset
   t.serve_safe_inset = d.serve_safe_inset
@@ -302,6 +308,8 @@ pub fn set_param(name : String, v : Double) -> Bool {
     "aim_short_depth" => t.aim_short_depth = v
     "aim_side_safe_margin" => t.aim_side_safe_margin = v
     "aim_corner_margin" => t.aim_corner_margin = v
+    "aim_corner_deep_margin" => t.aim_corner_deep_margin = v
+    "aim_corner_short_depth" => t.aim_corner_short_depth = v
     "aim_short_speed_drop" => t.aim_short_speed_drop = v
     "serve_deep_inset" => t.serve_deep_inset = v
     "serve_safe_inset" => t.serve_safe_inset = v
@@ -373,6 +381,8 @@ pub fn get_param(name : String) -> Double {
     "aim_short_depth" => t.aim_short_depth
     "aim_side_safe_margin" => t.aim_side_safe_margin
     "aim_corner_margin" => t.aim_corner_margin
+    "aim_corner_deep_margin" => t.aim_corner_deep_margin
+    "aim_corner_short_depth" => t.aim_corner_short_depth
     "aim_short_speed_drop" => t.aim_short_speed_drop
     "serve_deep_inset" => t.serve_deep_inset
     "serve_safe_inset" => t.serve_safe_inset
