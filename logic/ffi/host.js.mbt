@@ -129,12 +129,6 @@ pub extern "js" fn host_show_trail(
 ///|
 pub extern "js" fn host_hide_trail(h : Host) -> Unit = "(h)=>h.render.hideTrail()"
 
-// swing-timing ring: a circle centred on the human that shrinks from the reach
-// radius (frac=1) to zero (frac=0) as the best-hit window approaches.
-///|
-pub extern "js" fn host_set_timing_ring(h : Host, show : Bool, frac : Double) -> Unit =
-  "(h,s,f)=>h.render.setTimingRing(s,f)"
-
 // ---------------- render: players ----------------
 
 ///|

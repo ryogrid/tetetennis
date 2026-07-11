@@ -17,12 +17,6 @@ let slowmo_margin : Double = 2.0
 let slowmo_tau : Double = 0.08
 
 ///|
-let timing_window : Double = 1.0
-
-///|
-let timing_tol : Double = 0.07
-
-///|
 let swing_window : Double = 0.09
 
 ///|
@@ -230,10 +224,6 @@ struct MatchState {
   mut sweet_hit_valid : Bool
   mut sweet_hit_t : Double
   mut sweet_hit_clock : Double
-  // The descending contact opportunity (ball falling back through waist height
-  // toward the second bounce), shared clock with the rising one above.
-  mut sweet_hit_valid2 : Bool
-  mut sweet_hit_t2 : Double
   mut time : Double
   mut state_timer : Double
   mut serve_meter : Double // current oscillating power-meter value [0,1]
@@ -703,8 +693,6 @@ fn start_match(self : Game) -> Unit {
     sweet_hit_valid: false,
     sweet_hit_t: 0.0,
     sweet_hit_clock: 0.0,
-    sweet_hit_valid2: false,
-    sweet_hit_t2: 0.0,
     time: 0.0,
     state_timer: 0.0,
     serve_meter: 0.0,
@@ -1931,15 +1919,6 @@ fn rally_step(self : Game, ms : MatchState, dt : Double) -> Unit {
         ms.sweet_hit_valid = false
       }
     }
-    // The second (descending) contact opportunity, if the arc reaches waist
-    // height. Shares sweet_hit_clock, so remaining = sweet_hit_t2 - clock.
-    match @physics.predict_hit_point_fall(b, ms.surface, 1.0) {
-      Some(hp2) => {
-        ms.sweet_hit_t2 = hp2.t
-        ms.sweet_hit_valid2 = true
-      }
-      None => ms.sweet_hit_valid2 = false
-    }
     self.show_trajectory_trail(ms)
   }
 }
@@ -2001,26 +1980,6 @@ fn time_to_contact(ms : MatchState) -> Double? {
     return None
   }
   Some(ms.sweet_hit_t - ms.sweet_hit_clock)
-}
-
-// Remaining time to the NEXT upcoming best-hit point for the shrinking ring:
-// the rising crossing first, then (once that window has closed) the descending
-// crossing toward the second bounce. beststart is where the ring reaches zero.
-fn ring_remaining(ms : MatchState, beststart : Double) -> Double? {
-  if !ms.sweet_hit_valid || ms.last_hit_by != Some(@rules.C) {
-    return None
-  }
-  let rem1 = ms.sweet_hit_t - ms.sweet_hit_clock
-  if rem1 > beststart {
-    return Some(rem1)
-  }
-  if ms.sweet_hit_valid2 {
-    let rem2 = ms.sweet_hit_t2 - ms.sweet_hit_clock
-    if rem2 > beststart {
-      return Some(rem2)
-    }
-  }
-  None
 }
 
 ///|
@@ -2102,23 +2061,8 @@ pub fn frame_update(dt : Double) -> Unit {
 
   // (the on-screen move-assist arrow has been removed)
 
-  // swing timing feedback + recommended shot. The on-court ring shrinks from the
-  // reach radius (frac=1) to zero exactly at the START of the best-hit window
-  // (t = swing_contact_t + timing_tol); after that it stays hidden until the next
-  // best-hit point. There are up to two per incoming ball: the rising crossing
-  // after the bounce, then the descending one toward the second bounce.
+  // recommended shot type for the current incoming ball
   let ttc = time_to_contact(ms)
-  let beststart = swing_contact_t + timing_tol
-  match ring_remaining(ms, beststart) {
-    Some(t) =>
-      if t <= timing_window {
-        let ring_frac = @vec.clampd((t - beststart) / (timing_window - beststart), 0.0, 1.0)
-        @ffi.host_set_timing_ring(h, true, ring_frac)
-      } else {
-        @ffi.host_set_timing_ring(h, false, 0.0)
-      }
-    None => @ffi.host_set_timing_ring(h, false, 0.0)
-  }
   match ttc {
     Some(_) =>
       match recommend_shot_type(ms) {
@@ -2127,8 +2071,7 @@ pub fn frame_update(dt : Double) -> Unit {
       }
     None => @ffi.host_set_recommended_shot(h, "")
   }
-  // sweet-spot position marker (the shrinking timing ring above replaces the old
-  // countdown, so the marker never drives its own countdown: cd_show = false).
+  // sweet-spot position marker (no countdown ring: cd_show = false).
   @ffi.host_set_sweet(
     h, ms.has_sweet, ms.sweet_x, ms.sweet_y, ms.sweet_z, false, 0.0, false,
   )
