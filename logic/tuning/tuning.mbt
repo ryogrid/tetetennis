@@ -122,8 +122,8 @@ fn defaults() -> Tuning {
     mishit_q_max: 0.3,
     mishit_prob: 0.26072720125734405, // autotuned (was 0.35)
     q_speed_floor: 0.65,
-    shallow_speed_mid: 1.08, // stroke speed mul at the service line
-    shallow_speed_net: 1.30, // stroke speed mul at the net
+    shallow_speed_mid: 1.20, // stroke speed mul at the service line
+    shallow_speed_net: 1.70, // stroke speed mul at the net (put-away pace)
     jam_threshold: 26.0,
     jam_scale: 14.0,
     // discrete 9-target aiming (design_docs/ball-control-and-aiming.md)

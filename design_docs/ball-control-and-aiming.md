@@ -154,9 +154,14 @@ speed *= clamp(mul, 0.6, 1.05)        // Flat / flat volley only
   **achieved_z**, poor contact also collapses the power adjustment
   coherently. Multiplier stacking order in `compute_stroke` (documented for
   clarity): per-type base speed → charge/perfect/jam/counter → depth mul →
-  shallow-contact boost → `ball_speed_scale`. A down-cell Flat hit from the
-  forecourt nets ≈0.72 × ~1.3 ≈ 0.94 — an intended near-cancellation (a
-  put-away touch angle, not a smash).
+  shallow-contact boost (`shallow_speed_mul`: 1.0 at the baseline →
+  `shallow_speed_mid` 1.20 at the service line → `shallow_speed_net` 1.70 at
+  the net; Flat drives only in practice, since the control solver ignores
+  requested speed) → `ball_speed_scale`. The boost is deliberately strong so
+  a short ball can be put away for a stroke winner: a clean forecourt (z≈5)
+  flat drive comes back ~1.3× faster than the same shot from the baseline. A
+  down-cell Flat from the forecourt combines the ×0.72 short-target cut with
+  the shallow boost (net ~1.2×) — still a controllable put-away angle.
 - **Lateral control has no quality collapse.** Rationale: (a) the Gaussian
   error model already scales lateral scatter by `1 + err_quality_gain·(1−q)`
   — that *is* the lateral quality mechanism; (b) pulling the target toward

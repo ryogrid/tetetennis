@@ -444,6 +444,63 @@ test "fast-ball jam: topspin jams off pace, a slice blocks it, slow balls are fi
   assert_true(flat_jam_speed(1.0) > flat_jam_speed(0.0))
 }
 
+// Mean outgoing speed + landing-in rate of a Flat drive from a given contact
+// depth, aimed at (aim_x, aim_depth). Player stands next to the ball.
+///|
+fn flat_attack(contact_z : Double, aim_x : Double, aim_depth : Double) -> (Double, Double) {
+  let g = @rng.Gauss::new(321)
+  let mut sp = 0.0
+  let mut inn = 0
+  let mut n = 0
+  for _i = 0; _i < 300; _i = _i + 1 {
+    let r = compute_stroke(
+      0.0, contact_z + 0.2, 0.5, @physics.ideal_contact_h, contact_z, 0.0, 2.0,
+      6.0, test_stats, Flat, aim_x, aim_depth, @rules.P, g,
+    )
+    match r {
+      Some(s) => {
+        n = n + 1
+        sp = sp + @vec.hypot3(s.vx, s.vy, s.vz)
+        let b = @physics.make_ball()
+        b.px = 0.5
+        b.py = @physics.ideal_contact_h
+        b.pz = contact_z
+        b.vx = s.vx
+        b.vy = s.vy
+        b.vz = s.vz
+        b.sx = s.sx
+        b.sy = s.sy
+        b.sz = s.sz
+        b.activate()
+        match @physics.predict_landing(b, @physics.surface_hard) {
+          Some(l) =>
+            if l.z < 0.0 &&
+              -l.z <= @physics.court_half_len &&
+              @vec.dabs(l.x) <= @physics.court_half_width {
+              inn = inn + 1
+            }
+          None => ()
+        }
+      }
+      None => ()
+    }
+  }
+  let nd = (if n == 0 { 1 } else { n }).to_double()
+  (sp / nd, inn.to_double() / nd)
+}
+
+///|
+test "shallow-contact flat is a put-away" {
+  @assist.set_assist_level(Off)
+  // a flat drive off a short ball (forecourt contact) comes back markedly
+  // faster than the same flat from the baseline, and still lands in the large
+  // majority of the time -- a genuine put-away, not an auto-error.
+  let (base_sp, _) = flat_attack(11.2, 0.0, 1.0)
+  let (fc_sp, fc_in) = flat_attack(5.0, 0.0, 1.0)
+  assert_true(fc_sp > base_sp * 1.20) // clearly stronger short-ball pace
+  assert_true(fc_in > 0.5) // and it still lands in
+}
+
 ///|
 test "contact quality: whiff out of reach, full quality in the band" {
   @assist.set_assist_level(Off)
