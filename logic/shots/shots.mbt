@@ -96,6 +96,13 @@ let slice_charge_depth : Double = 2.0 // max extra depth toward the baseline (m)
 ///|
 let charge_spin_flatten : Double = 10.0 // max theta_max reduction at full charge (deg)
 
+// Same idea for the shallow-contact boost: it multiplies requested speed
+// (used only by the Flat drive solver), so on spin shots it is delivered as
+// arc-flattening instead. Degrees of theta_max reduction per unit of boost
+// excess (shallow_mul - 1.0).
+///|
+let shallow_spin_flatten : Double = 55.0 // deg per unit boost excess; topspin gains ~+26% at a forecourt contact
+
 // Smash (Appendix A.3): a high point in the forecourt hit Flat slams downward.
 ///|
 let smash_height : Double = 1.7 // contact height to qualify (m)
@@ -547,9 +554,19 @@ pub fn compute_stroke(
     speed = speed * @vec.clampd(mul, 0.6, 1.05)
   }
   // shallow-contact aggression (groundstrokes only; volleys/smash/touch
-  // shots keep their own speed identity)
-  if !do_volley && !is_smash && (typ == Flat || typ == Topspin || typ == Slice) {
-    speed = speed * shallow_speed_mul(@vec.dabs(ball_z))
+  // shots keep their own speed identity). Flat uses requested speed; the spin
+  // shots' control solver ignores it, so the boost flattens their arc instead
+  // (faster to the same landing; net clearance self-limits it).
+  if !do_volley && !is_smash {
+    let shallow_mul = shallow_speed_mul(@vec.dabs(ball_z))
+    if typ == Flat {
+      speed = speed * shallow_mul
+    } else if typ == Topspin || typ == Slice {
+      def_theta_max = @vec.dmax(
+        def_theta_min + 3.0,
+        def_theta_max - shallow_spin_flatten * (shallow_mul - 1.0),
+      )
+    }
   }
   // uniform ball-speed reduction across every shot category (flat/topspin/slice/
   // volley/smash/lob/drop all funnel through `speed`); default scale 1.0.

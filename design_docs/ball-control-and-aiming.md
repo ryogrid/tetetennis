@@ -156,10 +156,15 @@ speed *= clamp(mul, 0.6, 1.05)        // Flat / flat volley only
   clarity): per-type base speed → charge/perfect/jam/counter → depth mul →
   shallow-contact boost (`shallow_speed_mul`: 1.0 at the baseline →
   `shallow_speed_mid` 1.20 at the service line → `shallow_speed_net` 1.70 at
-  the net; Flat drives only in practice, since the control solver ignores
-  requested speed) → `ball_speed_scale`. The boost is deliberately strong so
-  a short ball can be put away for a stroke winner: a clean forecourt (z≈5)
-  flat drive comes back ~1.3× faster than the same shot from the baseline. A
+  the net) → `ball_speed_scale`. The boost is deliberately strong so a short
+  ball can be put away for a stroke winner: a clean forecourt (z≈5) flat
+  drive comes back ~1.3× faster than the same shot from the baseline. For
+  **Flat** the boost multiplies requested speed (drive solver). For
+  **Topspin/Slice** the control solver ignores requested speed, so the boost
+  is delivered as arc-flattening instead (`shallow_spin_flatten` lowers
+  `def_theta_max` ∝ the boost excess → a flatter, faster path to the same
+  landing; net clearance self-limits it). Topspin gains ~+26% at a forecourt
+  contact; Slice, low and floaty, is near its geometric ceiling (~+8%). A
   down-cell Flat from the forecourt combines the ×0.72 short-target cut with
   the shallow boost (net ~1.2×) — still a controllable put-away angle.
 - **Lateral control has no quality collapse.** Rationale: (a) the Gaussian

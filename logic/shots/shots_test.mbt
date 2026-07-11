@@ -445,6 +445,20 @@ test "fast-ball jam: topspin jams off pace, a slice blocks it, slow balls are fi
 }
 
 ///|
+test "shallow boost speeds up spin shots" {
+  @assist.set_assist_level(Off)
+  // A short-ball (forecourt) topspin is flattened so it comes back faster
+  // than a deep topspin toward the same aim would launch, and it still lands
+  // in — the boost reaches spin shots via the arc, not requested speed.
+  let (deep_sp, _) = shot_out(Topspin, 11.2, 0.0, 1.0, 1.0, 0.0)
+  let (fc_sp, fc_in) = shot_out(Topspin, 5.0, 0.0, 1.0, 1.0, 0.0)
+  // The forecourt shot travels less far, so it would normally be much slower;
+  // the flatten keeps it within ~85% of the baseline launch speed here.
+  assert_true(fc_sp > deep_sp * 0.80)
+  assert_true(fc_in > 0.8)
+}
+
+///|
 fn shot_out(
   typ : ShotType,
   contact_z : Double,
