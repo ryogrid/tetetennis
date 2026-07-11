@@ -283,11 +283,27 @@
       "kind": "absolute"
     },
     "aim_corner_margin": {
-      "default": 0.45,
+      "default": 0.75,
       "min": 0.25,
-      "max": 0.9,
+      "max": 1.2,
       "file": "logic/tuning/tuning.mbt",
       "symbol": "corner-cell margin from the singles sideline",
+      "kind": "absolute"
+    },
+    "aim_corner_deep_margin": {
+      "default": 2.05,
+      "min": 0.6,
+      "max": 2.8,
+      "file": "logic/tuning/tuning.mbt",
+      "symbol": "up-corner depth margin from the baseline",
+      "kind": "absolute"
+    },
+    "aim_corner_short_depth": {
+      "default": 4.6,
+      "min": 3.2,
+      "max": 6.0,
+      "file": "logic/tuning/tuning.mbt",
+      "symbol": "down-corner target depth",
       "kind": "absolute"
     },
     "aim_short_speed_drop": {

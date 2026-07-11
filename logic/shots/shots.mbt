@@ -218,19 +218,23 @@ pub fn rally_cell_target(
   cell_z : Double,
   typ : ShotType,
 ) -> (Double, Double) {
+  // Diagonals (corners) get their own looser depth + width than the straight
+  // rows, so a corner aim is aggressive but not a near-certain out.
+  let is_corner = cell_x != 0.0 && cell_z != 0.0
   let depth = if typ == Drop {
     if cell_z > 0.0 { 3.8 } else if cell_z < 0.0 { 1.8 } else { 2.4 }
   } else if cell_z > 0.0 {
-    @physics.court_half_len - @tuning.t.aim_deep_margin
+    @physics.court_half_len -
+    (if is_corner { @tuning.t.aim_corner_deep_margin } else { @tuning.t.aim_deep_margin })
   } else if cell_z < 0.0 {
-    @tuning.t.aim_short_depth
+    if is_corner { @tuning.t.aim_corner_short_depth } else { @tuning.t.aim_short_depth }
   } else {
     @tuning.t.aim_safe_depth
   }
-  let margin = if cell_z == 0.0 {
-    @tuning.t.aim_side_safe_margin
-  } else {
+  let margin = if is_corner {
     @tuning.t.aim_corner_margin
+  } else {
+    @tuning.t.aim_side_safe_margin
   }
   (cell_x * (@physics.court_half_width - margin), depth)
 }

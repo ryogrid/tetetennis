@@ -65,17 +65,25 @@ Cell coordinates come from new tunables (registry-tracked):
 | `aim_safe_depth` | 9.20 | none/left/right row depth |
 | `aim_short_depth` | 3.20 | down-row depth |
 | `aim_side_safe_margin` | 0.80 | side cells x = ±(4.115 − 0.80) = **±3.315** |
-| `aim_corner_margin` | 0.45 | corner cells x = ±(4.115 − 0.45) = **±3.665** |
 | `aim_short_speed_drop` | 0.28 | see §4 (max speed cut at the shortest depth) |
 
-Margin calibration (review finding): with the error model at clean contact
-(ctl 70 → σ_z ≈ 1.6 m, σ_x ≈ 0.79 m pre-flight), the up row is ~28% long at
-q=1 (~17% on a Perfect hit's 0.6× error) and a deep corner ~45% out combined
-(~30% on Perfect) — genuinely ギリギリ but not coin-flip-broken. The
-original 0.40/0.35 margins produced >50% outs at flawless execution and were
-rejected. The side (safe) cell is ~16% wide at q=1 pre-flight; spin-shot
-landings run tighter than pre-flight targets because the control solver
-undershoots wide targets. Levers stay `aim_deep_margin`/`aim_corner_margin`.
+**Diagonal (corner) cells** get their own, looser depth and width than the
+straight rows (they combine both extremes, so at the raw ギリギリ lines they
+were ~50% out — too punishing). `rally_cell_target` branches on
+`is_corner = cell_x ≠ 0 ∧ cell_z ≠ 0`:
+
+| tunable | default | corner target |
+|---|---|---|
+| `aim_corner_margin` | 0.75 | corner x = ±(4.115 − 0.75) = **±3.365** (≈ the side cell; distinguished by depth, not by hugging the line) |
+| `aim_corner_deep_margin` | 2.05 | up-corner depth = 11.885 − 2.05 = **9.84** (vs straight-up 10.99) |
+| `aim_corner_short_depth` | 4.60 | down-corner depth = **4.60** (vs straight-down 3.20) |
+
+Calibration: at clean contact this puts the flat up-corner at ~24% out and
+the flat down-corner ~15% (topspin corners lower, since the control solver
+undershoots) — aggressive but no longer a near-certain out. Levers:
+`aim_corner_margin` (width) and `aim_corner_deep_margin` / `aim_corner_short_depth`
+(depth). The straight up row keeps its ~28% long ギリギリ risk on the centre
+line via `aim_deep_margin` 0.90.
 
 Special cases:
 - **Drop** keeps its identity (a Drop must stay short even with no input):
