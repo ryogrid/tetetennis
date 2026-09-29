@@ -118,13 +118,23 @@ pub extern "js" fn host_set_sweet(
 // trail: flat [x,y,z,afterBounce, ...]; ideal_idx / ideal_idx2 mark the rising
 // and descending waist-height contact points (either may be -1).
 ///|
-pub extern "js" fn host_show_trail(
+pub extern "js" fn host_show_trail_ffi(
+  h : Host,
+  pts : FixedArray[Double],
+  ideal_idx : Int,
+  ideal_idx2 : Int,
+) -> Unit =
+
+pub fn host_show_trail(
   h : Host,
   pts : Array[Double],
   ideal_idx : Int,
   ideal_idx2 : Int,
-) -> Unit =
-  "(h,a,i,j)=>h.render.showTrail(a,i,j)"
+) -> Unit {
+  host_show_trail_ffi(h, FixedArray::from_array(pts), ideal_idx, ideal_idx2)
+}
+
+"(h,a,i,j)=>h.render.showTrail(a,i,j)"
 
 ///|
 pub extern "js" fn host_hide_trail(h : Host) -> Unit = "(h)=>h.render.hideTrail()"
