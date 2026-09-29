@@ -124,6 +124,7 @@ pub extern "js" fn host_show_trail_ffi(
   ideal_idx : Int,
   ideal_idx2 : Int,
 ) -> Unit =
+  "(h,a,i,j)=>h.render.showTrail(a,i,j)"
 
 pub fn host_show_trail(
   h : Host,
@@ -133,8 +134,6 @@ pub fn host_show_trail(
 ) -> Unit {
   host_show_trail_ffi(h, FixedArray::from_array(pts), ideal_idx, ideal_idx2)
 }
-
-"(h,a,i,j)=>h.render.showTrail(a,i,j)"
 
 ///|
 pub extern "js" fn host_hide_trail(h : Host) -> Unit = "(h)=>h.render.hideTrail()"
